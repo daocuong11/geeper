@@ -14,7 +14,8 @@ import { paso, type Contexto } from "./pasos";
 import { crearAudio, esperarAudio } from "./mpt";
 import { correr } from "./proceso";
 import { HYPERFRAMES_VERSION, MPT_CONTENEDOR, MPT_TAREAS } from "./rutas";
-import { sintetizar } from "./voz";
+import { huellaPesos } from "./modelos";
+import { MODELO_WHISPER, sintetizar } from "./voz";
 
 const tokens = (s: string) => s.split(/\s+/).filter(Boolean);
 
@@ -46,10 +47,31 @@ async function sintetizarAsset(ctx: Contexto & { signal?: AbortSignal }, p: Proy
     tipo: "audio",
     source: "tts",
     licencia: LICENCIAS.kokoro!,
-    regenerar: { motor, voz, velocidad, texto, modelo: "kokoro-82m", tareaMpt: r.resultado.tareaMpt },
+    regenerar: {
+      motor, voz, velocidad, texto, modelo: "kokoro-82m", tareaMpt: r.resultado.tareaMpt,
+      // El Kokoro de MPT vive en su contenedor: sólo se conoce la huella de los pesos locales.
+      pesos: motor === "kokoro" ? await huellaPesos("kokoro-82m-onnx") : null,
+      alineacion: { modelo: `whisper-${MODELO_WHISPER}`, pesos: await huellaPesos(`whisper-${MODELO_WHISPER}`) },
+    },
   });
   const palabras = await tiemposDeVoz(ctx, path.join(ctx.dir, ruta), texto, p.voz.idioma);
   return { asset, palabras };
+}
+
+/**
+ * Lo que la voz nueva tiene que decir: las palabras de la escena menos las recortadas por la edición
+ * por texto (palabras o muletillas; los silencios no cambian el texto).
+ */
+export function textoADecir(e: Escena): string {
+  const quitados = e.recortes.filter((r) => r.motivo !== "silencio");
+  if (!quitados.length) return e.texto;
+  return e.palabras
+    .filter((w) => {
+      const medio = (w.inicio + w.fin) / 2;
+      return !quitados.some((r) => medio >= r.inicio && medio <= r.fin);
+    })
+    .map((w) => w.texto)
+    .join(" ");
 }
 
 /** Conserva las correcciones si la escena sigue teniendo exactamente las mismas palabras. */
@@ -71,7 +93,7 @@ export async function regenerarVoz(
   if (escenaId) {
     const e = p.escenas[escenaId];
     if (!e) throw new Error(`No existe la escena ${escenaId}`);
-    const texto = tokens(e.texto).join(" ");
+    const texto = tokens(textoADecir(e)).join(" ");
     if (!texto) throw new Error("La escena no tiene texto para decir");
     const { asset, palabras } = await sintetizarAsset(ctx, p, texto);
     p.assets[asset.id] = asset;
@@ -82,11 +104,15 @@ export async function regenerarVoz(
     e.correcciones = conservarCorrecciones(e, palabras);
     e.palabras = palabras;
     e.texto = palabras.map((w) => w.texto).join(" ");
+    // Los recortes eran tiempos de la voz anterior: la nueva ya no dice lo recortado.
+    e.recortes = [];
   } else {
-    // Guion completo: el texto de las escenas actuales, en orden. Cada escena conserva su tramo de palabras.
+    // Guion completo: el texto de las escenas actuales (sin lo recortado), en orden. Cada escena
+    // conserva su tramo de palabras.
     const orden = escenasEnLinea(p);
-    const cuentas = orden.map((x) => tokens(x.escena.texto).length);
-    const texto = orden.map((x) => tokens(x.escena.texto).join(" ")).join(" ");
+    const textos = orden.map((x) => tokens(textoADecir(x.escena)));
+    const cuentas = textos.map((t) => t.length);
+    const texto = textos.map((t) => t.join(" ")).join(" ");
     const { asset, palabras } = await sintetizarAsset(ctx, p, texto);
     if (palabras.length !== cuentas.reduce((a, b) => a + b, 0)) {
       throw new Error(`La alineación devolvió ${palabras.length} palabras y el guion tiene ${cuentas.reduce((a, b) => a + b, 0)}`);
@@ -116,6 +142,7 @@ export async function regenerarVoz(
       e.correcciones = conservarCorrecciones(e, tramos[j]!);
       e.palabras = tramos[j]!;
       e.texto = tramos[j]!.map((w) => w.texto).join(" ");
+      e.recortes = [];
     });
     p.guion.texto = texto;
   }

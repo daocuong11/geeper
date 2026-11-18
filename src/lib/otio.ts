@@ -9,7 +9,7 @@
  * Cada clip visual lleva un marcador con el texto de su escena; los subtítulos van aparte en el .srt.
  */
 import path from "node:path";
-import type { Asset, Proyecto } from "./esquema";
+import { pistasLibres, type Asset, type Proyecto } from "./esquema";
 import { ENTRADA, duracionEscenas, escenasEnLinea } from "./linea";
 
 type J = Record<string, unknown>;
@@ -71,32 +71,53 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
     const n = `Escena ${e.indice + 1}`;
     const nota = e.escena.texto.length > 120 ? `${e.escena.texto.slice(0, 117)}…` : e.escena.texto;
     const a = activo(e.visual.asset);
-    const meta = { geeper: { escena: e.escena.id, ajuste: e.visual.ajuste ?? null, ancla: e.visual.ancla ?? null } };
+    const v = e.visual;
+    const velocidad = v.velocidad ?? 1;
+    const meta = {
+      geeper: {
+        escena: e.escena.id, ajuste: v.ajuste ?? null, ancla: v.ancla ?? null,
+        movimiento: v.movimiento ?? null, color: v.color ?? null, transicion: v.transicion ?? null,
+      },
+    };
+    // Fundido de entrada: transición OTIO entre la escena anterior y ésta.
+    if (e.indice > 0 && v.transicion?.tipo === "fundido") {
+      const d = Math.min(v.transicion.duracion, e.duracion);
+      visual.push({
+        OTIO_SCHEMA: "Transition.1", name: "Fundido", transition_type: "SMPTE_Dissolve",
+        in_offset: rt(0, rate), out_offset: rt(d, rate), metadata: { geeper: { transicion: v.transicion } },
+      });
+    }
     // Igual que el compilador: la primera escena cubre la ENTRADA y, si el clip se acaba antes que la
-    // escena, vuelve a empezar desde 0 (un tramo por vuelta).
+    // escena, vuelve a empezar desde 0 (un tramo por vuelta). Con velocidad, el clip consume
+    // `velocidad` segundos de material por segundo de línea.
     const largo = e.duracion + (e.indice === 0 ? ENTRADA : 0);
     let t = 0;
-    let desde = e.visual.rango.inicio;
+    let desde = v.rango.inicio;
     for (let k = 0; t < largo - 1e-3 && k < 50; k++) {
-      const disponible = a.tipo === "imagen" || !a.duracion ? largo - t : a.duracion - desde;
+      const disponible = a.tipo === "imagen" || !a.duracion ? largo - t : (a.duracion - desde) / velocidad;
       if (disponible < 0.05) {
         desde = 0;
         continue;
       }
       const dur = Math.min(largo - t, disponible);
-      visual.push(clip(k === 0 ? n : `${n} (vuelta ${k + 1})`, a, dirProyecto, desde, dur, rate, {
+      const c = clip(k === 0 ? n : `${n} (vuelta ${k + 1})`, a, dirProyecto, desde, a.tipo === "imagen" ? dur : dur * velocidad, rate, {
         markers: k === 0 ? [{
           OTIO_SCHEMA: "Marker.2", name: nota, color: "CYAN", comment: e.escena.texto,
           marked_range: tr(desde, 0, rate), metadata: { geeper: { escena: e.escena.id } },
         }] : [],
         metadata: meta,
-      }));
+      });
+      if (velocidad !== 1 && a.tipo !== "imagen") c.effects = [{ OTIO_SCHEMA: "LinearTimeWarp.1", name: "Velocidad", effect_name: "LinearTimeWarp", time_scalar: velocidad, metadata: {} }];
+      visual.push(c);
       t += dur;
       desde = 0;
     }
-    voz.push(clip(`Voz ${e.indice + 1}`, activo(e.voz.asset), dirProyecto, e.voz.rango.inicio, e.duracion, rate, {
-      metadata: { geeper: { escena: e.escena.id } },
-    }));
+    // Voz: un clip por tramo (lo que queda tras los recortes de la edición por texto).
+    e.tramos.forEach((x, j) => {
+      voz.push(clip(e.tramos.length > 1 ? `Voz ${e.indice + 1}.${j + 1}` : `Voz ${e.indice + 1}`, activo(e.voz.asset), dirProyecto, x.inicio, x.fin - x.inicio, rate, {
+        metadata: { geeper: { escena: e.escena.id, tramo: j } },
+      }));
+    });
   }
 
   const pistas: J[] = [pistaOtio("Visual", "Video", visual), pistaOtio("Voz", "Audio", voz)];
@@ -108,6 +129,22 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
       clip("Música", a, dirProyecto, m.rango.inicio, dur, rate, { metadata: { geeper: { volumen: m.volumen ?? 0.15, ducking: true } } }),
     ]));
   }
+  // Pistas libres: superposiciones de video y efectos de sonido, con huecos hasta cada clip.
+  for (const pi of pistasLibres(p)) {
+    const hijos: J[] = [];
+    let cursor = 0;
+    for (const c of [...pi.clips].sort((x, y) => (x.inicio ?? 0) - (y.inicio ?? 0))) {
+      const ini = c.inicio ?? 0;
+      if (ini > cursor + 1e-3) hijos.push(hueco(ini - cursor, rate));
+      const a = activo(c.asset);
+      const enLinea = c.rango.duracion / (c.velocidad ?? 1);
+      hijos.push(clip(c.id, a, dirProyecto, c.rango.inicio, c.rango.duracion, rate, {
+        metadata: { geeper: { volumen: c.volumen ?? null, opacidad: c.opacidad ?? null, transicion: c.transicion ?? null, movimiento: c.movimiento ?? null } },
+      }));
+      cursor = Math.max(cursor, ini + enLinea);
+    }
+    pistas.push(pistaOtio(pi.tipo === "video" ? `Superposición ${pi.id}` : `Efectos ${pi.id}`, pi.tipo === "video" ? "Video" : "Audio", hijos));
+  }
 
   return {
     OTIO_SCHEMA: "Timeline.1",
@@ -115,13 +152,25 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
     global_start_time: null,
     tracks: {
       OTIO_SCHEMA: "Stack.1", name: "tracks", source_range: null, children: pistas, effects: [], enabled: true,
-      markers: p.marcadores.map((mk) => ({
-        OTIO_SCHEMA: "Marker.2", name: mk.nombre, color: mk.tipo === "corte" ? "RED" : "YELLOW", comment: "",
-        marked_range: tr(mk.tiempo, 0, rate), metadata: { geeper: { tipo: mk.tipo } },
-      })),
+      markers: [
+        ...p.marcadores.map((mk) => ({
+          OTIO_SCHEMA: "Marker.2", name: mk.nombre, color: mk.tipo === "corte" ? "RED" : mk.tipo === "pulso" ? "GREEN" : "YELLOW", comment: "",
+          marked_range: tr(mk.tiempo, 0, rate), metadata: { geeper: { tipo: mk.tipo } },
+        })),
+        // Textos superpuestos: como marcadores con su duración (el editor los vuelve a poner a mano).
+        ...p.textos.map((tx) => ({
+          OTIO_SCHEMA: "Marker.2", name: tx.texto, color: "MAGENTA", comment: `${tx.estilo}, ${tx.posicion}`,
+          marked_range: tr(tx.inicio, tx.duracion, rate), metadata: { geeper: { texto: tx } },
+        })),
+      ],
       metadata: {},
     },
-    metadata: { geeper: { proyecto: p.id, formato: p.formato, plantilla: p.plantilla, fps: p.fps, duracion: total } },
+    metadata: {
+      geeper: {
+        proyecto: p.id, formato: p.formato, plantilla: p.plantilla, fps: p.fps, duracion: total,
+        comercial: p.comercial, plataformas: p.plataformas,
+      },
+    },
   };
 }
 
@@ -131,4 +180,6 @@ export const NO_VIAJA = [
   "chip de marca, zoom en los cortes y tarjeta final",
   "fondo desenfocado del modo «contener»",
   "ducking de la música (se anota en metadata.geeper)",
+  "textos superpuestos (van como marcadores con su duración)",
+  "movimiento de cámara, color, opacidad y transiciones que no son fundido (en metadata.geeper)",
 ] as const;
