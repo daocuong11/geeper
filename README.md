@@ -13,11 +13,20 @@ calidad. Uso interno, en esta PC, US$0 al mes. Ver `docs/PRODUCTO.md` (qué es y
 3. **Reeditar sin GPU:** corregir subtítulos, cambiar lo que se muestra sin cambiar lo que se oye,
    quitar o reordenar escenas, poner un clip propio, cambiar de plantilla o de formato (9:16, 16:9,
    1:1) y volver a renderizar.
-4. **Regenerar la voz** de una escena o del guion (Kokoro de MPT, en CPU) y realinear los subtítulos.
-5. **Descargar** el render (H.264 High CRF 20, ~4 Mbps: un short de 57 s pesa ~31 MB) y sus subtítulos
-   `.srt` sólo si pasó el QC: −14 LUFS y pico ≤ −1 dBTP, Rec.709 rango limitado,
+4. **Editar por texto:** recortar palabras de lo que se oye (se quita su audio y su tiempo), acortar
+   silencios largos y quitar muletillas. Las palabras con tiempos dudosos se marcan.
+5. **Efectos y capas:** transición de entrada, movimiento de cámara, velocidad y color por escena;
+   textos en pantalla (título, rótulo, cita); imágenes o videos encima y efectos de sonido en su
+   segundo; música alineada para que los cortes caigan en el pulso.
+6. **Regenerar la voz** de una escena o del guion (Kokoro de MPT, en CPU) y realinear los subtítulos.
+   Lo recortado ya no se vuelve a decir.
+7. **Descargar** el render (H.264 High CRF 20, ~4 Mbps: un short de 57 s pesa ~31 MB), sus subtítulos
+   `.srt` y, si se pide, un máster de archivo `.mov`, sólo si pasó el QC: −14 LUFS y pico ≤ −1 dBTP
+   (con reintento del limitador si el AAC lo sube), Rec.709 rango limitado,
    duración/fps/resolución/fotogramas exactos, sin congelados, subtítulos ≤ 42 car./línea, ≤ 2 líneas y
-   ≤ 17 car./s, texto dentro de la banda segura, más una hoja de contacto por render.
+   ≤ 17 car./s, texto dentro de la banda segura (la de cada plataforma elegida en 9:16), licencias
+   comerciales si el proyecto es de uso comercial, tiempos de la voz creíbles y cortes en pulso
+   (aviso), más una hoja de contacto por render.
 
 Cada guardado de `geeper.json` es una versión; se puede volver a cualquiera desde «Historial».
 
@@ -86,6 +95,8 @@ proyecto Hyperframes compilado; se abre con `npx hyperframes@0.9.27 preview buil
 | Render completo: mezcla 0,4 s + check 4–7 s + render NVENC 30–46 s + loudnorm y codificación de entrega 14 s + QC 6 s | 55–71 s |
 | Reeditar (2 subtítulos, quitar escena, pasar a 16:9) y renderizar, sin GPU para generar | 58 s |
 | Relanzar un render interrumpido (se saltan mezcla y check) | 53 s |
+| Render con ediciones v2 (recorte, transiciones, movimiento, color, 2 textos, superposición, 3 plataformas) y máster ProRes, short de 51 s (2026-11-18) | 212 s (el máster: 159 s y 2,1 GB) |
+| Volver a renderizar una versión sin cambios de imagen ni sonido (p. ej. sólo «uso comercial») | 6 s |
 | Generar un tema con MPT (GPU) | **sin medir en Geeper** (el dueño no autorizó GPU en esta sesión; MPT solo tardaba ~3 min) |
 
 ## Limitaciones conocidas
@@ -117,4 +128,13 @@ Los contenedores de Farol no se tocan.
 pnpm run typecheck && pnpm run lint && pnpm test
 pnpm tsx scripts/ui/capturas.ts /tmp/capturas [proyectoId]   # UI a 1440 px y en teléfono, sin errores
 pnpm tsx scripts/ui/reeditar.ts <proyectoId> /tmp/capturas    # reedición completa desde la UI
+pnpm tsx scripts/ui/editar-texto.ts <proyectoId>               # recortar y restaurar una palabra con clics
+pnpm tsx scripts/ui/desborde.ts /proyectos/<id> 390            # qué elementos se salen del ancho
+```
+
+Para probar sin tocar `~/geeper-data`, apunta a otra carpeta y otra base (el seed crea las plantillas):
+
+```bash
+GEEPER_DATA=/tmp/geeper-prueba GEEPER_DB=/tmp/geeper-prueba/geeper.db pnpm exec prisma db push
+GEEPER_DATA=/tmp/geeper-prueba GEEPER_DB=/tmp/geeper-prueba/geeper.db pnpm tsx prisma/seed.ts
 ```
