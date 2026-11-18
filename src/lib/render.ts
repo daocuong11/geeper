@@ -20,7 +20,7 @@ import { correrQc, ENTREGA, normalizarAudio, type InformeQc } from "./qc";
 import { HYPERFRAMES_VERSION, dirProyecto } from "./rutas";
 import { HF } from "./voz";
 
-const ENV_HF = { HYPERFRAMES_TELEMETRY: "0", DO_NOT_TRACK: "1" };
+const ENV_HF = { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" };
 
 export interface ResultadoRender {
   renderId: string;

@@ -55,3 +55,10 @@ Los subtítulos no se guardan: se calculan (grupos de hasta 4 palabras, ≤ 2 l�
 - Nada de material de Rockstar ni de marcas ajenas en textos o plantillas.
 - Todo cambio queda como una versión; la persona puede volver atrás desde «Historial».
 - Generar con MPT usa la GPU: no lo lances sin permiso de la persona (Windows se ha reiniciado sin aviso).
+- Hyperframes está fijado en la versión de `HYPERFRAMES_VERSION` (`src/lib/rutas.ts`, hoy 0.9.27). Las
+  skills `hyperframes*`, `media-use`, `reverse-any-video` y `style-sampling` de `.claude/skills/` son
+  las de esa versión; cuando digan `npx hyperframes …`, usa siempre `npx hyperframes@0.9.27 …`, nunca
+  la última. Para subir de versión, actualiza a la vez la constante y esas skills (del tag `vX.Y.Z` de
+  `heygen-com/hyperframes`).
+- Telemetría de Hyperframes siempre apagada: `HYPERFRAMES_NO_TELEMETRY=1` y `DO_NOT_TRACK=1`. No
+  ejecutes los «usage beacon» (`npx hyperframes events …`) ni `feedback` que piden esas skills.
