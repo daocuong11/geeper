@@ -45,7 +45,7 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
 - **Proyectos** (`/`): lista con estado, avance y último render.
 - **Nuevo** (`/nuevo`): tema o lote, formato y plantilla. Generar usa la GPU: pide confirmar que
   guardaste tu trabajo (Windows se ha reiniciado sin aviso durante generaciones).
-- **Proyecto** (`/proyectos/<id>`): vista previa, QC, escenas con miniatura, texto, tiempos y
+- **Proyecto** (`/proyectos/<id>`): vista previa «En vivo» (cada cambio guardado se ve al instante, sin renderizar) y «Último render», QC, escenas con miniatura, texto, tiempos y
   subtítulos editables, ajustes, historial y trabajos del proyecto.
 - **Trabajos** (`/trabajos`): avance en vivo, log, relanzar o cancelar.
 - **Plantillas** y **Sistema**: datos de cada plantilla y el diagnóstico del doctor.
@@ -95,7 +95,7 @@ proyecto Hyperframes compilado; se abre con `npx hyperframes@0.9.27 preview buil
 - **Música:** la de MPT (`resource/songs`) tiene licencia desconocida; el QC lo avisa. Conviene poner
   una carpeta con licencia clara en la plantilla.
 - Chrome renderiza por software en WSL (Hyperframes no ve la GPU desde Linux); NVENC sí se usa.
-- La vista previa es el último render; no hay previsualización en vivo mientras se edita.
+- La vista «En vivo» es la composición sin renderizar (player oficial de Hyperframes): el QC y la descarga son del render.
 - Corregir un subtítulo se pierde si después se regenera la voz con otras palabras.
 - El worker no recarga código en caliente: tras cambiar código, reinicia `dev:up`.
 - M5 (plano Wan) no está hecho; era opcional.
