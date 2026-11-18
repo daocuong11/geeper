@@ -57,6 +57,7 @@ pnpm tsx scripts/importar-mpt.ts <task_id> "<tema>" [9:16|16:9|1:1] [plantilla]
 pnpm tsx scripts/proponer.ts <slug> propuesta.json [--aplicar]   # valida y muestra diferencias
 pnpm tsx scripts/encolar.ts <slug> render.entregar
 pnpm tsx scripts/revisar-subtitulos.ts <slug>                       # QC de subtítulos sin renderizar
+pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio para FilmCraft, Resolve o Premiere
 ```
 
 Datos de cada proyecto en `~/geeper-data/<slug>/`: `geeper.json`, `assets/`, `renders/`
