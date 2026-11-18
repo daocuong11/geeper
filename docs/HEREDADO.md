@@ -67,3 +67,45 @@ hay que hacerlos. Lo reutilizable, todo MIT:
 - **Manim** (MIT, activo): no ahora; sirve más adelante para clips de diagramas en Dimerso como «clip propio».
 - Todo lo que usa ElevenLabs, HeyGen, Gemini, Veo o Google CSE: de pago.
 - **Voz a ritmo 1,2 para shorts** (explainroo): choca con la regla de ≤ 17 car./s (DECISIONES §3).
+
+## storytold (FilmCraft, EffectCraft, SoundCraft, craft-libs) — revisión 2026-11-18
+
+Apps de escritorio en Rust (egui/wgpu), MIT o Apache-2.0, sin telemetría ni llamadas a IA de pago.
+Todas en **alfa** según su propio ROADMAP: FilmCraft «~56 % listo», EffectCraft «~45 %», SoundCraft
+«~40 %», con Linux/WSL poco probado. Tienen CLI sin interfaz (`<app>-cli`) y servidor MCP. Su exportación
+usa códecs propios en CPU (H.264 sin NVENC en EffectCraft, ~0,7× tiempo real en FilmCraft): **no
+reemplazan** a Hyperframes + ffmpeg/NVENC como motor de render.
+
+**Hecho:** exportar a OpenTimelineIO (`src/lib/otio.ts`, `GET /api/proyectos/<id>/otio`,
+`scripts/exportar-otio.ts`) para terminar a mano en FilmCraft, DaVinci Resolve o Premiere. Reproduce la
+línea de tiempo del render (la primera escena cubre la entrada; un clip más corto que su escena vuelve a
+empezar). Validado con la biblioteca oficial `opentimelineio` 0.18.1 en los 5 proyectos (pistas de igual
+duración, assets existentes, rangos dentro del medio) y convertido a FCP 7 XML y EDL con los adaptadores
+oficiales. No viajan: subtítulos animados (van en el `.srt`), chip, zoom de cortes, tarjeta final, fondo
+desenfocado y ducking.
+
+**Para después (rutas dentro de cada repo):**
+- **Plantillas de motion graphics de EffectCraft:** `effectcraft-cli render --template x.ectemplate
+  --values v.json --format prores --channels rgba` (docs/agents.md:385-397) para intros, rótulos y
+  tarjetas con brillo, partículas o desenfoque de lente que CSS no logra; se superponen con ffmpeg. Requiere
+  instalar Rust o un binario publicado para Linux, y fijar la versión.
+- **Seguimiento de cara para la facecam:** EffectCraft `crates/track/src/face.rs` (MediaPipe Face
+  Landmarker en Rust puro) y el suavizado gaussiano de trayectoria de FilmCraft
+  `crates/render/src/vfx/temporal.rs:346`. El «Auto Reframe» de FilmCraft no detecta caras: no sirve.
+- **Recorte de fondo y segmentación locales:** `craft-ai-integrations` (BEN2 + ViTMatte y SAM 2.1 sobre
+  rten en CPU, `.onnx` de los autores): texto detrás del streamer.
+- **Análisis de audio para momentos fuertes:** `soundcraft/crates/dsp` (`meter.rs:139` R128 con pico
+  real 4×, `offline.rs:715` silencios, `offline.rs:580` transitorios). Sólo depende de rustfft.
+- **Detector de cortes de escena** portable a TS: FilmCraft `crates/render/src/scene.rs:62-95`
+  (rejilla de luma 32×18 + histograma de 16 niveles por canal, umbral frente a la mediana local).
+- **Semántica de edición** (ripple, roll, slip, slide) como especificación: FilmCraft
+  `crates/edit/src/lib.rs:310-1262`; base de tiempo exacta de 254 016 000 000 ticks por segundo.
+- **Subtítulos y listas de corte:** `craft-libs/crates/captions` (SRT, VTT, ASS, TTML con ajuste a
+  fotograma) y `crates/timeline` (FCPXML 1.9–1.11, EDL, OTIO).
+- **Valores de referencia de exportación:** FilmCraft `crates/export/src/presets.rs:125-160` (TikTok,
+  Reels y Shorts 1080×1920 a 8–12 Mbps y −14 LUFS); los nuestros quedan por debajo con CRF 20 y SSIM 0,99.
+
+**Descartado:** usar sus códecs o su render como motor, la UI egui o su build wasm (es la app entera, no
+una biblioteca), generar `.ecproj` a mano (esquema sin publicar), `--gpu` de EffectCraft bajo WSL2, y los
+demás repos de la organización (Unreal, mocap, Kinect, TTS de 2020–2023, infraestructura, `craft-skills`
+vacío, `cloud-worker` en nube de pago).

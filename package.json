@@ -24,6 +24,8 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "@hyperframes/core": "0.9.27",
+    "@hyperframes/player": "0.9.27",
     "@prisma/adapter-better-sqlite3": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "better-sqlite3": "^13.2.0",

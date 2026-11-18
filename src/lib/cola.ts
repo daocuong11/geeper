@@ -20,9 +20,10 @@ export const TIPOS = {
   "proyecto.importar": { motor: "voz", usaGpu: false, nombre: "Importar y alinear" },
   "voz.regenerar": { motor: "voz", usaGpu: false, nombre: "Regenerar voz" },
   "render.entregar": { motor: "render", usaGpu: true, nombre: "Render y QC" },
+  "publicar.subir": { motor: "red", usaGpu: false, nombre: "Publicar en red" },
 } as const;
 export type TipoTrabajo = keyof typeof TIPOS;
-export const MOTORES = ["mpt", "voz", "render"] as const;
+export const MOTORES = ["mpt", "voz", "render", "red"] as const;
 export type Motor = (typeof MOTORES)[number];
 
 export type Payload = Record<string, unknown> & { cadena?: TipoTrabajo[] };
@@ -36,7 +37,7 @@ export async function encolar(proyectoId: string | null, tipo: TipoTrabajo, payl
 
 export async function reclamar(motor: Motor, workerId: string) {
   const candidatos = await db.trabajo.findMany({
-    where: { motor, estado: "pendiente" },
+    where: { motor, estado: "pendiente", OR: [{ noAntesDe: null }, { noAntesDe: { lte: new Date() } }] },
     orderBy: [{ prioridad: "desc" }, { creado: "asc" }],
     take: 5,
   });
@@ -45,6 +46,7 @@ export async function reclamar(motor: Motor, workerId: string) {
       where: { id: c.id, estado: "pendiente" },
       data: {
         estado: "corriendo",
+        noAntesDe: null,
         workerId,
         leaseUntil: new Date(Date.now() + LEASE_MS),
         intentos: { increment: 1 },
@@ -112,10 +114,30 @@ export async function fallar(id: string, workerId: string, error: string, estado
   });
 }
 
+/**
+ * Devuelve un trabajo corriendo a la cola sin gastar el intento: no se toma antes de `hasta`.
+ * Lo usan los ejecutores que esperan algo externo (el VPN, la cuota diaria de una red).
+ */
+export async function esperar(id: string, workerId: string, hasta: Date, etapa: string): Promise<boolean> {
+  const r = await db.trabajo.updateMany({
+    where: { id, workerId, estado: "corriendo" },
+    data: { estado: "pendiente", noAntesDe: hasta, workerId: null, leaseUntil: null, etapa, intentos: { decrement: 1 } },
+  });
+  return r.count === 1;
+}
+
+/** Lo que lanza un ejecutor para que el worker llame a `esperar` en vez de marcarlo fallido. */
+export class Espera extends Error {
+  constructor(public hasta: Date, public etapa: string) {
+    super(etapa);
+    this.name = "Espera";
+  }
+}
+
 export async function relanzar(id: string) {
   const r = await db.trabajo.updateMany({
     where: { id, estado: { in: ["fallido", "interrumpido", "cancelado"] } },
-    data: { estado: "pendiente", intentos: 0, error: null, leaseUntil: null, workerId: null, etapa: "En cola", progreso: 0 },
+    data: { estado: "pendiente", intentos: 0, error: null, leaseUntil: null, noAntesDe: null, workerId: null, etapa: "En cola", progreso: 0 },
   });
   if (r.count !== 1) throw new Error("Sólo se relanzan trabajos fallidos, interrumpidos o cancelados");
 }

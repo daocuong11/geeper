@@ -1,14 +1,15 @@
 /**
- * Worker de Geeper: un ejecutor por motor (mpt, voz, render), cada uno con concurrencia 1.
+ * Worker de Geeper: un ejecutor por motor (mpt, voz, render, red), cada uno con concurrencia 1.
  * Uso: pnpm run worker
  */
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 import {
-  fallar, guardarLatidoWorker, latido, LATIDO_MS, marcarEtapa, MOTORES, nuevoWorkerId, reclamar,
+  Espera, esperar, fallar, guardarLatidoWorker, latido, LATIDO_MS, marcarEtapa, MOTORES, nuevoWorkerId, reclamar,
   recuperarAlArrancar, recuperarVencidos, terminar, type Motor, type Payload, type TipoTrabajo,
 } from "@/lib/cola";
 import { db, prepararDb } from "@/lib/db";
+import { tapar } from "@/lib/redes/secretos";
 import { dirProyecto } from "@/lib/rutas";
 import { EJECUTORES, rutaLog } from "./ejecutores";
 
@@ -31,7 +32,8 @@ async function correrUno(motor: Motor): Promise<boolean> {
   await db.trabajo.update({ where: { id: t.id }, data: { log: log.rel } });
   const escribir = (linea: string) => {
     try {
-      appendFileSync(log.abs, `${hora()} ${linea}\n`);
+      // Ningún token llega al log (PUBLICAR.md §6).
+      appendFileSync(log.abs, `${hora()} ${tapar(linea)}\n`);
     } catch {
       /* el log no debe tumbar el trabajo */
     }
@@ -66,12 +68,20 @@ async function correrUno(motor: Motor): Promise<boolean> {
     escribir(`== hecho${salida.siguiente ? `; sigue ${salida.siguiente.tipo}` : ""}`);
     avisar(`${motor}: terminó ${t.tipo} ${t.id}`);
   } catch (e) {
+    if (e instanceof Espera && !apagando && !ctrl.signal.aborted) {
+      // Espera algo externo (VPN, cuota): vuelve a la cola sin gastar el intento.
+      escribir(`.. ${e.etapa}; vuelve a la cola hasta ${e.hasta.toISOString()}`);
+      await esperar(t.id, workerId, e.hasta, e.etapa);
+      avisar(`${motor}: ${t.tipo} ${t.id} en espera: ${tapar(e.etapa)}`);
+      return true;
+    }
     const msg = e instanceof Error ? (e.stack ?? e.message) : String(e);
     escribir(`!! ${msg}`);
     if (apagando) await fallar(t.id, workerId, "Interrumpido: el worker se apagó a mitad. Relánzalo cuando quieras.", "interrumpido");
     else if (!ctrl.signal.aborted) {
-      await fallar(t.id, workerId, e instanceof Error ? e.message : String(e));
-      if (proyecto) await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "fallido" } }).catch(() => undefined);
+      await fallar(t.id, workerId, tapar(e instanceof Error ? e.message : String(e)));
+      // Una publicación fallida no cambia el estado del proyecto (el render sigue entregado).
+      if (proyecto && t.motor !== "red") await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "fallido" } }).catch(() => undefined);
     }
     avisar(`${motor}: ${t.tipo} ${t.id} ${ctrl.signal.aborted ? "detenido" : "falló"}: ${e instanceof Error ? e.message.split("\n")[0] : e}`);
   } finally {

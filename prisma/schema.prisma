@@ -51,6 +51,7 @@ model Proyecto {
   assets         Asset[]
   trabajos       Trabajo[]
   renders        Render[]
+  publicaciones  Publicacion[]
 }
 
 model Version {
@@ -89,9 +90,9 @@ model Asset {
 model Trabajo {
   id          String    @id @default(cuid())
   proyectoId  String?
-  /// mpt.generar | proyecto.importar | voz.regenerar | render.entregar
+  /// mpt.generar | proyecto.importar | voz.regenerar | render.entregar | publicar.subir
   tipo        String
-  /// Ejecutor que lo corre: mpt | voz | render
+  /// Ejecutor que lo corre: mpt | voz | render | red
   motor       String
   /// pendiente | corriendo | hecho | fallido | interrumpido | cancelado
   estado      String    @default("pendiente")
@@ -99,6 +100,8 @@ model Trabajo {
   intentos    Int       @default(0)
   maxIntentos Int       @default(2)
   leaseUntil  DateTime?
+  /// reclamar() no lo toma antes de esta hora (esperas por VPN o por cuota de una red).
+  noAntesDe   DateTime?
   workerId    String?
   input_hash  String?
   payload     Json
@@ -128,6 +131,8 @@ model Render {
   /// renderizado | aprobado | rechazado
   estado        String
   informeQc     Json?
+  /// sha256 del MP4 final (se publica sólo si el archivo sigue siendo el aprobado).
+  hash          String?
   duracion      Float?
   segundos      Float?
   trabajoId     String?
@@ -140,4 +145,62 @@ model Sistema {
   clave       String   @id
   valor       String
   actualizado DateTime @updatedAt
+}
+
+/// Una cuenta o un canal conectado por OAuth. Los tokens se guardan cifrados (docs/PUBLICAR.md §6).
+model Cuenta {
+  id              String        @id @default(cuid())
+  /// youtube | tiktok | instagram | facebook
+  red             String
+  /// id de la cuenta en la red (channelId, open_id, ig user id, page id)
+  externoId       String
+  /// @handle o nombre del canal o de la página
+  usuario         String
+  /// Nombre interno: «GTA VI Shorts»
+  alias           String?
+  avatarUrl       String?
+  /// conectada | reconectar | desconectada
+  estado          String        @default("conectada")
+  /// Separados por espacio
+  scopes          String        @default("")
+  /// Access token (o token de página), AES-256-GCM
+  accesoCifrado   String?
+  /// Refresh token, AES-256-GCM
+  refrescoCifrado String?
+  expira          DateTime?
+  /// Plantilla de Geeper que se sugiere publicar aquí (opcional).
+  plantilla       String?
+  error           String?
+  creado          DateTime      @default(now())
+  actualizado     DateTime      @updatedAt
+  publicaciones   Publicacion[]
+
+  @@unique([red, externoId])
+}
+
+/// Un render subido (o por subir) a una cuenta.
+model Publicacion {
+  id          String    @id @default(cuid())
+  proyectoId  String
+  renderId    String
+  cuentaId    String
+  /// pendiente | subiendo | procesando | publicada | borrador | fallida | cancelada
+  estado      String    @default("pendiente")
+  titulo      String
+  descripcion String
+  /// publico | no_listado | privado | borrador
+  privacidad  String    @default("privado")
+  programada  DateTime?
+  /// videoId, publish_id, media id
+  idExterno   String?
+  urlExterna  String?
+  error       String?
+  trabajoId   String?
+  creado      DateTime  @default(now())
+  actualizado DateTime  @updatedAt
+  cuenta      Cuenta    @relation(fields: [cuentaId], references: [id])
+  proyecto    Proyecto  @relation(fields: [proyectoId], references: [id], onDelete: Cascade)
+
+  /// Evita subir el mismo render dos veces a la misma cuenta por un doble clic.
+  @@unique([renderId, cuentaId])
 }

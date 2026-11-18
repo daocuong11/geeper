@@ -13,6 +13,7 @@ import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
 import { regenerarVoz } from "@/lib/regenerar";
 import { renderEntregar, versionDeProyecto } from "@/lib/render";
+import { publicarSubir } from "@/lib/redes/publicar";
 import { dirProyecto } from "@/lib/rutas";
 
 export interface Trabajo {
@@ -158,11 +159,25 @@ async function renderEntregarEj(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r };
 }
 
+async function publicarSubirEj(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const resultado = await publicarSubir(t.id, t.payload, {
+    log: h.log,
+    etapa: h.etapa,
+    signal: h.signal,
+    guardar: async (payload) => {
+      t.payload = payload;
+      await guardarPayload(t.id, payload);
+    },
+  });
+  return { resultado };
+}
+
 export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Promise<Salida>> = {
   "mpt.generar": mptGenerar,
   "proyecto.importar": proyectoImportar,
   "voz.regenerar": vozRegenerar,
   "render.entregar": renderEntregarEj,
+  "publicar.subir": publicarSubirEj,
 };
 
 export async function rutaLog(t: Trabajo): Promise<{ abs: string; rel: string }> {

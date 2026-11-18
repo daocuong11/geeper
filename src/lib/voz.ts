@@ -24,7 +24,7 @@ export async function transcribir(audio: string, idioma: string, log: Registro):
     const r = await correr(
       "npx",
       [...HF, "transcribe", local, "--engine", "whisper", "--model", MODELO_WHISPER, "--language", idioma, "--json"],
-      { cwd: tmp, env: { HYPERFRAMES_TELEMETRY: "0", DO_NOT_TRACK: "1" } },
+      { cwd: tmp, env: { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" } },
     );
     let indicada: string | undefined;
     try {
@@ -80,7 +80,7 @@ export async function sintetizar(texto: string, voz: string, velocidad: number, 
     await correr("npx", [...HF, "tts", txt, "--voice", voz, "--speed", String(velocidad), "--output", wav], {
       cwd: tmp,
       log,
-      env: { HYPERFRAMES_TELEMETRY: "0", DO_NOT_TRACK: "1", HYPERFRAMES_PYTHON: PYTHON_VOZ },
+      env: { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1", HYPERFRAMES_PYTHON: PYTHON_VOZ },
     });
     await fs.copyFile(wav, salida);
   } finally {

@@ -4,6 +4,12 @@ import { correr } from "./proceso";
 import { apiViva } from "./mpt";
 import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, PYTHON_VOZ, dirDatos } from "./rutas";
 import { existe } from "./archivos";
+import { db } from "./db";
+import { existeClave, rutaClave } from "./redes/cifrado";
+import { leerConfig, permisosRedes, rutaRedes, urlCallback, type ConfigRedes } from "./redes/config";
+import { obtenerRed } from "./redes/index";
+import { juzgar, leerAjustes, salidaActual, verificarSalida } from "./redes/salida";
+import { REDES_IDS } from "./redes/tipos";
 
 export interface Chequeo {
   nombre: string;
@@ -126,5 +132,71 @@ export async function diagnosticar(): Promise<Chequeo[]> {
     nombre: "mpt_acabado.py (alineación)", ok: py3.stdout.includes("ok"), detalle: py3.stdout.includes("ok") ? "se importa" : py3.stderr.slice(0, 200),
     arreglo: py3.stdout.includes("ok") ? undefined : "Restaura ~/dev/video-tools/bin/mpt_acabado.py",
   });
+
+  c.push(...(await diagnosticarRedes()));
+  return c;
+}
+
+/** Publicar en redes (PUBLICAR.md §6, §8): credenciales presentes, clave, VPN y cuentas. Nunca muestra secretos. */
+async function diagnosticarRedes(): Promise<Chequeo[]> {
+  const c: Chequeo[] = [];
+  const ruta = rutaRedes();
+  let config: ConfigRedes = {};
+  try {
+    config = leerConfig();
+  } catch (e) {
+    // El mensaje de leerConfig sólo nombra los campos con problema, no sus valores.
+    c.push({ nombre: "Credenciales de redes", ok: false, detalle: e instanceof Error ? e.message : String(e), arreglo: `Corrige ${ruta} (formato en src/lib/redes/config.ts)` });
+  }
+  for (const id of REDES_IDS) {
+    let nombre: string = id;
+    try {
+      nombre = obtenerRed(id).nombre;
+    } catch {
+      /* adaptador sin cargar: se usa el id */
+    }
+    const presente = !!config[id];
+    c.push({
+      nombre: `Credenciales de ${nombre}`, ok: presente, aviso: !presente,
+      detalle: presente ? `presentes en ${ruta}` : "faltan: no se pueden conectar cuentas de esta red",
+      arreglo: presente ? undefined : `Agrega "${id}" a ${ruta} (chmod 600) y registra el redirect URI ${urlCallback(id)}`,
+    });
+  }
+  const permisos = permisosRedes();
+  if (permisos && permisos !== "600") {
+    c.push({ nombre: "Permisos de redes.json", ok: false, aviso: true, detalle: `${ruta} tiene permisos ${permisos}`, arreglo: `chmod 600 ${ruta}` });
+  }
+
+  const clave = existeClave();
+  c.push({
+    nombre: "Clave de cifrado de tokens", ok: clave, aviso: !clave,
+    detalle: clave ? rutaClave() : `todavía no existe ${rutaClave()}`,
+    arreglo: clave ? undefined : "Se crea sola al conectar la primera cuenta (o con `pnpm run setup`).",
+  });
+
+  try {
+    const ajustes = await leerAjustes();
+    // Con el VPN apagado verificarSalida no mide; aquí se mide igual para mostrar la IP de salida.
+    const v = ajustes.vpn === "apagado" ? juzgar(ajustes, await salidaActual(true)) : await verificarSalida(true);
+    const ok = v.estado === "activo" || v.estado === "apagado";
+    c.push({
+      nombre: "VPN (salida a las redes)", ok, aviso: v.estado === "sin_dato", detalle: v.detalle,
+      arreglo: ok ? undefined
+        : v.estado === "sin_dato" ? "Revisa la conexión a internet; si sigue, mide de nuevo en Cuentas."
+        : v.estado === "sin_configurar" ? "Configura la IP o el país esperados en Cuentas → Ajustes del VPN."
+        : "Enciende el túnel WireGuard en Windows (con «Block untunneled traffic») o corrige la IP o el país esperados en Cuentas.",
+    });
+  } catch (e) {
+    c.push({ nombre: "VPN (salida a las redes)", ok: false, aviso: true, detalle: `no se pudo revisar: ${e instanceof Error ? e.message : String(e)}` });
+  }
+
+  try {
+    const n = await db.cuenta.count({ where: { estado: "reconectar" } });
+    if (n > 0) {
+      c.push({ nombre: "Cuentas conectadas", ok: false, aviso: true, detalle: `${n} ${n === 1 ? "cuenta necesita" : "cuentas necesitan"} reconectarse`, arreglo: "Página Cuentas → «Reconectar»." });
+    }
+  } catch (e) {
+    c.push({ nombre: "Cuentas conectadas", ok: false, aviso: true, detalle: `no se pudo leer la base: ${e instanceof Error ? e.message : String(e)}` });
+  }
   return c;
 }

@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
 import { Aviso, Estado, archivo, pedir, postJson, segundos, useSondeo } from "./comun";
+import { VistaEnVivo } from "./vista-en-vivo";
 import { ListaTrabajos } from "./lista-trabajos";
+import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
 
 interface Grupo {
   texto: string;
@@ -44,6 +46,7 @@ interface Vista {
     renders: Render[];
     trabajos: { tipo: string; estado: string }[];
     lote: { nombre: string } | null;
+    publicaciones: PublicacionV[];
   };
   p: { voz: { voz: string; velocidad: number }; mostrar: { de: string; a: string }[]; formato: string; plantilla: string } | null;
   escenas: EscenaV[];
@@ -167,6 +170,7 @@ export function EditorProyecto({ id }: { id: string }) {
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [mostrarTxt, setMostrarTxt] = useState<string | null>(null);
+  const [pestana, setPestana] = useState<"vivo" | "render" | null>(null);
 
   async function hacer(fn: () => Promise<unknown>, ok: string) {
     setOcupado(true);
@@ -181,7 +185,7 @@ export function EditorProyecto({ id }: { id: string }) {
       setOcupado(false);
     }
   }
-  const editar = (ed: object) => hacer(() => postJson(`/api/proyectos/${id}/editar`, { edicion: ed }), "Guardado como versión nueva. Renderiza para ver el cambio.");
+  const editar = (ed: object) => hacer(() => postJson(`/api/proyectos/${id}/editar`, { edicion: ed }), "Guardado como versión nueva. Ya se ve en «En vivo»; renderiza para el QC y la descarga.");
   const subirClip = (escena: string, f: File) => hacer(async () => {
     const fd = new FormData();
     fd.set("escena", escena);
@@ -196,6 +200,8 @@ export function EditorProyecto({ id }: { id: string }) {
   if (!v) return <p className="text-tenue">Cargando…</p>;
   const { fila, p, escenas } = v;
   const render = fila.renders[0];
+  // Por defecto: el render si está al día; si hay cambios sin renderizar, la vista en vivo.
+  const modo = pestana ?? (render && render.versionNumero === fila.versionActual ? "render" : "vivo");
   const activos = fila.trabajos.filter((t) => t.estado === "pendiente" || t.estado === "corriendo");
   const textoMostrar = mostrarTxt ?? (p?.mostrar ?? []).map((m) => `${m.de}=${m.a}`).join("\n");
 
@@ -218,8 +224,19 @@ export function EditorProyecto({ id }: { id: string }) {
       {p && (
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
           <div className="tarjeta space-y-3 p-4">
-            <h2 className="font-medium">Vista previa</h2>
-            {render ? (
+            <div className="flex items-center gap-2">
+              <h2 className="font-medium">Vista previa</h2>
+              <div className="ml-auto flex gap-1 text-sm" role="tablist" aria-label="Qué ver">
+                {(["vivo", "render"] as const).map((m) => (
+                  <button key={m} type="button" role="tab" aria-selected={modo === m}
+                    className={`rounded px-2 py-1 ${modo === m ? "bg-white/15" : "text-tenue hover:bg-white/5"}`}
+                    onClick={() => setPestana(m)}>
+                    {m === "vivo" ? "En vivo" : "Último render"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {modo === "vivo" ? <VistaEnVivo proyectoId={id} version={fila.versionActual} /> : render ? (
               <>
                 <video key={render.id} src={archivo(`${fila.slug}/${render.ruta}`)} controls preload="metadata"
                   className={`mx-auto max-h-[70vh] w-full rounded bg-black ${render.perfil === "shorts-9x16" ? "max-w-sm" : ""}`} />
@@ -277,6 +294,16 @@ export function EditorProyecto({ id }: { id: string }) {
               </button>
             </div>
           </div>
+        </section>
+      )}
+
+      {render?.estado === "aprobado" ? (
+        <PanelPublicar proyectoId={id} render={render} nombre={fila.nombre} tema={fila.tema} publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
+      ) : fila.publicaciones.length > 0 && (
+        <section className="tarjeta space-y-2 p-4">
+          <h2 className="font-medium">Publicaciones de este proyecto</h2>
+          <p className="text-xs text-tenue">El último render no está aprobado: para publicar otra vez, renderiza y pasa el QC.</p>
+          <ListaPublicaciones publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
         </section>
       )}
 

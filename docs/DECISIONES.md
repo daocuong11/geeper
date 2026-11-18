@@ -106,7 +106,7 @@ sobre el texto. Si después se regenera la voz y la escena dice exactamente las 
 correcciones se conservan; si el texto cambió, se descartan (los índices ya no valen) y hay que
 volver a corregir.
 
-## 9. Vista previa: el render, no `hyperframes preview`
+## 9. Vista previa: el render, no `hyperframes preview` (superada por §14)
 
 La vista previa del proyecto es el último render (aprobado o no). `hyperframes preview` abre un
 servidor por proyecto y un estudio pensado para editar HTML, que en Geeper no se edita a mano. Se puede
@@ -149,3 +149,22 @@ subirlo junto al video.
 
 Origen: revisión de `zhuyansen/awesome-claude-video-skills` (2026-11-18). Lo heredado y lo
 descartado está en `docs/HEREDADO.md`.
+
+## 14. Vista previa en vivo con `<hyperframes-player>`
+
+El editor tiene dos pestañas: «En vivo» y «Último render». «En vivo» compila la versión actual sin
+renderizar (`src/lib/vista-previa.ts`: mezcla + compilación, ~0,8 s la primera vez y ~30 ms después,
+cacheado por versión, compilador y plantilla en `build/vista-<formato>/`) y la reproduce con
+`@hyperframes/player` 0.9.27, de la misma versión que el render. Al guardar una edición se ve al
+instante; el QC y la descarga siguen siendo del render.
+
+**Choque encontrado:** si la composición expone `window.__timelines`, el player la maneja «en directo»
+(sólo GSAP) y no inyecta el runtime de Hyperframes, que es quien muestra y oculta cada clip: se veía
+siempre el último clip. La vista previa enlaza una copia local de `@hyperframes/core` 0.9.27
+(`hyperframe.runtime.iife.js`, sin CDN); el HTML del render no cambia. Verificado en Chrome headless:
+listo en ~0,5 s, duración 57,44 s igual al render y saltos exactos con el mismo clip y subtítulo que el
+render (`scripts/ui/vista-en-vivo.ts`).
+
+Diferencias conocidas: el ajuste de línea de los subtítulos puede variar un poco por las fuentes del
+navegador, y los clips de MPT tienen un keyframe cada 6 s, así que un salto tarda un instante más en
+mostrar la imagen.
