@@ -10,13 +10,13 @@ import { compilar, escribirProyectoHf, VERSION_COMPILADOR } from "./compilador";
 import { validarProyecto, type Proyecto } from "./esquema";
 import { metricas } from "./formatos";
 import { tomarGpu } from "./gpu";
-import { duracionEscenas, escenasEnLinea } from "./linea";
+import { aSrt, duracionEscenas, escenasEnLinea } from "./linea";
 import { huellaFfmpeg } from "./media";
 import { mezclar } from "./mezcla";
 import { paso, type Contexto } from "./pasos";
 import { obtenerPlantilla } from "./plantillas";
 import { correr } from "./proceso";
-import { correrQc, normalizarAudio, type InformeQc } from "./qc";
+import { correrQc, ENTREGA, normalizarAudio, type InformeQc } from "./qc";
 import { HYPERFRAMES_VERSION, dirProyecto } from "./rutas";
 import { HF } from "./voz";
 
@@ -153,11 +153,11 @@ export async function renderEntregar(
   );
   gpu = rr.resultado.gpu;
 
-  // 5. Sonoridad: loudnorm en dos pasadas sobre el render (el video se copia sin recodificar).
+  // 5. Entrega: loudnorm en dos pasadas y, en la misma pasada, la codificación liviana del video (ENTREGA).
   await ctx.etapa("Normalizando sonoridad", 0.8);
   const base = `v${numero}-${m.perfil}`;
   const final = path.join(dir, "renders", `${base}.mp4`);
-  await paso(ctx, "entrega.loudnorm", { archivos: [crudo], params: { lufs: -14, tp: -2 }, motor: huella }, [final], async ([tmp]) => {
+  await paso(ctx, "entrega.loudnorm", { archivos: [crudo], params: { lufs: -14, tp: -2, entrega: ENTREGA }, motor: huella }, [final], async ([tmp]) => {
     const medido = await normalizarAudio(crudo, tmp!, ctx.log);
     return { antes: medido };
   });
@@ -183,6 +183,7 @@ export async function renderEntregar(
     path.join(dir, "renders", `${base}-hoja`),
     ctx.log,
   );
+  await fs.writeFile(path.join(dir, "renders", `${base}.srt`), aSrt(comp.grupos, comp.inicioTarjeta));
   const rel = (x: string) => path.relative(dir, x);
   const informeRel = { ...informe, archivo: rel(informe.archivo), hojaContacto: informe.hojaContacto && rel(informe.hojaContacto), fotogramas: informe.fotogramas.map((f) => ({ ...f, ruta: rel(f.ruta) })) };
   await fs.writeFile(path.join(dir, "renders", `${base}.qc.json`), JSON.stringify(informeRel, null, 2));

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const TIPOS: Record<string, string> = {
   ".mp4": "video/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4", ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg", ".png": "image/png", ".json": "application/json", ".log": "text/plain; charset=utf-8",
-  ".webp": "image/webp", ".csv": "text/csv; charset=utf-8",
+  ".webp": "image/webp", ".csv": "text/csv; charset=utf-8", ".srt": "application/x-subrip; charset=utf-8",
 };
 
 /** Sirve archivos de ~/geeper-data (con Range para los videos). Sólo lectura, sin salir de la carpeta. */

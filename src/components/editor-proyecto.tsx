@@ -228,7 +228,11 @@ export function EditorProyecto({ id }: { id: string }) {
                   <span className="text-tenue">v{render.versionNumero} · {render.perfil} · {segundos(render.duracion)} · render en {segundos(render.segundos)}</span>
                   {render.versionNumero !== fila.versionActual && <span className="text-amber-300">Hay cambios sin renderizar</span>}
                   {render.estado === "aprobado"
-                    ? <a className="boton ml-auto" href={archivo(`${fila.slug}/${render.ruta}`, true)}>Descargar MP4</a>
+                    ? <>
+                        <a className="boton ml-auto" href={archivo(`${fila.slug}/${render.ruta}`, true)}>Descargar MP4</a>
+                        <a className="boton" title="Para subirlos junto al video (accesibilidad y búsqueda)"
+                          href={archivo(`${fila.slug}/${render.ruta.replace(/\.mp4$/, ".srt")}`, true)}>Subtítulos (.srt)</a>
+                      </>
                     : <span className="ml-auto text-xs text-red-300">No se descarga: no pasó el QC</span>}
                 </div>
               </>

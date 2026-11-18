@@ -156,3 +156,18 @@ export function suavizarRitmo<T extends Ficha>(grupos: T[][], cpl: number, fin: 
   }
   return gs;
 }
+
+const marcaSrt = (s: number) => {
+  const ms = Math.max(0, Math.round(s * 1000));
+  const p = (n: number, w = 2) => String(n).padStart(w, "0");
+  return `${p(Math.floor(ms / 3_600_000))}:${p(Math.floor(ms / 60_000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`;
+};
+
+/**
+ * Subtítulos SRT con los mismos intervalos que anima el compilador (ver `intervalos`), para subirlos
+ * junto al video: las plataformas los usan para accesibilidad y búsqueda aunque estén quemados.
+ */
+export function aSrt(grupos: { texto: string; inicio: number; fin: number }[], finSubs: number): string {
+  const iv = intervalos(grupos, finSubs);
+  return grupos.map((g, i) => `${i + 1}\n${marcaSrt(iv[i]!.ini)} --> ${marcaSrt(iv[i]!.fin)}\n${g.texto.trim()}\n`).join("\n");
+}

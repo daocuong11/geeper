@@ -14,7 +14,8 @@ calidad. Uso interno, en esta PC, US$0 al mes. Ver `docs/PRODUCTO.md` (qué es y
    quitar o reordenar escenas, poner un clip propio, cambiar de plantilla o de formato (9:16, 16:9,
    1:1) y volver a renderizar.
 4. **Regenerar la voz** de una escena o del guion (Kokoro de MPT, en CPU) y realinear los subtítulos.
-5. **Descargar** el render sólo si pasó el QC: −14 LUFS y pico ≤ −1 dBTP, Rec.709 rango limitado,
+5. **Descargar** el render (H.264 High CRF 20, ~4 Mbps: un short de 57 s pesa ~31 MB) y sus subtítulos
+   `.srt` sólo si pasó el QC: −14 LUFS y pico ≤ −1 dBTP, Rec.709 rango limitado,
    duración/fps/resolución/fotogramas exactos, sin congelados, subtítulos ≤ 42 car./línea, ≤ 2 líneas y
    ≤ 17 car./s, texto dentro de la banda segura, más una hoja de contacto por render.
 
@@ -81,7 +82,7 @@ proyecto Hyperframes compilado; se abre con `npx hyperframes@0.9.27 preview buil
 | Importar un short de MPT (copiar + whisper `medium` en CPU + escenas) | 30 s |
 | Regenerar la voz del guion (MPT `/audio`, Kokoro en CPU) | 10 s |
 | Realinear subtítulos (whisper `medium` en CPU) | 30 s |
-| Render completo: mezcla 0,4 s + check 4–7 s + render NVENC 30–46 s + loudnorm 4 s + QC 6 s | 45–61 s |
+| Render completo: mezcla 0,4 s + check 4–7 s + render NVENC 30–46 s + loudnorm y codificación de entrega 14 s + QC 6 s | 55–71 s |
 | Reeditar (2 subtítulos, quitar escena, pasar a 16:9) y renderizar, sin GPU para generar | 58 s |
 | Relanzar un render interrumpido (se saltan mezcla y check) | 53 s |
 | Generar un tema con MPT (GPU) | **sin medir en Geeper** (el dueño no autorizó GPU en esta sesión; MPT solo tardaba ~3 min) |

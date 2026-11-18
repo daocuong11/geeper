@@ -5,7 +5,7 @@ const config = [
   ...next,
   ...nextTs,
   {
-    ignores: [".next/**", "node_modules/**", "src/generated/**", "next-env.d.ts", "py/**"],
+    ignores: [".next/**", "node_modules/**", "src/generated/**", "next-env.d.ts", "py/**", ".claude/**"],
   },
   {
     rules: {

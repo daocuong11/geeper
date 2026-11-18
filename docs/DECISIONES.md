@@ -131,3 +131,21 @@ código, reinicia `dev:up` (reiniciarlo deja «interrumpido» lo que estaba corr
 solo, `dev:up` lo vuelve a lanzar (hasta 5 veces en 10 min) y el barrido de leases marca
 «interrumpido» lo que tenía. Un `kill -9` del worker deja huérfano el render de Hyperframes que estaba
 corriendo: termina solo y su temporal nunca recibe el nombre final.
+
+## 13. Entrega liviana: libx264 High CRF 20 sobre el máster de Hyperframes
+
+**Choque:** el render `--quality delivery` de Hyperframes sale en H.264 Main a ~16 Mbps: un short de
+57 s pesaba 115 MB, que es lento de subir y ocupa disco sin ganar calidad visible.
+
+**Decisión:** el render de Hyperframes queda como máster (`build/crudo-<perfil>.mp4`) y el archivo
+entregado se recodifica en la misma pasada que el `loudnorm` (`ENTREGA` en `src/lib/qc.ts`): libx264
+`slow`, CRF 20, perfil High, keyframe cada 2 s, tope de 12 Mbps, etiquetas Rec.709 y AAC 192k sin PNS
+(`-aac_pns 0`, de explainroo). Medido sobre el short de los barcos: **115 MB → 31,5 MB** (4,2 Mbps),
+SSIM 0,992 frente al máster, 14 s de CPU, QC aprobado. CRF 18 daba 43 MB (SSIM 0,993) y CRF 22,
+23 MB (0,991). No hay `libvmaf` en el ffmpeg local; si se instala, el criterio es VMAF ≥ 93.
+
+Cada render deja también `v<N>-<perfil>.srt` con los mismos intervalos que anima el compilador, para
+subirlo junto al video.
+
+Origen: revisión de `zhuyansen/awesome-claude-video-skills` (2026-11-18). Lo heredado y lo
+descartado está en `docs/HEREDADO.md`.
