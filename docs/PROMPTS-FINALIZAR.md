@@ -9,12 +9,11 @@ seguidos de una prueba real. Hay dos agentes, en este orden:
    claves de al menos una red.
 
 Antes del agente A, haz a mano lo que ningún agente puede hacer por ti:
-- **Base de datos:** la base local todavía no tiene las tablas de M5 (`pnpm doctor` lo marca como «The
-  table `main.Cuenta` does not exist»). En la rama `feat/m5-publicar-redes`, respalda
-  `~/geeper-data` (o la ruta que muestre `pnpm doctor`) y corre `pnpm db:push`. Solo agrega tablas y
-  columnas; si Prisma avisa que se perderían datos, detente y revisa antes de aceptar.
-- **Docker Desktop:** ábrelo, con la integración WSL activa. Hoy está apagado y MoneyPrinterTurbo no
-  responde. No afecta la publicación, pero sí la generación de videos.
+- **Base de datos:** ✓ hecho el 18-11-2026. Las tablas de M5 ya están aplicadas con `pnpm db:push`. El
+  respaldo previo está en `~/geeper-data/geeper.db.respaldo-antes-m5` (con sus archivos `-wal` y `-shm`).
+  Si otro equipo usa una base distinta, repite el paso allí.
+- **Docker Desktop:** debe estar abierto, con la integración WSL activa, para que MoneyPrinterTurbo
+  genere videos. No afecta la publicación.
 - **VPN:** instala WireGuard en Windows con un servidor fijo (TRAMITES.md §0.3).
 - **Cuentas:** crea las cuentas de cada red (TRAMITES.md §1).
 
