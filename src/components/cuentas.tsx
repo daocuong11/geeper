@@ -234,6 +234,17 @@ function SeccionRed({ red, cuentas, vpn, alCambiar, avisar }: {
           y registra este redirect URI en la consola de la red: <code className="break-all">{red.callback}</code>
         </Aviso>
       )}
+      {red.id === "youtube" && (
+        // Exigido por las políticas para desarrolladores de los Servicios de API de YouTube.
+        <p className="text-xs text-tenue">
+          Geeper usa los Servicios de API de YouTube. Al conectar un canal aceptas los{" "}
+          <a className="text-acento hover:underline" href="https://www.youtube.com/t/terms" target="_blank" rel="noreferrer">Términos del Servicio de YouTube</a>
+          {" "}y la{" "}
+          <a className="text-acento hover:underline" href="https://policies.google.com/privacy" target="_blank" rel="noreferrer">Política de Privacidad de Google</a>.
+          {" "}Puedes revocar el acceso cuando quieras con «Desconectar» o desde la{" "}
+          <a className="text-acento hover:underline" href="https://security.google.com/settings/security/permissions" target="_blank" rel="noreferrer">configuración de seguridad de Google</a>.
+        </p>
+      )}
       {red.configurada && !vpn.ok && <p className="text-xs text-amber-300">No se puede conectar ahora: {vpn.detalle}</p>}
       {cuentas.length > 0 ? (
         <ul className="grid gap-3 md:grid-cols-2">
