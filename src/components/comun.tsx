@@ -55,6 +55,14 @@ const COLORES: Record<string, string> = {
   entregado: "bg-emerald-800 text-emerald-100",
   aprobado: "bg-emerald-800 text-emerald-100",
   rechazado: "bg-red-900 text-red-100",
+  subiendo: "bg-sky-800 text-sky-100",
+  procesando: "bg-indigo-800 text-indigo-100",
+  publicada: "bg-emerald-800 text-emerald-100",
+  fallida: "bg-red-900 text-red-100",
+  cancelada: "bg-zinc-700 text-zinc-200",
+  conectada: "bg-emerald-800 text-emerald-100",
+  reconectar: "bg-amber-800 text-amber-100",
+  desconectada: "bg-zinc-700 text-zinc-200",
 };
 
 const NOMBRES: Record<string, string> = {

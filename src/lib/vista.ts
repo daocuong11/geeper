@@ -14,6 +14,10 @@ export async function vistaProyecto(id: string) {
       renders: { orderBy: { creado: "desc" } },
       trabajos: { orderBy: { creado: "desc" }, take: 30 },
       lote: { select: { id: true, nombre: true } },
+      publicaciones: {
+        orderBy: { creado: "desc" },
+        include: { cuenta: { select: { id: true, red: true, usuario: true, alias: true } } },
+      },
     },
   });
   if (!fila) return null;

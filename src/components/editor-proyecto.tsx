@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Aviso, Estado, archivo, pedir, postJson, segundos, useSondeo } from "./comun";
 import { ListaTrabajos } from "./lista-trabajos";
+import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
 
 interface Grupo {
   texto: string;
@@ -44,6 +45,7 @@ interface Vista {
     renders: Render[];
     trabajos: { tipo: string; estado: string }[];
     lote: { nombre: string } | null;
+    publicaciones: PublicacionV[];
   };
   p: { voz: { voz: string; velocidad: number }; mostrar: { de: string; a: string }[]; formato: string; plantilla: string } | null;
   escenas: EscenaV[];
@@ -277,6 +279,16 @@ export function EditorProyecto({ id }: { id: string }) {
               </button>
             </div>
           </div>
+        </section>
+      )}
+
+      {render?.estado === "aprobado" ? (
+        <PanelPublicar proyectoId={id} render={render} nombre={fila.nombre} tema={fila.tema} publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
+      ) : fila.publicaciones.length > 0 && (
+        <section className="tarjeta space-y-2 p-4">
+          <h2 className="font-medium">Publicaciones de este proyecto</h2>
+          <p className="text-xs text-tenue">El último render no está aprobado: para publicar otra vez, renderiza y pasa el QC.</p>
+          <ListaPublicaciones publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
         </section>
       )}
 

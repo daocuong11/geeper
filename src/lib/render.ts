@@ -5,6 +5,7 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import { sha256Archivo } from "./archivos";
 import { db } from "./db";
 import { compilar, escribirProyectoHf, VERSION_COMPILADOR } from "./compilador";
 import { validarProyecto, type Proyecto } from "./esquema";
@@ -198,6 +199,8 @@ export async function renderEntregar(
       ruta: rel(final),
       estado: informe.aprobado ? "aprobado" : "rechazado",
       informeQc: informeRel as object,
+      // Se publica sólo si el MP4 sigue siendo el que aprobó el QC (PUBLICAR.md §9).
+      hash: informe.aprobado ? await sha256Archivo(final) : null,
       duracion: comp.total,
       segundos,
       trabajoId,
