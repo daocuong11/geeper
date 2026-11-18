@@ -28,3 +28,5 @@ export const MPT_TAREAS = "/MoneyPrinterTurbo/storage/tasks";
 export const HYPERFRAMES_VERSION = "0.9.27";
 /** Raíz del repo (para localizar py/ y otros recursos). */
 export const RAIZ_REPO = process.env.GEEPER_REPO ?? process.cwd();
+/** Python con kokoro-onnx para `hyperframes tts` (el venv del estudio). */
+export const PYTHON_VOZ = process.env.HYPERFRAMES_PYTHON ?? path.join(ESTUDIO, "OpenMontage", ".venv", "bin", "python");

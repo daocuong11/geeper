@@ -176,3 +176,20 @@ export async function recuperarAlArrancar(): Promise<{ reinicio: Reinicio; inter
 export function nuevoWorkerId(): string {
   return `${os.hostname()}:${process.pid}:${Date.now().toString(36)}`;
 }
+
+/**
+ * Durante la marcha: trabajos «corriendo» cuyo lease venció (su worker murió sin avisar, p. ej. kill -9).
+ * Los de GPU quedan «interrumpidos» (los relanza la persona); los demás vuelven a la cola.
+ */
+export async function recuperarVencidos(): Promise<number> {
+  const vencidos = await db.trabajo.findMany({ where: { estado: "corriendo", leaseUntil: { lt: new Date() } } });
+  for (const t of vencidos) {
+    await db.trabajo.updateMany({
+      where: { id: t.id, estado: "corriendo", leaseUntil: { lt: new Date() } },
+      data: t.usaGpu
+        ? { estado: "interrumpido", leaseUntil: null, terminado: new Date(), error: "Interrumpido: el worker que lo corría dejó de responder. Relánzalo cuando quieras." }
+        : { estado: "pendiente", leaseUntil: null, workerId: null, etapa: "En cola (recuperado)" },
+    });
+  }
+  return vencidos.length;
+}

@@ -69,7 +69,7 @@ export const PLANTILLAS_INICIALES: { slug: string; nombre: string; datos: DatosP
       tipografia: { titulos: "Archivo Black", texto: "Montserrat", pesoTexto: 800 },
       cta: "Suscríbete para más",
       tarjetaFinal: { titulo: "GTA VI Shorts", duracion: 2.8 },
-      voz: { motor: "kokoro", voz: "ef_dora", velocidad: 0.9, idioma: "es" },
+      voz: { motor: "mpt", voz: "kokoro:ef_dora", velocidad: 0.9, idioma: "es" },
       mpt: {
         video_language: "es-ES",
         voice_name: "kokoro:ef_dora",
@@ -105,7 +105,7 @@ export const PLANTILLAS_INICIALES: { slug: string; nombre: string; datos: DatosP
       tipografia: { titulos: "Inter", texto: "Inter", pesoTexto: 800 },
       cta: "Síguenos para más",
       tarjetaFinal: { titulo: "Dimerso", duracion: 2.8 },
-      voz: { motor: "kokoro", voz: "ef_dora", velocidad: 0.9, idioma: "es" },
+      voz: { motor: "mpt", voz: "kokoro:ef_dora", velocidad: 0.9, idioma: "es" },
       mpt: {
         video_language: "es-ES",
         voice_name: "kokoro:ef_dora",

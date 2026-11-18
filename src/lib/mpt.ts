@@ -79,3 +79,33 @@ export async function modeloImagen(): Promise<string | undefined> {
   const v = r.stdout.trim();
   return v ? v.split("/").pop() : undefined;
 }
+
+/** Sólo voz (POST /audio): Kokoro de MPT en CPU, sin guion por LLM ni imágenes. */
+export async function crearAudio(texto: string, voz: string, velocidad: number, idioma: string): Promise<string> {
+  const r = await pedir("/audio", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      video_script: texto,
+      voice_name: voz.includes(":") ? voz : `kokoro:${voz}`,
+      voice_rate: velocidad,
+      video_language: idioma,
+      bgm_type: "",
+    }),
+  });
+  const id = (r.json as { data?: { task_id?: string } } | null)?.data?.task_id;
+  if (r.status !== 200 || !id) throw new Error(`MPT rechazó el audio (${r.status}): ${JSON.stringify(r.json).slice(0, 500)}`);
+  return id;
+}
+
+export async function esperarAudio(taskId: string, signal?: AbortSignal): Promise<void> {
+  for (let i = 0; i < 600; i++) {
+    if (signal?.aborted) throw new Error("Cancelado");
+    const r = await pedir(`/tasks/${taskId}`);
+    const d = (r.json as { data?: { state?: number } } | null)?.data ?? {};
+    if (d.state === 1) return;
+    if (d.state === -1 || r.status === 404) throw new Error(`MPT no pudo generar el audio (${taskId})`);
+    await new Promise((ok) => setTimeout(ok, 2000));
+  }
+  throw new Error("MPT tardó demasiado en generar el audio");
+}

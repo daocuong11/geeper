@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 import { correr } from "./proceso";
 import { apiViva } from "./mpt";
-import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, dirDatos } from "./rutas";
+import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, PYTHON_VOZ, dirDatos } from "./rutas";
 import { existe } from "./archivos";
 
 export interface Chequeo {
@@ -81,11 +81,11 @@ export async function diagnosticar(): Promise<Chequeo[]> {
   });
 
   // venv del estudio.
-  const venv = `${ESTUDIO}/OpenMontage/.venv/bin/python`;
+  const venv = PYTHON_VOZ;
   const py = await intento(venv, ["-c", "import torch, kokoro_onnx; print(torch.__version__, torch.cuda.is_available())"], 60_000);
   c.push({
-    nombre: "venv del estudio (OpenMontage)", ok: py.codigo === 0, aviso: true,
-    detalle: py.codigo === 0 ? `torch ${py.stdout.trim()}` : "no responde (sólo lo usa el plano Wan, opcional)",
+    nombre: "venv del estudio (Kokoro para regenerar voz)", ok: py.codigo === 0,
+    detalle: py.codigo === 0 ? `kokoro-onnx ok, torch ${py.stdout.trim()}` : "no responde: regenerar la voz no funcionará",
     arreglo: py.codigo === 0 ? undefined : "source ~/dev/video-tools/estudio.sh  (ver ESTUDIO.md)",
   });
 
