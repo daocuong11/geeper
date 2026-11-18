@@ -16,6 +16,7 @@ export function FormNuevo() {
   const [formato, setFormato] = useState("9:16");
   const [plantilla, setPlantilla] = useState("gta-vi-shorts");
   const [mptTaskId, setMpt] = useState("");
+  const [rehacerVoz, setRehacerVoz] = useState(true);
   const [aceptoGpu, setAcepto] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +29,7 @@ export function FormNuevo() {
     setEnviando(true);
     setError(null);
     try {
-      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined });
+      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz });
       router.push(r.proyectos.length === 1 ? `/proyectos/${r.proyectos[0]!.id}` : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -70,6 +71,10 @@ export function FormNuevo() {
         <label className="etiqueta mt-3" htmlFor="mpt">task_id de MoneyPrinterTurbo</label>
         <input id="mpt" className="campo font-mono" value={mptTaskId} onChange={(e) => setMpt(e.target.value)} placeholder="c721927b-353e-4dce-9bbb-8ce7d33ed5f2" />
         <p className="mt-1 text-xs text-tenue">Usa la primera línea de «Tema» como nombre.</p>
+        <label className="mt-2 flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={rehacerVoz} onChange={(e) => setRehacerVoz(e.target.checked)} />
+          Rehacer la voz con la de la plantilla (Kokoro en CPU; los shorts viejos de MPT van muy rápido para el QC)
+        </label>
       </details>
       {necesitaGpu && (
         <Aviso tipo="alerta">

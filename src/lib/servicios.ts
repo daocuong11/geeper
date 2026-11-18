@@ -67,10 +67,16 @@ export async function crearLote(temas: string[], formato: Formato, plantilla: st
 }
 
 /** Trae un short que MPT ya generó (sin usar la GPU): importar → render → QC. */
-export async function importarTareaMpt(taskId: string, n: NuevoProyecto) {
+/**
+ * Trae un short que MPT ya generó (sin usar la GPU): importar → render → QC. Con `rehacerVoz`, la voz
+ * se vuelve a sintetizar con la de la plantilla (Kokoro de MPT, en CPU) antes del render: sirve para
+ * shorts viejos hechos a velocidad 1, que no pasan la regla de ≤ 17 car./s.
+ */
+export async function importarTareaMpt(taskId: string, n: NuevoProyecto, rehacerVoz = false) {
   if (!/^[0-9a-f-]{36}$/.test(taskId)) throw new Error("task_id de MPT inválido");
   const p = await crearFila(n);
   await db.proyecto.update({ where: { id: p.id }, data: { estado: "ensamblado" } });
-  await encolar(p.id, "proyecto.importar", { taskId, cadena: ["render.entregar"] });
+  const cadena: TipoTrabajo[] = rehacerVoz ? ["voz.regenerar", "render.entregar"] : ["render.entregar"];
+  await encolar(p.id, "proyecto.importar", { taskId, cadena });
   return p;
 }

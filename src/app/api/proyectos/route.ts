@@ -24,6 +24,7 @@ const Pedido = z.object({
   plantilla: z.string().min(1),
   nombreLote: z.string().optional(),
   mptTaskId: z.string().optional(),
+  rehacerVoz: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     const d = Pedido.parse(await req.json());
     const temas = d.temas.split("\n").map((t) => t.trim()).filter(Boolean);
     if (d.mptTaskId?.trim()) {
-      const p = await importarTareaMpt(d.mptTaskId.trim(), { tema: temas[0]!, formato: d.formato, plantilla: d.plantilla });
+      const p = await importarTareaMpt(d.mptTaskId.trim(), { tema: temas[0]!, formato: d.formato, plantilla: d.plantilla }, d.rehacerVoz);
       return json({ proyectos: [p] }, 201);
     }
     if (temas.length === 1) return json({ proyectos: [await crearProyecto({ tema: temas[0]!, formato: d.formato, plantilla: d.plantilla })] }, 201);

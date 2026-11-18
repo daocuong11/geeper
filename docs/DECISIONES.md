@@ -24,26 +24,45 @@ El README de MPT dice que `resource/songs` viene de videos de YouTube («si infr
 Biblioteca de audio de YouTube o pistas CC0) y apuntar `musica.carpeta` y `musica.licencia` de la
 plantilla ahí desde la página Plantillas.
 
-## 3. Voz al 0,9 para cumplir ≤ 17 caracteres por segundo
+## 3. Voz al 0,85 para acercarse a ≤ 17 caracteres por segundo
 
-**Choque:** la voz Kokoro `ef_dora` a velocidad 1 habla a 17,2 car./s **de media** (medido en un short
-de 47 s). Con eso ninguna agrupación puede dejar todos los subtítulos en ≤ 17 car./s, que es la regla
-del QC.
+**Choque:** la voz Kokoro `ef_dora` a velocidad 1 habla a ~17,2 car./s **de media** (medido en un short
+de 47 s). Con eso ninguna agrupación deja todos los subtítulos en ≤ 17 car./s, que es la regla del QC.
 
-**Decisión:** las plantillas piden la voz a **0,9** (Kokoro directo y `voice_rate` de MPT) y el
+**Decisión:** las plantillas piden la voz a **0,85** (`voice_rate` de MPT y `voz.velocidad`) y el
 compilador:
 - corta grupos de hasta 4 palabras como `mpt-acabado`, partidos para que quepan en 2 líneas,
-- después **suaviza el ritmo**: une grupos vecinos o les pasa una palabra mientras baje el exceso
-  sobre 17 car./s y sigan cabiendo en 2 líneas (un grupo puede cruzar un corte de escena),
-- deja que cada grupo aparezca hasta 0,3 s antes si hay silencio y se quede hasta 0,6 s después.
+- **suaviza el ritmo**: une grupos vecinos o les pasa una palabra mientras baje el exceso sobre
+  17 car./s y sigan cabiendo en 2 líneas (un grupo puede cruzar un corte de escena),
+- deja que cada grupo aparezca hasta 0,3 s antes si hay silencio y se quede hasta 0,6 s después,
+- empieza cada video con **0,3 s de entrada** en silencio (la imagen ya se ve), así el primer
+  subtítulo no queda a 19 car./s porque la voz arrancaba en el segundo 0.
 
-El QC mide exactamente los mismos intervalos que anima el compilador (una sola función,
-`intervalos()` en `src/lib/linea.ts`). Simulado sobre el short de faros: a velocidad 1 quedan 7 grupos
-por encima de 17; a 0,92 o 0,9, ninguno. Si el dueño prefiere el ritmo original, la velocidad se
-cambia por plantilla o por proyecto, pero el QC lo rechazará por legibilidad.
+El QC mide exactamente los mismos intervalos que anima el compilador (`intervalos()` en
+`src/lib/linea.ts`).
 
-Para que quepan más caracteres por línea, en 9:16 el subtítulo pasa de 74 a 60 px (21 a 24
-caracteres por línea dentro de una pastilla de 940 px), y en 1:1 a 58 px.
+**Medido** sobre 5 shorts reales de MPT (voz regenerada con el Kokoro de MPT):
+
+| Velocidad | Aprobados por legibilidad | Peor pico |
+|---|---|---|
+| 0,9 | 1 de 5 | 17,44 car./s |
+| 0,85 | 3 de 4 | 17,39 car./s (el que falla) |
+
+**Pendiente del dueño:** con 0,85 un short de cada cuatro todavía queda apenas por encima (17,4). Las
+salidas son (a) voz a 0,8, (b) aceptar 18 car./s para shorts con karaoke (el texto aparece al ritmo
+de la voz, no hay que leerlo de corrido) o (c) dejarlo así y corregir a mano el guion de los que
+fallen. La regla vive en `OBJETIVO.maxCps` (`src/lib/qc.ts`).
+
+En 9:16 el subtítulo pasa de 74 a 60 px (24 caracteres por línea en una pastilla de 940 px) y en 1:1 a
+58 px, para que quepan grupos más largos.
+
+### 3 bis. Regenerar la voz: Kokoro de MPT, no el de Hyperframes
+
+`hyperframes tts` (Kokoro-82M por kokoro-onnx) a 0,9 habla tan rápido como MPT a 1,0 y reparte peor
+las pausas: necesitaría ~0,82 para pasar el QC. Por eso regenerar la voz usa `POST /api/v1/audio` de
+MPT (sólo voz: Kokoro en CPU, sin LLM ni imágenes, sin GPU) y suena igual que el short original. El
+motor `kokoro` (Hyperframes, con el venv del estudio en `HYPERFRAMES_PYTHON`) queda como alternativa por
+proyecto si MPT no está levantado.
 
 ## 4. Los cortes de escena se ajustan a silencios y fin de frase
 
@@ -93,8 +112,22 @@ La vista previa del proyecto es el último render (aprobado o no). `hyperframes 
 servidor por proyecto y un estudio pensado para editar HTML, que en Geeper no se edita a mano. Se puede
 abrir igual desde la terminal sobre `~/geeper-data/<proyecto>/build/hf-9x16`.
 
-## 10. Puerto, datos y procesos
+## 10. Duración en el QC: la del stream de video
+
+El contenedor MP4 suma el relleno del códec AAC (unos 0,1 s), así que medir `format.duration` rechazaba
+renders correctos. El QC mide la duración del stream de video contra la esperada (± 2 fotogramas) y
+aparte exige que el audio no se aparte más de 0,15 s del video.
+
+## 11. Pico real a −2 dBTP
+
+`loudnorm` apunta a −2 dBTP (no −1,5): tras codificar en AAC el pico real sube unas décimas y con
+−1,5 quedaba en −1,03, al borde de la regla de ≤ −1.
+
+## 12. Puerto, datos y procesos
 
 Web en `:3300`, worker aparte (`pnpm run worker`) y los dos juntos con `pnpm run dev:up`. Base SQLite y
 proyectos en `~/geeper-data/`, fuera del repo. El worker no recarga código en caliente: tras cambiar
-código, reinicia `dev:up` (reiniciarlo deja «interrumpido» lo que estaba corriendo).
+código, reinicia `dev:up` (reiniciarlo deja «interrumpido» lo que estaba corriendo). Si el worker muere
+solo, `dev:up` lo vuelve a lanzar (hasta 5 veces en 10 min) y el barrido de leases marca
+«interrumpido» lo que tenía. Un `kill -9` del worker deja huérfano el render de Hyperframes que estaba
+corriendo: termina solo y su temporal nunca recibe el nombre final.

@@ -22,9 +22,9 @@ describe("ediciones sin GPU", () => {
     const p = aplicarEdicion(proyectoDePrueba(), { tipo: "quitarEscena", escena: "e01" });
     const es = escenasEnLinea(p);
     expect(es.map((e) => e.escena.id)).toEqual(["e02", "e03"]);
-    expect(es[0]!.inicio).toBe(0);
+    expect(es[0]!.inicio).toBeCloseTo(0.3); // tras la entrada en silencio
     const g = todosLosGrupos(p);
-    expect(g[0]!.inicio).toBeCloseTo(0); // la palabra de 3.0 s en la voz cae en 0 s de la línea
+    expect(g[0]!.inicio).toBeCloseTo(0.3); // la palabra de 3.0 s en la voz cae al final de la entrada
     expect(g[0]!.texto.startsWith("Escena 2")).toBe(true);
   });
 
@@ -52,7 +52,8 @@ describe("ediciones sin GPU", () => {
       const p = aplicarEdicion(proyectoDePrueba(), { tipo: "cambiarFormato", formato: f });
       const c = compilar(p, plantilla, "/tmp/mezcla.wav", "/tmp/p");
       expect(c.cajas.filter((x) => !x.dentro)).toEqual([]);
-      expect(c.total).toBeCloseTo(9 + plantilla.tarjetaFinal.duracion);
+      expect(c.total).toBeCloseTo(0.3 + 9 + plantilla.tarjetaFinal.duracion);
+      expect(c.html).toContain('data-start="0.000"'); // la primera escena cubre la entrada
       // Un clip de 9:16 en 16:9 se contiene sobre un fondo desenfocado.
       expect(c.html.includes("clip fondo desenfoque")).toBe(f !== "9:16"); // 9:16 en 16:9 o 1:1: contenido sobre fondo desenfocado
       expect(revisarSubtitulos(f, c.grupos, c.inicioTarjeta).peorLineas).toBeLessThanOrEqual(2);

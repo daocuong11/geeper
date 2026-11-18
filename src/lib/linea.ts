@@ -22,10 +22,13 @@ export interface Grupo {
   escena: string;
 }
 
+/** Silencio al inicio (s): la imagen ya se ve y el primer subtítulo tiene de dónde anticiparse. */
+export const ENTRADA = 0.3;
+
 export function escenasEnLinea(p: Proyecto): EscenaEnLinea[] {
   const voz = pista(p, "voz").clips;
   const visual = pista(p, "visual").clips;
-  let t = 0;
+  let t = ENTRADA;
   return voz.map((c, i) => {
     const escena = p.escenas[c.escena ?? ""];
     const v = visual[i];
@@ -37,7 +40,7 @@ export function escenasEnLinea(p: Proyecto): EscenaEnLinea[] {
 }
 
 export function duracionEscenas(p: Proyecto): number {
-  return pista(p, "voz").clips.reduce((s, c) => s + c.rango.duracion, 0);
+  return ENTRADA + pista(p, "voz").clips.reduce((s, c) => s + c.rango.duracion, 0);
 }
 
 /** Palabras mostradas de una escena, ya en tiempo de la línea final. */
@@ -64,7 +67,7 @@ export function todosLosGrupos(p: Proyecto): Grupo[] {
   const cpl = caracteresPorLinea(p.formato);
   const escenas = escenasEnLinea(p);
   const porEscena = escenas.flatMap((e) => agrupar(fichasDeEscena(p, e)).flatMap((g) => partirEnDosLineas(g, cpl)));
-  const fin = escenas.reduce((s, e) => s + e.duracion, 0);
+  const fin = ENTRADA + escenas.reduce((s, e) => s + e.duracion, 0);
   return suavizarRitmo(porEscena, cpl, fin).map((g) => ({
     fichas: g,
     texto: g.map((f) => f.texto).join(" "),

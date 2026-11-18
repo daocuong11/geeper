@@ -197,9 +197,13 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
     medido: `${info.ancho}x${info.alto}`, objetivo: `${m.W}x${m.H}`,
   });
   reglas.push({ id: "fps", nombre: "Fotogramas por segundo", ok: v.r_frame_rate === "30/1", medido: v.r_frame_rate, objetivo: "30/1" });
+  // Duración del stream de video (el contenedor suma el relleno del códec de audio).
+  const durVideo = Number(v.duration ?? info.duracion);
+  const durAudio = Number(info.audio?.duration ?? durVideo);
   reglas.push({
-    id: "duracion", nombre: "Duración", ok: Math.abs(info.duracion - esp.total) <= 2 / OBJETIVO.fps + 0.05,
-    medido: Number(info.duracion.toFixed(3)), objetivo: `${esp.total.toFixed(3)} s`,
+    id: "duracion", nombre: "Duración (video y audio)",
+    ok: Math.abs(durVideo - esp.total) <= 2 / OBJETIVO.fps + 0.05 && Math.abs(durAudio - durVideo) <= 0.15,
+    medido: { video: Number(durVideo.toFixed(3)), audio: Number(durAudio.toFixed(3)) }, objetivo: `${esp.total.toFixed(3)} s; audio a ≤ 0,15 s del video`,
   });
   reglas.push({
     id: "fotogramas", nombre: "Fotogramas (caídos o de más)", ok: Math.abs(fotogramas - esperados) <= 2,

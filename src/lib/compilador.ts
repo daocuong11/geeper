@@ -76,7 +76,9 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
     const ajuste = ajusteDe(es.visual, a, W, H);
     const ids: string[] = [];
     const imagen = a.tipo === "imagen";
-    let t = 0;
+    // La primera escena también cubre la entrada en silencio del principio.
+    const entrada = es.indice === 0 ? es.inicio : 0;
+    let t = -entrada;
     let desde = es.visual.rango.inicio;
     let k = 0;
     while (t < es.duracion - 1e-3 && k < 50) {
@@ -99,7 +101,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       desde = 0;
       k++;
     }
-    cortes.push({ t: es.inicio, ids });
+    cortes.push({ t: es.inicio - entrada, ids });
   }
   // La última escena se congela bajo la tarjeta final: se extiende el último tramo.
   const ultimas = piezas.filter((x) => Math.abs(x.inicio + x.dur - inicioTarjeta) < 1e-3);

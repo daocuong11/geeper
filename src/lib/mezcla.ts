@@ -5,7 +5,7 @@
  */
 import path from "node:path";
 import { pista, type Proyecto } from "./esquema";
-import { duracionEscenas } from "./linea";
+import { duracionEscenas, ENTRADA } from "./linea";
 import { ffmpeg } from "./media";
 import type { Registro } from "./proceso";
 
@@ -38,7 +38,7 @@ export function planMezcla(p: Proyecto, dir: string, total: number, ducking: boo
         `afade=t=in:d=${FUNDIDO},afade=t=out:st=${Math.max(0, d - FUNDIDO).toFixed(4)}:d=${FUNDIDO}[s${i}]`,
     );
   });
-  partes.push(`${voz.map((_, i) => `[s${i}]`).join("")}concat=n=${voz.length}:v=0:a=1,apad=whole_dur=${total.toFixed(4)}[voz]`);
+  partes.push(`${voz.map((_, i) => `[s${i}]`).join("")}concat=n=${voz.length}:v=0:a=1,adelay=delays=${Math.round(ENTRADA * 1000)}:all=1,apad=whole_dur=${total.toFixed(4)}[voz]`);
   if (musica) {
     const km = entradas.length;
     entradas.push(path.join(dir, p.assets[musica.asset]!.ruta));

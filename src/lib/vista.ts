@@ -2,7 +2,7 @@
 import { db } from "./db";
 import { validarProyecto, type Proyecto } from "./esquema";
 import { caracteresPorLinea } from "./formatos";
-import { escenasEnLinea, gruposDeEscena, todosLosGrupos } from "./linea";
+import { duracionEscenas, escenasEnLinea, gruposDeEscena, todosLosGrupos } from "./linea";
 import { obtenerPlantilla } from "./plantillas";
 import { lineas } from "./subtitulos";
 
@@ -30,7 +30,7 @@ export async function vistaProyecto(id: string) {
     const cpl = caracteresPorLinea(proyecto.formato);
     const es = escenasEnLinea(proyecto);
     const todos = todosLosGrupos(proyecto);
-    total = es.reduce((s, e) => s + e.duracion, 0) + (plantilla?.datos.tarjetaFinal.duracion ?? 0);
+    total = duracionEscenas(proyecto) + (plantilla?.datos.tarjetaFinal.duracion ?? 0);
     escenas = es.map((e) => {
       const a = proyecto.assets[e.visual.asset]!;
       const vozA = proyecto.assets[e.voz.asset]!;
