@@ -1,0 +1,17 @@
+import next from "eslint-config-next";
+import nextTs from "eslint-config-next/typescript";
+
+const config = [
+  ...next,
+  ...nextTs,
+  {
+    ignores: [".next/**", "node_modules/**", "src/generated/**", "next-env.d.ts", "py/**"],
+  },
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
+    },
+  },
+];
+
+export default config;

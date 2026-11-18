@@ -1,0 +1,14 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+src/generated/
+# Base de datos local y datos de proyectos (viven en ~/geeper-data)
+*.db
+*.db-journal
+geeper-data/
+.env*
+!.env.example
+coverage/
+test-results/
+playwright-report/
