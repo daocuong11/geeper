@@ -1,0 +1,67 @@
+"use client";
+import Link from "next/link";
+import { Barra, Estado, useSondeo } from "./comun";
+
+interface Fila {
+  id: string;
+  slug: string;
+  nombre: string;
+  tema: string;
+  formato: string;
+  plantilla: string;
+  estado: string;
+  versionActual: number;
+  creado: string;
+  lote: { nombre: string } | null;
+  renders: { estado: string; ruta: string; creado: string }[];
+  trabajos: { tipo: string; estado: string; etapa: string; progreso: number }[];
+}
+
+export function ListaProyectos() {
+  const { datos, error } = useSondeo<{ proyectos: Fila[] }>("/api/proyectos", 3000);
+  return (
+    <section>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">Proyectos</h1>
+        <Link href="/nuevo" className="boton boton-primario">Nuevo proyecto o lote</Link>
+      </div>
+      {error && <p className="text-red-300">{error}</p>}
+      {datos && datos.proyectos.length === 0 && (
+        <div className="tarjeta p-6 text-center text-tenue">
+          Todavía no hay proyectos. <Link className="text-acento underline" href="/nuevo">Crea el primero</Link>.
+        </div>
+      )}
+      <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {datos?.proyectos.map((p) => {
+          const t = p.trabajos[0];
+          const activo = t && (t.estado === "corriendo" || t.estado === "pendiente");
+          const r = p.renders[0];
+          return (
+            <li key={p.id}>
+              <Link href={`/proyectos/${p.id}`} className="tarjeta block h-full p-4 hover:border-sky-700">
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <h2 className="font-medium leading-snug">{p.nombre}</h2>
+                  <Estado valor={p.estado} />
+                </div>
+                <p className="text-xs text-tenue">
+                  {p.formato} · {p.plantilla} · v{p.versionActual}
+                  {p.lote ? ` · ${p.lote.nombre}` : ""}
+                </p>
+                {activo && (
+                  <div className="mt-3 space-y-1">
+                    <p className="truncate text-xs text-sky-200">{t.estado === "pendiente" ? "En cola" : t.etapa}</p>
+                    <Barra valor={t.progreso} />
+                  </div>
+                )}
+                {!activo && t && (t.estado === "fallido" || t.estado === "interrumpido") && (
+                  <p className="mt-3 text-xs text-amber-300">Último trabajo {t.estado}: ábrelo para ver el log y relanzarlo.</p>
+                )}
+                {r && <p className="mt-3 text-xs text-tenue">Último render: <Estado valor={r.estado} /></p>}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}

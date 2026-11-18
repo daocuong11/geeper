@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fondo: #0b0d12;
+  --color-panel: #141821;
+  --color-borde: #262c3a;
+  --color-tenue: #8b93a7;
+  --color-acento: #7dd3fc;
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+}
+
+html { color-scheme: dark; }
+body { background: var(--color-fondo); color: #e6e9ef; }
+.tarjeta { background: var(--color-panel); border: 1px solid var(--color-borde); border-radius: 12px; }
+.boton { display: inline-flex; align-items: center; gap: .4rem; border-radius: 8px; padding: .45rem .8rem; font-size: .875rem;
+         background: #232a38; border: 1px solid var(--color-borde); }
+.boton:hover:not(:disabled) { background: #2c3445; }
+.boton:disabled { opacity: .5; cursor: not-allowed; }
+.boton-primario { background: #0e7490; border-color: #0891b2; color: white; }
+.boton-primario:hover:not(:disabled) { background: #0891b2; }
+.boton-peligro { background: #3b1219; border-color: #7f1d1d; }
+.campo { width: 100%; background: #0f131a; border: 1px solid var(--color-borde); border-radius: 8px; padding: .5rem .65rem; font-size: .9rem; }
+.campo:focus { outline: 2px solid #0891b2; outline-offset: 0; }
+.etiqueta { font-size: .8rem; color: var(--color-tenue); display: block; margin-bottom: .25rem; }
