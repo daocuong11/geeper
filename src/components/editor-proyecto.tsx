@@ -4,6 +4,7 @@ import { Aviso, Estado, archivo, pedir, postJson, segundos, useSondeo } from "./
 import { VistaEnVivo } from "./vista-en-vivo";
 import { ListaTrabajos } from "./lista-trabajos";
 import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
+import { EdicionPorTexto, EfectosEscena, PanelAvanzado, type EfectosV, type ExtrasV, type PalabraV } from "./edicion-avanzada";
 
 interface Grupo {
   texto: string;
@@ -21,7 +22,10 @@ interface EscenaV {
   indice: number;
   inicio: number;
   duracion: number;
+  duracionOriginal: number;
   texto: string;
+  detalle: PalabraV[];
+  efectos: EfectosV;
   correcciones: { desde: number; hasta: number; texto: string }[];
   visual: { asset: string; ruta: string; source: string; licencia: string; tipo: string; inicio: number; ajuste: string; ancla: string; prompt: unknown };
   voz: { asset: string; source: string };
@@ -37,7 +41,7 @@ interface Render {
   duracion: number | null;
   segundos: number | null;
   creado: string;
-  informeQc: { aprobado: boolean; reglas: Regla[]; hojaContacto?: string; fotogramas: { t: number; ruta: string; nota: string }[] } | null;
+  informeQc: { aprobado: boolean; reglas: Regla[]; hojaContacto?: string; fotogramas: { t: number; ruta: string; nota: string }[]; master?: string } | null;
 }
 interface Vista {
   fila: {
@@ -51,6 +55,7 @@ interface Vista {
   p: { voz: { voz: string; velocidad: number }; mostrar: { de: string; a: string }[]; formato: string; plantilla: string } | null;
   escenas: EscenaV[];
   total: number;
+  extras: ExtrasV | null;
 }
 
 const t2 = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
@@ -132,7 +137,7 @@ function TarjetaEscena({ e, slug, total, editar, subirClip, regenerarVoz, ocupad
           <span className="font-mono text-xs text-tenue">{t2(e.inicio)} – {t2(e.inicio + e.duracion)} ({e.duracion.toFixed(2)} s)</span>
           <span className="text-xs text-tenue">clip: {e.visual.source}{e.visual.source === "archivo" ? " (propio)" : ""} · voz: {e.voz.source}</span>
         </div>
-        <p className="text-sm text-slate-300"><span className="text-tenue">Se oye:</span> {e.texto}</p>
+        <EdicionPorTexto escena={e.id} palabras={e.detalle} duracion={e.duracion} duracionOriginal={e.duracionOriginal} editar={editar} ocupado={ocupado} />
         <ul className="space-y-1.5">
           {e.grupos.map((g) => (
             <EditorGrupo key={`${g.desde}-${g.hasta}-${g.mostradoPropio}`} g={g}
@@ -159,6 +164,7 @@ function TarjetaEscena({ e, slug, total, editar, subirClip, regenerarVoz, ocupad
           <button type="button" className="boton boton-peligro" disabled={ocupado || total <= 1}
             onClick={() => { if (confirm(`¿Quitar la escena ${e.indice + 1}? Se quita también lo que se oye en ella. Puedes volver atrás en el historial.`)) void editar({ tipo: "quitarEscena", escena: e.id }); }}>Quitar</button>
         </div>
+        <EfectosEscena escena={e.id} indice={e.indice} efectos={e.efectos} editar={editar} ocupado={ocupado} />
       </div>
     </li>
   );
@@ -195,6 +201,18 @@ export function EditorProyecto({ id }: { id: string }) {
   const regenerarVoz = (escena: string | null) => hacer(() => postJson(`/api/proyectos/${id}/voz`, { escena }),
     "Voz en cola (Kokoro y whisper en CPU). Al terminar se realinean los subtítulos y se vuelve a renderizar.");
   const renderizar = () => hacer(() => postJson(`/api/proyectos/${id}/render`, {}), "Render en cola: sólo compila y renderiza, no genera nada con la GPU.");
+  const alinearMusica = () => hacer(async () => {
+    const r = await postJson<{ cambio: boolean; motivo?: string }>(`/api/proyectos/${id}/musica`, {});
+    if (!r.cambio) throw new Error(r.motivo ?? "No se pudo alinear la música");
+  }, "Música alineada: los pulsos quedan marcados y el QC mide cuántos cortes caen en pulso.");
+  const subirLibre = (f: File, pista: string, inicio: number, licencia: string) => hacer(async () => {
+    const fd = new FormData();
+    fd.set("pista", pista);
+    fd.set("inicio", String(inicio));
+    fd.set("licencia", licencia);
+    fd.set("archivo", f);
+    await pedir(`/api/proyectos/${id}/clip`, { method: "POST", body: fd });
+  }, `«${f.name}» agregado en ${inicio.toFixed(1)} s.`);
 
   if (error && !v) return <Aviso tipo="error">{error}</Aviso>;
   if (!v) return <p className="text-tenue">Cargando…</p>;
@@ -249,6 +267,7 @@ export function EditorProyecto({ id }: { id: string }) {
                         <a className="boton ml-auto" href={archivo(`${fila.slug}/${render.ruta}`, true)}>Descargar MP4</a>
                         <a className="boton" title="Para subirlos junto al video (accesibilidad y búsqueda)"
                           href={archivo(`${fila.slug}/${render.ruta.replace(/\.mp4$/, ".srt")}`, true)}>Subtítulos (.srt)</a>
+                        {render.informeQc?.master && <a className="boton" href={archivo(`${fila.slug}/${render.informeQc.master}`, true)}>Máster (.mov)</a>}
                       </>
                     : <span className="ml-auto text-xs text-red-300">No se descarga: no pasó el QC</span>}
                 </div>
@@ -295,6 +314,10 @@ export function EditorProyecto({ id }: { id: string }) {
             </div>
           </div>
         </section>
+      )}
+
+      {p && v.extras && (
+        <PanelAvanzado extras={v.extras} formato={p.formato} total={v.total} editar={editar} alinearMusica={alinearMusica} subirLibre={subirLibre} ocupado={ocupado} />
       )}
 
       {render?.estado === "aprobado" ? (

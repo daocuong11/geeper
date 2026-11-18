@@ -5,11 +5,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { CajaRevisada } from "./compilador";
-import type { Formato } from "./esquema";
+import { MAX_DUDOSAS, type ResumenConfianza } from "./confianza";
+import type { Formato, Plataforma } from "./esquema";
 import { caracteresPorLinea, metricas } from "./formatos";
+import { usoComercial } from "./licencias";
 import { intervalos, type Grupo } from "./linea";
 import { ffmpeg, fotograma, probar } from "./media";
 import { correr, type Registro } from "./proceso";
+import type { Ritmo } from "./pulsos";
 import { FFMPEG, FFPROBE } from "./rutas";
 import { lineas } from "./subtitulos";
 
@@ -44,10 +47,14 @@ export interface InformeQc {
   reglas: Regla[];
   hojaContacto?: string;
   fotogramas: { t: number; ruta: string; nota: string }[];
+  /** Máster de archivo (si el proyecto lo pide): ProRes/MOV del mismo render. */
+  master?: string;
 }
 
 export interface Esperado {
   formato: Formato;
+  fps?: number;
+  plataformas?: readonly Plataforma[];
   total: number;
   inicioTarjeta: number;
   grupos: Grupo[];
@@ -55,6 +62,12 @@ export interface Esperado {
   /** Momentos clave (medio de cada escena) para la hoja de contacto. */
   momentos: { t: number; nota: string }[];
   licencias: { asset: string; licencia: string }[];
+  /** Uso comercial: las licencias dudosas bloquean en vez de avisar. */
+  comercial?: boolean;
+  /** Confianza de la alineación de la voz (sin medir en proyectos viejos). */
+  confianza?: ResumenConfianza;
+  /** Cortes en pulso de la música (null: la música no tiene pulso estable o no hay música). */
+  ritmo?: Ritmo | null;
   check?: { ok: boolean; errores: number; avisos: number; resumen: string };
 }
 
@@ -99,12 +112,12 @@ export const ENTREGA = {
  * Segunda pasada de loudnorm (lineal, con las medidas de la primera) a −14 LUFS / −2 dBTP y, en la
  * misma pasada, la codificación de entrega del video (ver ENTREGA).
  */
-export async function normalizarAudio(entrada: string, salida: string, log: Registro): Promise<Sonoridad> {
+export async function normalizarAudio(entrada: string, salida: string, log: Registro, fps: number = OBJETIVO.fps): Promise<Sonoridad> {
   const m = await medirSonoridad(entrada, log);
   await ffmpeg([
     "-v", "error", "-i", entrada, "-map", "0:v:0", "-map", "0:a:0",
     "-c:v", "libx264", "-preset", ENTREGA.preset, "-crf", String(ENTREGA.crf), "-profile:v", "high",
-    "-pix_fmt", "yuv420p", "-g", String(ENTREGA.gopSegundos * OBJETIVO.fps), "-fps_mode", "passthrough",
+    "-pix_fmt", "yuv420p", "-g", String(ENTREGA.gopSegundos * fps), "-fps_mode", "passthrough",
     "-maxrate", ENTREGA.maxrate, "-bufsize", ENTREGA.bufsize,
     "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv",
     "-af",
@@ -115,6 +128,37 @@ export async function normalizarAudio(entrada: string, salida: string, log: Regi
     "-movflags", "+faststart", "-f", "mp4", salida,
   ], log);
   return m;
+}
+
+/** Topes del limitador en cada reintento de pico real (dBTP), del más suave al más firme. */
+export const TOPES_PICO = [-1.5, -1.8, -2.1, -2.4] as const;
+
+/**
+ * Pico real tras codificar (HEREDADO.md §2, de explainroo `src/ffmpeg.js:96-150`): el AAC sube el pico
+ * unas décimas por encima de lo que dejó loudnorm. Si el archivo final pasa de −1 dBTP, se limita el
+ * audio a 192 kHz (el limitador ve los picos entre muestras) y se recodifica sólo el audio, hasta 4
+ * veces con un tope cada vez más bajo. El video se copia sin tocar.
+ */
+export async function asegurarPicoReal(archivo: string, log: Registro): Promise<{ tp: number; intentos: number }> {
+  let tp = Number((await medirSonoridad(archivo)).input_tp);
+  let intentos = 0;
+  for (const tope of TOPES_PICO) {
+    if (tp <= OBJETIVO.picoMaxDbtp) break;
+    intentos++;
+    const tmp = `${archivo}.pico.mp4`;
+    const lineal = Math.pow(10, tope / 20).toFixed(4);
+    await ffmpeg([
+      "-v", "error", "-y", "-i", archivo, "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy",
+      "-af", `aresample=192000,alimiter=limit=${lineal}:attack=1:release=50:level=disabled,aresample=48000`,
+      "-c:a", "aac", "-b:a", `${ENTREGA.audioKbps}k`, "-aac_pns", "0", "-ar", "48000",
+      "-movflags", "+faststart", "-f", "mp4", tmp,
+    ], log);
+    await fs.rename(tmp, archivo);
+    const antes = tp;
+    tp = Number((await medirSonoridad(archivo)).input_tp);
+    log(`pico real ${antes.toFixed(2)} → ${tp.toFixed(2)} dBTP (limitador a ${tope} dBTP)`);
+  }
+  return { tp, intentos };
 }
 
 async function congelados(archivo: string, hasta: number): Promise<{ inicio: number; dur: number }[]> {
@@ -128,13 +172,13 @@ async function congelados(archivo: string, hasta: number): Promise<{ inicio: num
   return out;
 }
 
-async function duplicados(archivo: string, hasta: number): Promise<{ entrada: number; salida: number }> {
+async function duplicados(archivo: string, hasta: number, fps: number): Promise<{ entrada: number; salida: number }> {
   const r = await correr(FFMPEG, [
     "-hide_banner", "-nostdin", "-t", hasta.toFixed(3), "-i", archivo, "-an",
     "-vf", "mpdecimate", "-fps_mode", "vfr", "-f", "null", "-",
   ]);
   const salida = Number([...r.stderr.matchAll(/frame=\s*(\d+)/g)].pop()?.[1] ?? 0);
-  return { entrada: Math.round(hasta * OBJETIVO.fps), salida };
+  return { entrada: Math.round(hasta * fps), salida };
 }
 
 export async function contarFotogramas(archivo: string): Promise<number> {
@@ -148,8 +192,8 @@ export function intervalosSubtitulos(grupos: Grupo[], finSubs: number) {
   return grupos.map((g, i) => ({ texto: g.texto, ini: iv[i]!.ini, fin: iv[i]!.fin }));
 }
 
-export function revisarSubtitulos(formato: Formato, grupos: Grupo[], finSubs: number) {
-  const cpl = caracteresPorLinea(formato);
+export function revisarSubtitulos(formato: Formato, grupos: Grupo[], finSubs: number, plataformas: readonly Plataforma[] = []) {
+  const cpl = caracteresPorLinea(formato, { plataformas });
   const malos: string[] = [];
   let peorLinea = 0;
   let peorLineas = 0;
@@ -187,8 +231,55 @@ export async function hojaDeContacto(archivo: string, momentos: { t: number; not
   return { hoja, fotos };
 }
 
+/**
+ * Licencias. Sin uso comercial es un aviso (la persona decide antes de publicar); con `comercial: true`
+ * bloquea todo asset cuya licencia no permita uso comercial o no se sepa (BRECHAS.md Q1).
+ */
+export function reglaLicencias(licencias: { asset: string; licencia: string }[], comercial: boolean): Regla {
+  const clasificadas = licencias.map((l) => ({ ...l, comercial: usoComercial(l.licencia) }));
+  const malas = clasificadas.filter((l) => l.comercial !== "si");
+  return {
+    id: "licencias",
+    nombre: comercial ? "Licencias de los assets (uso comercial)" : "Licencias de los assets",
+    ok: malas.length === 0,
+    aviso: !comercial,
+    medido: clasificadas,
+    objetivo: comercial ? "todas permiten uso comercial" : "todas conocidas y comerciales (aviso: el proyecto no está marcado de uso comercial)",
+    detalle: malas.map((d) => `${d.asset}: ${d.licencia} (${d.comercial === "no" ? "no comercial" : "sin confirmar"})`).join("\n") || undefined,
+  };
+}
+
+/** Alineación de la voz: avisa si hay palabras dudosas; bloquea si son más del 20 % (transcripción fallida). */
+export function reglaAlineacion(c: ResumenConfianza | undefined): Regla | null {
+  if (!c || c.medidas === 0) return null;
+  const fallida = c.proporcion > MAX_DUDOSAS;
+  return {
+    id: "alineacion",
+    nombre: "Tiempos de la voz (alineación)",
+    ok: c.dudosas === 0,
+    aviso: !fallida,
+    medido: { dudosas: c.dudosas, medidas: c.medidas, proporcion: Number(c.proporcion.toFixed(3)) },
+    objetivo: `sin palabras dudosas; más del ${MAX_DUDOSAS * 100} % = transcripción fallida`,
+    detalle: c.escenas.map((e) => `${e.escena}: ${e.palabras.slice(0, 8).join(", ")}`).join("\n") || undefined,
+  };
+}
+
+/** Ritmo: qué parte de los cortes cae en un pulso de la música. Informativo (aviso). */
+export function reglaRitmo(r: Ritmo | null | undefined): Regla | null {
+  if (!r || r.cortes === 0) return null;
+  return {
+    id: "ritmo",
+    nombre: "Cortes en el pulso de la música",
+    ok: r.enPulso / r.cortes >= 0.5,
+    aviso: true,
+    medido: { enPulso: r.enPulso, cortes: r.cortes, distanciaMedia: Number(r.media.toFixed(3)) },
+    objetivo: "al menos la mitad de los cortes a ≤ 70 ms de un pulso",
+  };
+}
+
 export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, log: Registro): Promise<InformeQc> {
-  const m = metricas(esp.formato);
+  const m = metricas(esp.formato, { plataformas: esp.plataformas });
+  const fps = esp.fps ?? OBJETIVO.fps;
   const info = await probar(archivo);
   const reglas: Regla[] = [];
 
@@ -213,25 +304,25 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
 
   // Integridad.
   const fotogramas = await contarFotogramas(archivo);
-  const esperados = Math.round(esp.total * OBJETIVO.fps);
+  const esperados = Math.round(esp.total * fps);
   reglas.push({
     id: "resolucion", nombre: "Resolución", ok: info.ancho === m.W && info.alto === m.H,
     medido: `${info.ancho}x${info.alto}`, objetivo: `${m.W}x${m.H}`,
   });
-  reglas.push({ id: "fps", nombre: "Fotogramas por segundo", ok: v.r_frame_rate === "30/1", medido: v.r_frame_rate, objetivo: "30/1" });
+  reglas.push({ id: "fps", nombre: "Fotogramas por segundo", ok: v.r_frame_rate === `${fps}/1`, medido: v.r_frame_rate, objetivo: `${fps}/1` });
   // Duración del stream de video (el contenedor suma el relleno del códec de audio).
   const durVideo = Number(v.duration ?? info.duracion);
   const durAudio = Number(info.audio?.duration ?? durVideo);
   reglas.push({
     id: "duracion", nombre: "Duración (video y audio)",
-    ok: Math.abs(durVideo - esp.total) <= 2 / OBJETIVO.fps + 0.05 && Math.abs(durAudio - durVideo) <= 0.15,
+    ok: Math.abs(durVideo - esp.total) <= 2 / fps + 0.05 && Math.abs(durAudio - durVideo) <= 0.15,
     medido: { video: Number(durVideo.toFixed(3)), audio: Number(durAudio.toFixed(3)) }, objetivo: `${esp.total.toFixed(3)} s; audio a ≤ 0,15 s del video`,
   });
   reglas.push({
     id: "fotogramas", nombre: "Fotogramas (caídos o de más)", ok: Math.abs(fotogramas - esperados) <= 2,
     medido: fotogramas, objetivo: `${esperados} ± 2`,
   });
-  const dups = await duplicados(archivo, esp.inicioTarjeta);
+  const dups = await duplicados(archivo, esp.inicioTarjeta, fps);
   const ratio = dups.entrada ? 1 - dups.salida / dups.entrada : 0;
   const cong = (await congelados(archivo, esp.inicioTarjeta)).filter((c) => c.dur >= OBJETIVO.maxCongelado);
   reglas.push({
@@ -241,7 +332,7 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
   });
 
   // Subtítulos.
-  const sub = revisarSubtitulos(esp.formato, esp.grupos, esp.inicioTarjeta);
+  const sub = revisarSubtitulos(esp.formato, esp.grupos, esp.inicioTarjeta, esp.plataformas);
   reglas.push({
     id: "subtitulos", nombre: "Subtítulos legibles",
     ok: sub.malos.length === 0,
@@ -266,13 +357,11 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
     });
   }
 
-  // Licencias: aviso, no bloquea (la persona decide antes de publicar).
-  const dudosas = esp.licencias.filter((l) => /desconocida|revisar/i.test(l.licencia));
-  reglas.push({
-    id: "licencias", nombre: "Licencias de los assets", ok: dudosas.length === 0, aviso: true,
-    medido: esp.licencias, objetivo: "todas conocidas",
-    detalle: dudosas.map((d) => `${d.asset}: ${d.licencia}`).join("\n") || undefined,
-  });
+  reglas.push(reglaLicencias(esp.licencias, esp.comercial ?? false));
+  const alineacion = reglaAlineacion(esp.confianza);
+  if (alineacion) reglas.push(alineacion);
+  const ritmo = reglaRitmo(esp.ritmo);
+  if (ritmo) reglas.push(ritmo);
 
   const hoja = await hojaDeContacto(archivo, esp.momentos, dirHoja, log);
   return {

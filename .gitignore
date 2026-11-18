@@ -12,3 +12,6 @@ geeper-data/
 coverage/
 test-results/
 playwright-report/
+
+# Worktrees de sesiones de Claude Code
+.claude/worktrees/

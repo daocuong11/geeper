@@ -13,6 +13,7 @@ export function proyectoDePrueba(): Proyecto {
       texto: `Escena ${i + 1} dice GTA seis.`,
       palabras: ["Escena", `${i + 1}`, "dice", "GTA", "seis."].map((t, k) => ({ texto: t, inicio: base + k * 0.5, fin: base + k * 0.5 + 0.4 })),
       correcciones: [],
+      recortes: [],
     };
     voz.push({ id: `voz-${id}`, asset: "voz", escena: id, rango: { inicio: base, duracion: 3 } });
     visual.push({ id: `vis-${id}`, asset: `clip-0${i + 1}`, escena: id, rango: { inicio: 0, duracion: 3 } });
