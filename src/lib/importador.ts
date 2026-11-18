@@ -28,6 +28,17 @@ interface ScriptMpt {
   material_sources?: { provider?: string; local_file: string; duration?: number; search_term?: string }[];
 }
 
+/**
+ * MPT termina con éxito aunque falle la mayoría de las imágenes (p. ej. si la GPU se cae a mitad: el
+ * 2026-11-18 entregó 1 de 5 y repitió esa imagen 47 s). Si llegó menos del 60 % de lo pedido, no se
+ * importa: el short saldría pobre sin que nadie lo note. Devuelve el motivo o null.
+ */
+export function imagenesFaltantes(pedidas: number, recibidas: number): string | null {
+  if (pedidas < 2 || recibidas >= Math.ceil(pedidas * 0.6)) return null;
+  return `MPT entregó ${recibidas} de ${pedidas} imágenes (las demás fallaron al generarse; suele ser la GPU o el servidor de imágenes). ` +
+    "Revisa `docker logs mpt-image-server` y vuelve a generar el tema.";
+}
+
 export interface DatosImport {
   proyectoId: string;
   slug: string;
@@ -118,6 +129,8 @@ export async function importarMpt(ctx: Contexto, d: DatosImport): Promise<{ vers
   if (!fuentes.length || !(await existe(path.join(crudo, "audio.mp3")))) {
     throw new Error("La tarea de MPT no tiene material_sources o audio.mp3: genera el video completo en MPT primero.");
   }
+  const faltan = imagenesFaltantes(script.search_terms?.length ?? 0, fuentes.length);
+  if (faltan) throw new Error(faltan);
   const assets: Record<string, Asset> = {};
 
   // Clips en el orden de material_sources.
