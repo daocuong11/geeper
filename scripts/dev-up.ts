@@ -15,12 +15,23 @@ function lanzar(nombre: string, color: string, args: string[]) {
       for (const l of lineas) process.stdout.write(pref + l + "\n");
     });
   }
-  p.on("exit", (c) => {
-    process.stdout.write(`${pref}terminó (${c ?? "señal"})\n`);
-    if (!apagando) apagar();
+  p.on("exit", (c, senal) => {
+    process.stdout.write(`${pref}terminó (${c ?? senal ?? "?"})\n`);
+    if (apagando) return;
+    // Si el worker muere solo, se vuelve a lanzar (al arrancar marca «interrumpido» lo que corría;
+    // nada de GPU se reintenta solo). Si muere la web, se apaga todo.
+    const ahora = Date.now();
+    reinicios.splice(0, reinicios.length, ...reinicios.filter((t) => ahora - t < 10 * 60_000));
+    if (nombre === "worker" && reinicios.length < 5) {
+      reinicios.push(ahora);
+      process.stdout.write(`${pref}se reinicia en 3 s (${reinicios.length}/5 en 10 min)\n`);
+      setTimeout(() => !apagando && lanzar(nombre, color, args), 3000);
+    } else apagar();
   });
   hijos.push({ nombre, color, p });
 }
+
+const reinicios: number[] = [];
 
 let apagando = false;
 function apagar() {

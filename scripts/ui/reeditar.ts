@@ -25,7 +25,7 @@ async function main() {
   const b = await chromium.launch({ executablePath: chrome() });
   const p = await b.newPage({ viewport: { width: 1440, height: 1000 } });
   p.on("dialog", (d) => void d.accept());
-  await p.goto(`${BASE}/proyectos/${id}`, { waitUntil: "networkidle" });
+  await p.goto(`${BASE}/proyectos/${id}`, { waitUntil: "domcontentloaded" });
   await p.getByRole("heading", { name: "Escenas" }).waitFor();
 
   // 1 y 2: corregir dos subtítulos.

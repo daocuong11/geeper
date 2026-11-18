@@ -26,7 +26,7 @@ async function main() {
     pagina.on("console", (m) => m.type() === "error" && errores.push(`${nombre} ${pagina.url()}: ${m.text()}`));
     pagina.on("pageerror", (e) => errores.push(`${nombre} ${pagina.url()}: ${e.message}`));
     for (const r of rutas) {
-      await pagina.goto(BASE + r, { waitUntil: "networkidle" });
+      await pagina.goto(BASE + r, { waitUntil: "domcontentloaded" });
       await pagina.waitForTimeout(r === "/sistema" ? 8000 : 1500);
       const desborde = await pagina.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       if (desborde > 1) errores.push(`${nombre} ${r}: desborde horizontal de ${desborde}px`);
