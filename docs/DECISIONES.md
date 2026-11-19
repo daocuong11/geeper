@@ -168,3 +168,73 @@ render (`scripts/ui/vista-en-vivo.ts`).
 Diferencias conocidas: el ajuste de línea de los subtítulos puede variar un poco por las fuentes del
 navegador, y los clips de MPT tienen un keyframe cada 6 s, así que un salto tarda un instante más en
 mostrar la imagen.
+
+## 15. Esquema v2: pistas libres y textos aparte, migración en la lectura
+
+**Decisión:** `geeper.json` pasa a `schemaVersion: 2` sin romper nada. Las pistas `visual`, `voz` y
+`musica` siguen reservadas (un clip por escena, en orden); cualquier otra pista es **libre** y sus
+clips llevan `inicio` en la línea final (superposiciones y efectos de sonido). Los textos superpuestos
+van en un arreglo `textos` propio y no como pistas, para que toda pista tenga clips con asset y el
+resto del código no cambie de tipos. `validarProyecto` migra v1 → v2 antes de validar, así las
+versiones viejas guardadas en la base se leen igual; al guardar quedan en v2.
+
+**Transiciones:** se montan sobre el final de la escena anterior (que se alarga lo que dura la
+transición) en vez de comerle tiempo a la escena nueva: la voz no cambia de lugar. Escenas pares e
+impares van en carriles distintos de Hyperframes. Sin transición propia ni movimiento, la escena
+conserva el golpe de zoom de la plantilla; `corte` lo quita.
+
+## 16. Edición por texto: recortes en tiempo del audio, no índices de palabras
+
+Un recorte guarda `{ inicio, fin, motivo }` en tiempo del asset de voz, no índices: así sirve igual
+para palabras, muletillas y silencios. Recortar palabras corta de la mitad del silencio anterior a la
+mitad del siguiente (nunca se come una palabra vecina). La mezcla arma la voz por tramos con fundidos
+de 15 ms; los subtítulos se recolocan en los tramos y una palabra cuyo centro cae en un recorte no se
+muestra. La imagen de la escena sigue corrida (no salta): el material de MPT es B-roll sobre la voz.
+
+Regenerar la voz descarta los recortes (sus tiempos eran de la voz anterior) pero **no** vuelve a decir
+lo recortado: se sintetiza el texto sin esas palabras. No se puede recortar una escena entera (para eso
+está «Quitar escena»).
+
+## 17. Confianza de la alineación sin probabilidades de whisper
+
+`hyperframes transcribe` (whisper.cpp) no da probabilidad por palabra (comprobado: sólo `text`,
+`start`, `end`, `id`). La confianza se calcula con el parecido entre la palabra del guion y lo que oyó
+whisper en ese tiempo, si cae dentro de un silencio (`silencedetect` −35 dB / 0,6 s) y si dura menos de
+30 ms o más de 2 s. Menos de 0,6 es «dudosa»; con más del 20 % dudosas el QC bloquea (transcripción
+fallida), si no, avisa. Los proyectos importados antes no tienen confianza («sin medir») hasta que se
+regenera su voz.
+
+## 18. Pulsos: se mueve la música, no los cortes
+
+Los cortes los decide la voz (pausas y fines de frase). Para cortar al ritmo se elige desde qué segundo
+empieza la música (hasta 30 s) para que más cortes caigan a ≤ 70 ms de un pulso. Los pulsos los da
+`hyperframes beats`, que devuelve vacío si la pista no tiene pulso estable (comprobado con la música
+actual de MPT: 0 pulsos; con un clic sintético a 120 BPM: 40 pulsos a 5 ms del real). El importador lo
+intenta solo; el QC lo informa como aviso.
+
+## 19. Licencias, plataformas, pico real, máster y pesos
+
+- **Uso comercial** (`comercial: true`): el QC bloquea todo asset cuya licencia no se reconozca como
+  comercial. Sin la marca sigue siendo aviso, como antes (la música de MPT, DECISIONES §2).
+- **Plataformas** en 9:16: la banda segura es la intersección de lo que no tapa la interfaz de cada
+  una (fracciones de explainroo, HEREDADO.md). Con TikTok la banda queda en x 119–864: los subtítulos
+  pasan a menos caracteres por línea y marca y tarjeta final se centran en esa banda. Sin plataformas,
+  todo queda como antes.
+- **Pico real:** tras codificar, si el archivo pasa de −1 dBTP se limita el audio a 192 kHz y se
+  recodifica sólo el audio (el video se copia), hasta 4 veces con un tope cada vez más bajo.
+- **Máster:** con `entrega.master`, un segundo render de Hyperframes en MOV calidad alta, en CPU.
+- **Pesos:** el sha256 de `ggml-medium.bin` y `kokoro-v1.0.onnx` entra en la huella de la alineación y
+  en `regenerar` de cada voz, con caché por tamaño y fecha en `~/geeper-data/modelos.json`. Los modelos
+  dentro del contenedor de MPT no se ven desde aquí.
+
+## 20. Un paso hecho con otra ruta de salida se reutiliza
+
+**Bug (venía de antes):** `paso()` daba por hecho un paso si las salidas *del manifiesto anterior*
+seguían intactas, sin mirar si eran las rutas pedidas ahora. El render de entrega lleva el número de
+versión en el nombre (`v<N>-<perfil>.mp4`): al renderizar una versión nueva con la misma imagen y el
+mismo sonido (p. ej. después de «Volver a esta» o de cambiar sólo «uso comercial»), `entrega.loudnorm`
+se saltaba y el QC fallaba porque `v<N>.mp4` no existía.
+
+**Arreglo:** si el resultado ya existe con otra ruta, se enlaza (o copia) a la ruta pedida y el paso
+sigue saltado. Medido: re-render de una versión sin cambios de imagen ni sonido en 6 s. Prueba en
+`tests/reanudar.test.ts`.

@@ -19,6 +19,10 @@ import type { DatosPlantilla } from "./plantillas";
 import { correr } from "./proceso";
 import { HYPERFRAMES_VERSION, MPT_CONTENEDOR, MPT_TAREAS } from "./rutas";
 import { segmentar } from "./segmentar";
+import { detectarSilencios, puntuarPalabras, resumirConfianza } from "./confianza";
+import { aplicarEdicion } from "./ediciones";
+import { proponerMusica } from "./pulsos";
+import { etiquetaPesos, huellaPesos } from "./modelos";
 import { alinear, MODELO_WHISPER, transcribir } from "./voz";
 
 interface ScriptMpt {
@@ -102,20 +106,27 @@ export async function elegirMusica(
   });
 }
 
-/** Tiempos por palabra de un audio de voz, alineados al texto (paso con manifiesto). */
+/**
+ * Tiempos por palabra de un audio de voz, alineados al texto y con su confianza (paso con manifiesto).
+ * La huella del paso incluye el sha256 de los pesos de whisper: otro modelo es otra alineación.
+ */
 export async function tiemposDeVoz(ctx: Contexto, rutaVoz: string, texto: string, idioma: string): Promise<Palabra[]> {
   const dur = (await probar(rutaVoz)).duracion;
   const salida = path.join(ctx.dir, "assets", `palabras-${path.parse(rutaVoz).name}.json`);
+  const pesos = await etiquetaPesos(`whisper-${MODELO_WHISPER}`);
   await paso(
     ctx,
     "voz.alinear",
-    { archivos: [rutaVoz], params: { texto, idioma, modelo: MODELO_WHISPER }, motor: `hyperframes@${HYPERFRAMES_VERSION}+alinear-v1` },
+    { archivos: [rutaVoz], params: { texto, idioma, modelo: MODELO_WHISPER }, motor: `hyperframes@${HYPERFRAMES_VERSION}+alinear-v2+${pesos}` },
     [salida],
     async ([tmp]) => {
       const w = await transcribir(rutaVoz, idioma, ctx.log);
-      const palabras = await alinear(texto, w, dur);
+      const alineadas = await alinear(texto, w, dur);
+      const palabras = puntuarPalabras(alineadas, w, await detectarSilencios(rutaVoz));
+      const r = resumirConfianza([{ id: "voz", palabras }]);
+      if (r.dudosas) ctx.log(`Aviso: ${r.dudosas} de ${r.medidas} palabras con tiempos dudosos (${(r.proporcion * 100).toFixed(0)} %)`);
       await fs.writeFile(tmp!, JSON.stringify(palabras));
-      return { palabras: palabras.length, whisper: w.length };
+      return { palabras: palabras.length, whisper: w.length, dudosas: r.dudosas };
     },
   );
   return JSON.parse(await fs.readFile(salida, "utf8")) as Palabra[];
@@ -172,6 +183,7 @@ export async function importarMpt(ctx: Contexto, d: DatosImport): Promise<{ vers
       velocidad: script.params?.voice_rate ?? 1,
       texto: script.script,
       modelo: "kokoro-82m",
+      alineacion: { modelo: `whisper-${MODELO_WHISPER}`, pesos: await huellaPesos(`whisper-${MODELO_WHISPER}`) },
     },
   });
   assets[voz.id] = voz;
@@ -186,7 +198,7 @@ export async function importarMpt(ctx: Contexto, d: DatosImport): Promise<{ vers
   const clipsVisual = [];
   for (const [i, t] of tramos.entries()) {
     const id = `e${String(i + 1).padStart(2, "0")}`;
-    escenas[id] = { id, texto: t.palabras.map((w) => w.texto).join(" "), palabras: t.palabras, correcciones: [] };
+    escenas[id] = { id, texto: t.palabras.map((w) => w.texto).join(" "), palabras: t.palabras, correcciones: [], recortes: [] };
     clipsVoz.push({ id: `voz-${id}`, asset: voz.id, escena: id, rango: { inicio: t.inicio, duracion: t.fin - t.inicio } });
     const c = clips[i % clips.length]!;
     clipsVisual.push({
@@ -229,8 +241,21 @@ export async function importarMpt(ctx: Contexto, d: DatosImport): Promise<{ vers
     origen: { mpt: { taskId: d.taskId, searchTerms: script.search_terms ?? [], params: script.params ?? {} } },
   });
   await escribirAtomico(path.join(ctx.dir, "mpt", `${d.taskId}.palabras.json`), JSON.stringify(palabras));
-  const version = await guardarProyecto(d.proyectoId, proyecto, `Importado de MPT (${d.taskId.slice(0, 8)})`);
-  await registrarAssetsEnDb(d.proyectoId, proyecto);
+  // Música al ritmo: si la pista tiene pulso estable, empieza donde más cortes caen en pulso.
+  let final = proyecto;
+  if (musica) {
+    try {
+      const prop = await proponerMusica(proyecto, ctx.dir);
+      if (prop?.despues) {
+        final = aplicarEdicion(proyecto, prop.edicion);
+        ctx.log(`Música: ${prop.bpm ?? "?"} BPM, empieza en ${prop.edicion.inicio.toFixed(2)} s; cortes en pulso ${prop.despues.enPulso}/${prop.despues.cortes}`);
+      } else ctx.log("Música sin pulso estable: no se alinean los cortes");
+    } catch (e) {
+      ctx.log(`Aviso: no pude detectar los pulsos de la música (${(e as Error).message}); sigo sin alinear`);
+    }
+  }
+  const version = await guardarProyecto(d.proyectoId, final, `Importado de MPT (${d.taskId.slice(0, 8)})`);
+  await registrarAssetsEnDb(d.proyectoId, final);
   ctx.log(`Importado: ${tramos.length} escenas, ${palabras.length} palabras, voz ${durVoz.toFixed(1)} s, versión ${version}`);
   return { version, escenas: tramos.length };
 }

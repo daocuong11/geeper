@@ -67,6 +67,20 @@ export async function paso<T>(
   const rm = rutaManifiesto(ctx, nombre, inputHash);
   const previo = await vigente<T>(ctx, rm);
   if (previo) {
+    // Mismas entradas pero otras rutas de salida (p. ej. el render de entrega lleva el número de
+    // versión en el nombre): el resultado es el mismo, se enlaza (o copia) a la ruta pedida.
+    for (const [i, s] of salidas.entries()) {
+      const anterior = previo.salidas[i] && path.join(ctx.dir, previo.salidas[i]!.ruta);
+      if (!anterior || path.resolve(anterior) === path.resolve(s)) continue;
+      await fs.mkdir(path.dirname(s), { recursive: true });
+      const tmp = rutaTemporal(s);
+      try {
+        await fs.link(anterior, tmp);
+      } catch {
+        await fs.copyFile(anterior, tmp);
+      }
+      await fs.rename(tmp, s);
+    }
     ctx.log(`· ${nombre}: ya hecho (${inputHash.slice(0, 12)}), se salta`);
     return { saltado: true, resultado: previo.resultado, inputHash };
   }

@@ -2,18 +2,20 @@
  * Compilador geeper.json → proyecto Hyperframes (index.html + assets enlazados).
  *
  * Es `construir_html()` de mpt_acabado.py generalizado: marca arriba dentro de la banda segura,
- * golpe de zoom en cada corte, subtítulos karaoke con la palabra activa resaltada, tarjeta final; ahora
- * con escenas editables, plantilla de datos, tres formatos y comprobación de zonas seguras.
+ * golpe de zoom en cada corte, subtítulos karaoke con la palabra activa resaltada, tarjeta final; con
+ * escenas editables, plantilla de datos, tres formatos y comprobación de zonas seguras. Desde v2:
+ * transiciones entre escenas, movimiento de cámara, velocidad y color por clip, superposiciones de las
+ * pistas libres, textos superpuestos y banda segura por plataforma.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pista, type Asset, type Clip, type Proyecto } from "./esquema";
-import { ANCHO_CARACTER, dentro, metricas, PADDING_PASTILLA, type Caja } from "./formatos";
-import { duracionEscenas, escenasEnLinea, intervalos, todosLosGrupos, type Grupo } from "./linea";
+import { pista, pistasLibres, type Asset, type Clip, type Encuadre, type Proyecto, type Texto } from "./esquema";
+import { ANCHO_CARACTER, dentro, metricas, PADDING_PASTILLA, type Caja, type Metricas } from "./formatos";
+import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type Grupo } from "./linea";
 import type { DatosPlantilla } from "./plantillas";
 import { lineas } from "./subtitulos";
 
-export const VERSION_COMPILADOR = "compilador-hf-v1";
+export const VERSION_COMPILADOR = "compilador-hf-v2";
 
 export interface CajaRevisada {
   nombre: string;
@@ -46,6 +48,19 @@ interface Pieza {
   desde: number;
   clase: string;
   imagen: boolean;
+  pista: number;
+  estilo: string;
+  velocidad?: number;
+}
+
+/** Animación que el script GSAP aplica a un elemento (todo en tiempo de la línea final). */
+export interface Anim {
+  id: string;
+  t: number;
+  dur: number;
+  desde: Record<string, number>;
+  hasta: Record<string, number>;
+  ease?: string;
 }
 
 /** Decide cubrir/contener: automático si la relación de aspecto difiere mucho del lienzo. */
@@ -56,8 +71,55 @@ function ajusteDe(c: Clip, a: Asset, W: number, H: number): "cubrir" | "contener
   return Math.max(r, 1 / r) > 1.4 ? "contener" : "cubrir";
 }
 
+const ENCUADRE_BASE: Encuadre = { escala: 1, x: 0, y: 0 };
+const mezclarEncuadre = (a: Encuadre, b: Encuadre, k: number): Record<string, number> => ({
+  scale: a.escala + (b.escala - a.escala) * k,
+  xPercent: (a.x + (b.x - a.x) * k) * 50,
+  yPercent: (a.y + (b.y - a.y) * k) * 50,
+});
+
+/** Filtro CSS del ajuste de color (vacío si no hay). */
+function filtroColor(c: Clip): string {
+  if (!c.color) return "";
+  const { brillo, contraste, saturacion } = c.color;
+  if (brillo === 1 && contraste === 1 && saturacion === 1) return "";
+  return `filter: brightness(${brillo}) contrast(${contraste}) saturate(${saturacion});`;
+}
+
+/** Animación de entrada de una transición sobre el elemento `id`, que empieza en `t`. */
+function entrada(id: string, tipo: string, t: number, d: number, opacidad = 1): Anim | null {
+  if (tipo === "fundido") return { id, t, dur: d, desde: { opacity: 0 }, hasta: { opacity: opacidad }, ease: "none" };
+  if (tipo === "deslizar") return { id, t, dur: d, desde: { xPercent: 100 }, hasta: { xPercent: 0 }, ease: "power3.out" };
+  if (tipo === "zoom") return { id, t, dur: d, desde: { scale: 1.3, opacity: 0 }, hasta: { scale: 1, opacity: opacidad }, ease: "power3.out" };
+  return null;
+}
+
+const ESTILOS_TEXTO = { titulo: "texto-titulo", rotulo: "texto-rotulo", cita: "texto-cita" } as const;
+
+function cuerpoTexto(t: Texto, m: Metricas): number {
+  if (t.estilo === "titulo") return Math.round(m.tituloFs * 0.62);
+  if (t.estilo === "cita") return Math.round(m.subsFs * 0.8);
+  return Math.round(m.subsFs * 0.85);
+}
+
+/** Caja que ocupa un texto superpuesto (la misma que pinta el HTML y revisa el QC). */
+export function cajaTexto(t: Texto, m: Metricas, altoMarca: number): Caja {
+  const fs = cuerpoTexto(t, m);
+  const maxW = m.segura.w - 40;
+  const cpl = Math.max(4, Math.floor((maxW - 48) / (fs * ANCHO_CARACTER)));
+  const ls = lineas(t.texto, cpl);
+  const w = Math.min(maxW, Math.max(...ls.map((l) => l.length * fs * ANCHO_CARACTER)) + 48);
+  const h = ls.length * fs * 1.15 + 32;
+  const x = m.segura.x + (m.segura.w - w) / 2;
+  const y =
+    t.posicion === "arriba" ? m.marcaTop + altoMarca + 24
+    : t.posicion === "abajo" ? m.subs.y - h - 20
+    : m.segura.y + (m.segura.h - h) / 2;
+  return { x, y, w, h };
+}
+
 export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: string, dirProyecto: string): Compilado {
-  const m = metricas(p.formato);
+  const m = metricas(p.formato, opcionesDe(p));
   const { W, H } = m;
   const vertical = H > W;
   const escenas = escenasEnLinea(p);
@@ -65,24 +127,37 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
   const total = inicioTarjeta + plantilla.tarjetaFinal.duracion;
   const grupos = todosLosGrupos(p);
   const archivos: Record<string, string> = { "assets/mezcla.wav": rutaMezcla };
+  const anims: Anim[] = [];
+  const enlazar = (a: Asset) => {
+    const nombre = `assets/${a.id}${path.extname(a.ruta)}`;
+    archivos[nombre] = path.join(dirProyecto, a.ruta);
+    return nombre;
+  };
 
   // ---- Visuales: un tramo por escena; si el clip es más corto que la escena, se repite.
   const piezas: Pieza[] = [];
   const cortes: { t: number; ids: string[] }[] = [];
+  const ultimasDeEscena: Pieza[][] = [];
   for (const es of escenas) {
     const a = p.assets[es.visual.asset]!;
-    const nombre = `assets/${a.id}${path.extname(a.ruta)}`;
-    archivos[nombre] = path.join(dirProyecto, a.ruta);
+    const nombre = enlazar(a);
     const ajuste = ajusteDe(es.visual, a, W, H);
+    const v = es.visual;
+    const velocidad = v.velocidad ?? 1;
+    const color = filtroColor(v);
     const ids: string[] = [];
     const imagen = a.tipo === "imagen";
+    // Escenas pares e impares en carriles distintos: una transición las monta una sobre otra.
+    const carril = es.indice % 2 === 0 ? 0 : 5;
     // La primera escena también cubre la entrada en silencio del principio.
-    const entrada = es.indice === 0 ? es.inicio : 0;
-    let t = -entrada;
-    let desde = es.visual.rango.inicio;
+    const entradaSilencio = es.indice === 0 ? es.inicio : 0;
+    const largo = es.duracion + entradaSilencio;
+    let t = -entradaSilencio;
+    let desde = v.rango.inicio;
     let k = 0;
+    const propias: Pieza[] = [];
     while (t < es.duracion - 1e-3 && k < 50) {
-      const disponible = imagen || !a.duracion ? es.duracion - t : a.duracion - desde;
+      const disponible = imagen || !a.duracion ? es.duracion - t : (a.duracion - desde) / velocidad;
       if (disponible < 0.05) {
         desde = 0;
         k++;
@@ -90,30 +165,92 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       }
       const dur = Math.min(es.duracion - t, disponible);
       const base = `${es.escena.id}-${k}`;
+      const comun = { src: nombre, inicio: es.inicio + t, dur, desde, imagen, pista: carril, velocidad: imagen ? undefined : velocidad };
       if (ajuste === "contener") {
-        piezas.push({ id: `b-${base}`, src: nombre, inicio: es.inicio + t, dur, desde, clase: "fondo desenfoque", imagen });
-        piezas.push({ id: `v-${base}`, src: nombre, inicio: es.inicio + t, dur, desde, clase: "fondo contener", imagen });
+        piezas.push({ ...comun, id: `b-${base}`, clase: "fondo desenfoque", estilo: "" });
+        const pz = { ...comun, id: `v-${base}`, clase: "fondo contener", estilo: color };
+        piezas.push(pz);
+        propias.push(pz);
       } else {
-        piezas.push({ id: `v-${base}`, src: nombre, inicio: es.inicio + t, dur, desde, clase: `fondo ancla-${es.visual.ancla ?? "centro"}`, imagen });
+        const pz = { ...comun, id: `v-${base}`, clase: `fondo ancla-${v.ancla ?? "centro"}`, estilo: color };
+        piezas.push(pz);
+        propias.push(pz);
       }
       if (k === 0) ids.push(`v-${base}`);
+      // Movimiento de cámara: cada tramo recorre su parte del camino desde → hasta.
+      if (v.movimiento) {
+        const k0 = (t + entradaSilencio) / largo;
+        const k1 = (t + dur + entradaSilencio) / largo;
+        const d0 = { ...ENCUADRE_BASE, ...v.movimiento.desde };
+        const d1 = { ...ENCUADRE_BASE, ...v.movimiento.hasta };
+        anims.push({ id: `v-${base}`, t: es.inicio + t, dur, desde: mezclarEncuadre(d0, d1, k0), hasta: mezclarEncuadre(d0, d1, k1), ease: "none" });
+      }
       t += dur;
       desde = 0;
       k++;
     }
-    cortes.push({ t: es.inicio - entrada, ids });
+    ultimasDeEscena.push(piezas.filter((x) => Math.abs(x.inicio + x.dur - (es.inicio + es.duracion)) < 1e-3));
+    const tr = v.transicion;
+    if (es.indice > 0 && tr && tr.tipo !== "corte") {
+      // La escena entra sobre la anterior: la anterior se alarga lo que dura la transición.
+      const d = Math.min(tr.duracion, es.duracion);
+      for (const u of ultimasDeEscena[es.indice - 1] ?? []) u.dur += d;
+      const primera = propias[0];
+      const an = primera ? entrada(primera.id, tr.tipo, es.inicio, d) : null;
+      if (an) anims.push(an);
+      const fondo = piezas.find((x) => x.id === `b-${es.escena.id}-0`);
+      const anFondo = fondo ? entrada(fondo.id, tr.tipo, es.inicio, d) : null;
+      if (anFondo) anims.push(anFondo);
+    } else if (!v.movimiento && tr?.tipo !== "corte") {
+      // Por defecto (plantilla): golpe de zoom en el corte.
+      cortes.push({ t: es.inicio - entradaSilencio, ids });
+    }
   }
   // La última escena se congela bajo la tarjeta final: se extiende el último tramo.
   const ultimas = piezas.filter((x) => Math.abs(x.inicio + x.dur - inicioTarjeta) < 1e-3);
   for (const u of ultimas) u.dur += plantilla.tarjetaFinal.duracion;
 
-  const videos = piezas
-    .map((x) =>
-      x.imagen
-        ? `      <img id="${x.id}" class="clip ${x.clase}" src="${e(x.src)}" data-start="${f3(x.inicio)}" data-duration="${f3(x.dur)}" data-track-index="0" alt="" />`
-        : `      <video id="${x.id}" class="clip ${x.clase}" src="${e(x.src)}" data-start="${f3(x.inicio)}" data-duration="${f3(x.dur)}" data-media-start="${f3(x.desde)}" data-track-index="0" muted playsinline></video>`,
-    )
-    .join("\n");
+  // ---- Superposiciones (pistas libres de video): encima del fondo, debajo de marca y subtítulos.
+  const superpuestas: Pieza[] = [];
+  pistasLibres(p)
+    .filter((x) => x.tipo === "video")
+    .forEach((pi, n) => {
+      pi.clips.forEach((c, j) => {
+        const a = p.assets[c.asset]!;
+        const ini = c.inicio ?? 0;
+        if (ini >= total) return;
+        const velocidad = c.velocidad ?? 1;
+        const imagen = a.tipo === "imagen";
+        const dur = Math.min(c.rango.duracion / velocidad, total - ini);
+        const ajuste = ajusteDe(c, a, W, H);
+        const id = `s-${pi.id}-${j}`;
+        const opacidad = c.opacidad ?? 1;
+        superpuestas.push({
+          id, src: enlazar(a), inicio: ini, dur, desde: c.rango.inicio, imagen, pista: 6 + n,
+          clase: `superpuesta ${ajuste === "contener" ? "contener" : `ancla-${c.ancla ?? "centro"}`}`,
+          estilo: `z-index: ${20 + n}; opacity: ${opacidad}; ${filtroColor(c)}`.trim(),
+          velocidad: imagen ? undefined : velocidad,
+        });
+        if (c.movimiento) {
+          const d0 = { ...ENCUADRE_BASE, ...c.movimiento.desde };
+          const d1 = { ...ENCUADRE_BASE, ...c.movimiento.hasta };
+          anims.push({ id, t: ini, dur, desde: mezclarEncuadre(d0, d1, 0), hasta: mezclarEncuadre(d0, d1, 1), ease: "none" });
+        }
+        if (c.transicion && c.transicion.tipo !== "corte") {
+          const an = entrada(id, c.transicion.tipo, ini, Math.min(c.transicion.duracion, dur), opacidad);
+          if (an) anims.push(an);
+        }
+      });
+    });
+
+  const media = (x: Pieza) => {
+    const vel = x.velocidad && x.velocidad !== 1 ? ` data-playback-rate="${x.velocidad}"` : "";
+    const estilo = x.estilo ? ` style="${e(x.estilo)}"` : "";
+    return x.imagen
+      ? `      <img id="${x.id}" class="clip ${x.clase}" src="${e(x.src)}" data-start="${f3(x.inicio)}" data-duration="${f3(x.dur)}" data-track-index="${x.pista}"${estilo} alt="" />`
+      : `      <video id="${x.id}" class="clip ${x.clase}" src="${e(x.src)}" data-start="${f3(x.inicio)}" data-duration="${f3(x.dur)}" data-media-start="${f3(x.desde)}" data-track-index="${x.pista}"${vel}${estilo} muted playsinline></video>`;
+  };
+  const videos = [...piezas, ...superpuestas].map(media).join("\n");
 
   // ---- Subtítulos.
   const gruposHtml = grupos
@@ -138,21 +275,41 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
     logoHtml = `<img class="logo" src="${e(nombre)}" alt="" />`;
   }
 
-  // ---- Zonas seguras: cajas de cada elemento contra la banda segura del formato.
+  // ---- Zonas seguras: cajas de cada elemento contra la banda segura del formato (o de la plataforma).
+  const S = m.segura;
+  const centroX = S.x + S.w / 2;
+  const centroY = S.y + S.h / 2;
   const anchoTexto = (txt: string, fs: number) => txt.length * fs * ANCHO_CARACTER;
   const chipW = anchoTexto(plantilla.marca.texto, m.marcaFs) * 1.06 + 68 + (logoHtml ? m.marcaFs * 1.4 : 0);
   const chipH = m.marcaFs * 1.15 + 30;
-  const tituloCpl = Math.max(4, Math.floor((W - 120) / (m.tituloFs * ANCHO_CARACTER)));
+  const tituloCpl = Math.max(4, Math.floor((S.w - 60) / (m.tituloFs * ANCHO_CARACTER)));
   const tituloLineas = lineas(plantilla.tarjetaFinal.titulo.toUpperCase(), tituloCpl);
-  const tituloW = Math.min(W - 120, Math.max(...tituloLineas.map((l) => anchoTexto(l, m.tituloFs))));
+  const tituloW = Math.min(S.w - 60, Math.max(...tituloLineas.map((l) => anchoTexto(l, m.tituloFs))));
   const ctaW = anchoTexto(plantilla.cta, m.ctaFs) + 80;
   const cierreH = tituloLineas.length * m.tituloFs + 28 + m.ctaFs * 1.2 + 32;
   const cajasBase: { nombre: string; caja: Caja }[] = [
-    { nombre: "marca", caja: { x: (W - chipW) / 2, y: m.marcaTop, w: chipW, h: chipH } },
+    { nombre: "marca", caja: { x: centroX - chipW / 2, y: m.marcaTop, w: chipW, h: chipH } },
     { nombre: "subtítulos", caja: m.subs },
-    { nombre: "tarjeta final: título", caja: { x: (W - tituloW) / 2, y: (H - cierreH) / 2, w: tituloW, h: tituloLineas.length * m.tituloFs } },
-    { nombre: "tarjeta final: CTA", caja: { x: (W - ctaW) / 2, y: (H + cierreH) / 2 - (m.ctaFs * 1.2 + 32), w: ctaW, h: m.ctaFs * 1.2 + 32 } },
+    { nombre: "tarjeta final: título", caja: { x: centroX - tituloW / 2, y: centroY - cierreH / 2, w: tituloW, h: tituloLineas.length * m.tituloFs } },
+    { nombre: "tarjeta final: CTA", caja: { x: centroX - ctaW / 2, y: centroY + cierreH / 2 - (m.ctaFs * 1.2 + 32), w: ctaW, h: m.ctaFs * 1.2 + 32 } },
   ];
+
+  // ---- Textos superpuestos (títulos, rótulos, citas).
+  const textosHtml: string[] = [];
+  for (const t of p.textos) {
+    if (t.inicio >= inicioTarjeta) continue;
+    const dur = Math.min(t.duracion, inicioTarjeta - t.inicio);
+    const caja = cajaTexto(t, m, chipH);
+    const fs = cuerpoTexto(t, m);
+    cajasBase.push({ nombre: `texto «${t.texto.slice(0, 24)}»`, caja });
+    const id = `t-${t.id}`;
+    textosHtml.push(
+      `      <div id="${id}" class="clip texto ${ESTILOS_TEXTO[t.estilo]}" data-start="${f3(t.inicio)}" data-duration="${f3(dur)}" data-track-index="7" ` +
+        `style="left: ${f3(caja.x)}px; top: ${f3(caja.y)}px; width: ${f3(caja.w)}px; font-size: ${fs}px;">${e(t.texto)}</div>`,
+    );
+    anims.push({ id, t: t.inicio, dur: 0.35, desde: { opacity: 0, y: 24 }, hasta: { opacity: 1, y: 0 }, ease: "power3.out" });
+    anims.push({ id, t: Math.max(t.inicio + 0.4, t.inicio + dur - 0.25), dur: 0.25, desde: { opacity: 1 }, hasta: { opacity: 0 }, ease: "power2.in" });
+  }
   const cajas = cajasBase.map((c) => ({ ...c, dentro: dentro(c.caja, m.segura) }));
 
   const c = plantilla.colores;
@@ -178,26 +335,34 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: ${W}px; height: ${H}px; overflow: hidden; background: #000; }
       #root { position: relative; width: ${W}px; height: ${H}px; overflow: hidden; font-family: ${fuenteTitulos}; }
-      .fondo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
-      .fondo.contener { object-fit: contain; z-index: 2; }
+      .fondo, .superpuesta { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; }
+      .fondo.contener, .superpuesta.contener { object-fit: contain; }
+      .fondo.contener { z-index: 2; }
       .fondo.desenfoque { filter: blur(40px) brightness(0.55); transform: scale(1.15); z-index: 1; }
       .ancla-arriba { object-position: 50% 0%; }
       .ancla-abajo { object-position: 50% 100%; }
-      #marca { position: absolute; top: ${m.marcaTop}px; left: 0; width: 100%; z-index: 30; display: flex; justify-content: center; }
+      #marca { position: absolute; top: ${m.marcaTop}px; left: ${S.x}px; width: ${S.w}px; z-index: 30; display: flex; justify-content: center; }
       #marca .chip { display: flex; align-items: center; gap: 14px; padding: 14px 34px 16px; border-radius: 999px;
                      background: rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.18); }
       #marca .logo { height: ${Math.round(m.marcaFs * 1.2)}px; width: auto; }
       #marca .txt { font-size: ${m.marcaFs}px; letter-spacing: 0.06em; text-transform: uppercase;
                     background: linear-gradient(90deg, var(--acento1), var(--acento2));
                     -webkit-background-clip: text; background-clip: text; color: transparent; }
+      .texto { position: absolute; z-index: 35; text-align: center; line-height: 1.15; padding: 16px 24px; border-radius: 18px; opacity: 0; }
+      .texto-titulo { font-family: ${fuenteTitulos}; text-transform: uppercase; color: var(--tinta);
+                      background: linear-gradient(90deg, var(--acento1), var(--acento2)); }
+      .texto-rotulo { font-family: ${fuenteTitulos}; color: var(--tinta); background: var(--fondo-pastilla); }
+      .texto-cita { font-family: ${fuenteTexto}; font-weight: ${t.pesoTexto}; font-style: italic; color: var(--tinta);
+                    background: var(--fondo-pastilla); border-left: 8px solid var(--acento1); }
       #subtitulos { position: absolute; left: ${m.subs.x}px; top: ${m.subs.y}px; width: ${m.subs.w}px; height: ${m.subs.h}px; z-index: 40; overflow: visible; }
       .grupo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; overflow: visible; }
       .pastilla { max-width: ${m.pastillaMax}px; padding: 18px ${PADDING_PASTILLA}px 22px; border-radius: 26px; background: var(--fondo-pastilla);
                   text-align: center; line-height: 1.12; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px ${Math.round(m.subsFs * 0.42)}px; overflow: visible; }
       .palabra { display: inline-block; font-family: ${fuenteTitulos}; font-size: ${m.subsFs}px; color: var(--tinta); text-shadow: 0 4px 14px rgba(0,0,0,0.65); }
-      #cierre { position: absolute; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center;
-                gap: 28px; background: var(--fondo-cierre); }
-      #cierre .titulo { font-size: ${m.tituloFs}px; text-transform: uppercase; text-align: center; line-height: 1.0; padding: 0 60px;
+      #cierre { position: absolute; inset: 0; z-index: 60; background: var(--fondo-cierre); }
+      #cierre .contenido { position: absolute; left: ${S.x}px; top: ${S.y}px; width: ${S.w}px; height: ${S.h}px;
+                           display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }
+      #cierre .titulo { font-size: ${m.tituloFs}px; text-transform: uppercase; text-align: center; line-height: 1.0; padding: 0 30px;
                         background: linear-gradient(90deg, var(--acento1), var(--acento2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
       #cierre .cta { font-family: ${fuenteTexto}; font-weight: ${t.pesoTexto}; font-size: ${m.ctaFs}px; color: var(--tinta);
                      padding: 16px 40px; border-radius: 999px; background: var(--acento1); }
@@ -206,6 +371,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
   <body>
     <div id="root" data-composition-id="main" data-start="0" data-duration="${f3(total)}" data-width="${W}" data-height="${H}">
 ${videos}
+${textosHtml.join("\n")}
       <audio id="mezcla" class="clip" src="assets/mezcla.wav" data-start="0" data-duration="${f3(total)}" data-track-index="1"></audio>
       <div id="marca" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="2">
         <div class="chip">${logoHtml}<span class="txt">${e(plantilla.marca.texto)}</span></div>
@@ -214,20 +380,27 @@ ${videos}
 ${gruposHtml}
       </div>
       <div id="cierre" class="clip" data-start="${f3(inicioTarjeta)}" data-duration="${f3(total - inicioTarjeta)}" data-track-index="4">
-        <div class="titulo">${e(plantilla.tarjetaFinal.titulo)}</div>
-        <div class="cta">${e(plantilla.cta)}</div>
+        <div class="contenido">
+          <div class="titulo">${e(plantilla.tarjetaFinal.titulo)}</div>
+          <div class="cta">${e(plantilla.cta)}</div>
+        </div>
       </div>
     </div>
     <script>
       const GRUPOS = ${jsonScript(tiempos)};
       const CORTES = ${jsonScript(cortes)};
+      const ANIMS = ${jsonScript(anims)};
       const FIN_SUBS = ${f3(inicioTarjeta)};
       const ACTIVA = ${jsonScript(c.activa)};
       const TINTA = ${jsonScript(c.tinta)};
       const tl = gsap.timeline({ paused: true });
-      // Golpe de zoom en cada corte de escena.
+      // Golpe de zoom en cada corte de escena (las que no tienen transición ni movimiento propios).
       CORTES.forEach((c) => {
         c.ids.forEach((id) => tl.fromTo("#" + id, { scale: 1.07 }, { scale: 1, duration: 0.4, ease: "power3.out" }, c.t));
+      });
+      // Transiciones, movimiento de cámara y textos superpuestos (de geeper.json).
+      ANIMS.forEach((a) => {
+        tl.fromTo("#" + a.id, a.desde, Object.assign({}, a.hasta, { duration: a.dur, ease: a.ease || "none", immediateRender: false }), a.t);
       });
       tl.from("#marca .chip", { y: -30, opacity: 0, duration: 0.45, ease: "back.out(1.6)" }, 0.15);
       // Karaoke: un grupo visible a la vez; la palabra que suena se enciende.
