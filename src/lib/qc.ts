@@ -5,6 +5,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { CajaRevisada } from "./compilador";
+import type { Ampliacion } from "./nitidez";
 import { MAX_DUDOSAS, type ResumenConfianza } from "./confianza";
 import type { Formato, Plataforma } from "./esquema";
 import { caracteresPorLinea, metricas } from "./formatos";
@@ -68,6 +69,8 @@ export interface Esperado {
   confianza?: ResumenConfianza;
   /** Cortes en pulso de la música (null: la música no tiene pulso estable o no hay música). */
   ritmo?: Ritmo | null;
+  /** Ampliación de cada clip raster en la salida (`ampliaciones()` de nitidez.ts). */
+  ampliaciones?: Ampliacion[];
   check?: { ok: boolean; errores: number; avisos: number; resumen: string };
 }
 
@@ -264,6 +267,40 @@ export function reglaAlineacion(c: ResumenConfianza | undefined): Regla | null {
   };
 }
 
+/**
+ * Más allá de 2× un texto o un logo raster se ve blando. Los clips de MPT (832×1216) en 9:16 se
+ * amplían 1,58× y pasan; un logo PNG chico como superposición a pantalla completa, no.
+ */
+export const AMPLIACION_MAX = 2;
+
+/** Resolución efectiva de imágenes y clips en la salida. Aviso: no bloquea la entrega. */
+export function reglaAmpliacion(lista: Ampliacion[] | undefined): Regla | null {
+  if (!lista?.length) return null;
+  const malas = lista.filter((x) => x.factor > AMPLIACION_MAX + 1e-3);
+  const maxima = Math.max(...lista.map((x) => x.factor));
+  const veces = (k: number) => `${k.toFixed(1).replace(".", ",")}×`;
+  return {
+    id: "ampliacion",
+    nombre: "Nitidez de imágenes y clips",
+    ok: malas.length === 0,
+    aviso: true,
+    medido: {
+      "más estirado": veces(maxima),
+      revisados: lista.length,
+      // Para el botón «Vectorizar» de la UI (no se muestra como texto): imágenes borrosas, una por asset.
+      vectorizables: [...new Map(malas.filter((x) => x.imagen).map((x) => [x.asset, { asset: x.asset, donde: x.donde }])).values()],
+    },
+    objetivo: `nada estirado a más de ${AMPLIACION_MAX}× su tamaño (se vería borroso); los SVG nunca se ven borrosos`,
+    detalle: malas
+      .map((x) => {
+        const w = Math.ceil((x.ancho * x.factor) / AMPLIACION_MAX);
+        const h = Math.ceil((x.alto * x.factor) / AMPLIACION_MAX);
+        return `${x.donde}: se estira ${veces(x.factor)} y se verá borrosa. Cámbiala por una de al menos ${w}×${h} px, o por un SVG.`;
+      })
+      .join("\n") || undefined,
+  };
+}
+
 /** Ritmo: qué parte de los cortes cae en un pulso de la música. Informativo (aviso). */
 export function reglaRitmo(r: Ritmo | null | undefined): Regla | null {
   if (!r || r.cortes === 0) return null;
@@ -362,6 +399,8 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
   if (alineacion) reglas.push(alineacion);
   const ritmo = reglaRitmo(esp.ritmo);
   if (ritmo) reglas.push(ritmo);
+  const ampliacion = reglaAmpliacion(esp.ampliaciones);
+  if (ampliacion) reglas.push(ampliacion);
 
   const hoja = await hojaDeContacto(archivo, esp.momentos, dirHoja, log);
   return {

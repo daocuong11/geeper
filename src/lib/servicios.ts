@@ -24,6 +24,8 @@ export interface NuevoProyecto {
   plantilla: string;
   loteId?: string;
   orden?: number;
+  /** Guion exacto (lo que se dice). Si falta, MPT escribe uno a partir del tema. */
+  guion?: string;
 }
 
 async function crearFila(n: NuevoProyecto) {
@@ -50,7 +52,7 @@ const CADENA_FABRICA: TipoTrabajo[] = ["proyecto.importar", "render.entregar"];
 /** Fábrica: MPT genera → se importa a geeper.json → render con la plantilla → QC. */
 export async function crearProyecto(n: NuevoProyecto) {
   const p = await crearFila(n);
-  await encolar(p.id, "mpt.generar", { cadena: CADENA_FABRICA });
+  await encolar(p.id, "mpt.generar", n.guion?.trim() ? { cadena: CADENA_FABRICA, guion: n.guion.trim() } : { cadena: CADENA_FABRICA });
   return p;
 }
 

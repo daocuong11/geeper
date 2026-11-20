@@ -6,6 +6,7 @@ import { escribirAtomico, sha256Archivo, sha256Texto } from "./archivos";
 import { validarProyecto, type Asset, type Proyecto } from "./esquema";
 import { probar } from "./media";
 import { dirProyecto } from "./rutas";
+import { esSvg, revisarSvg } from "./svg";
 
 export function rutaGeeperJson(slug: string): string {
   return path.join(dirProyecto(slug), "geeper.json");
@@ -73,7 +74,10 @@ export async function describirAsset(
   base: Pick<Asset, "id" | "tipo" | "source" | "licencia"> & { regenerar?: Record<string, unknown> },
 ): Promise<Asset> {
   const abs = path.join(dirProy, ruta);
-  const info = await probar(abs).catch(() => ({ duracion: undefined, ancho: undefined, alto: undefined }));
+  // ffprobe no sabe el tamaño de un SVG: sale de su width/height o viewBox (y se revisa que sea seguro).
+  const info = esSvg(ruta)
+    ? { duracion: undefined, ...revisarSvg(await fs.readFile(abs, "utf8")) }
+    : await probar(abs).catch(() => ({ duracion: undefined, ancho: undefined, alto: undefined }));
   return {
     ...base,
     ruta,

@@ -56,6 +56,40 @@ describe("correcciones", () => {
   });
 });
 
-it("lineas no parte palabras", () => {
-  expect(lineas("operan en condiciones climáticas", 18)).toEqual(["operan en", "condiciones", "climáticas"]);
+describe("lineas", () => {
+  it("no parte palabras ni cierra una línea en preposición", () => {
+    expect(lineas("operan en condiciones climáticas", 18)).toEqual(["operan", "en condiciones", "climáticas"]);
+  });
+  it("equilibra sin sumar líneas (el voraz daría 32 + 11 caracteres)", () => {
+    const ls = lineas("los faros guiaron barcos durante siglos aquí", 32);
+    expect(ls).toEqual(["los faros guiaron barcos", "durante siglos aquí"]);
+    expect(Math.max(...ls.map((l) => l.length))).toBeLessThanOrEqual(32);
+  });
+  it("evita dejar «de» al final si el desequilibrio es razonable", () => {
+    expect(lineas("la historia de los faros", 16)).toEqual(["la historia", "de los faros"]);
+  });
+  it("con puntuación pegada la palabra débil sí puede cerrar línea", () => {
+    expect(lineas("pienso que sin duda", 15)).toEqual(["pienso", "que sin duda"]);
+    expect(lineas("pienso que, sin duda", 15)).toEqual(["pienso que,", "sin duda"]);
+  });
+  it("una palabra más larga que la línea queda sola", () => {
+    expect(lineas("ok electroencefalografista sí", 10)).toEqual(["ok", "electroencefalografista", "sí"]);
+  });
+  it("respeta siempre el máximo y el número de líneas del corte voraz", () => {
+    const texto = "una frase bastante larga para probar el reparto de las líneas en los subtítulos del video";
+    for (const max of [12, 18, 24, 32, 42]) {
+      const ls = lineas(texto, max);
+      expect(ls.join(" ")).toBe(texto);
+      expect(Math.max(...ls.map((l) => l.length))).toBeLessThanOrEqual(max);
+      let voraz = 1;
+      let largo = 0;
+      for (const w of texto.split(" ")) {
+        if (largo && largo + 1 + w.length > max) {
+          voraz++;
+          largo = w.length;
+        } else largo += (largo ? 1 : 0) + w.length;
+      }
+      expect(ls.length).toBe(voraz);
+    }
+  });
 });

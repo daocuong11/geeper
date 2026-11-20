@@ -1,10 +1,19 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Aviso, Estado, archivo, pedir, postJson, segundos, useSondeo } from "./comun";
+import { ACCEPT_IMAGEN, esVector } from "@/lib/formatos-vector";
 import { VistaEnVivo } from "./vista-en-vivo";
 import { ListaTrabajos } from "./lista-trabajos";
 import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
-import { EdicionPorTexto, EfectosEscena, PanelAvanzado, type EfectosV, type ExtrasV, type PalabraV } from "./edicion-avanzada";
+import { PanelPortada } from "./panel-portada";
+import { SelectorEncuadre, type EncuadreV } from "./selector-encuadre";
+import { PanelOtroEditor } from "./panel-otro-editor";
+import { useAccionesProyecto } from "./acciones-proyecto";
+import { EdicionPorTexto, EfectosEscena, PanelAvanzado, PanelEstilo, type EfectosV, type EstiloV, type ExtrasV, type PalabraV } from "./edicion-avanzada";
+
+/** Miniatura de una escena (la misma que su tarjeta). */
+const miniatura = (slug: string, e: { visual: { ruta: string; inicio: number } }) =>
+  `/api/miniatura?p=${slug}&ruta=${encodeURIComponent(e.visual.ruta)}&t=${(e.visual.inicio + 0.5).toFixed(1)}`;
 
 interface Grupo {
   texto: string;
@@ -27,8 +36,8 @@ interface EscenaV {
   detalle: PalabraV[];
   efectos: EfectosV;
   correcciones: { desde: number; hasta: number; texto: string }[];
-  visual: { asset: string; ruta: string; source: string; licencia: string; tipo: string; inicio: number; ajuste: string; ancla: string; prompt: unknown };
-  voz: { asset: string; source: string };
+  visual: { asset: string; ruta: string; source: string; licencia: string; tipo: string; inicio: number; ajuste: string; ancla: string; prompt: unknown; encuadre: EncuadreV };
+  voz: { asset: string; source: string; ruta: string };
   grupos: Grupo[];
 }
 interface Regla { id: string; nombre: string; ok: boolean; aviso?: boolean; medido: unknown; objetivo: string; detalle?: string }
@@ -56,7 +65,12 @@ interface Vista {
   escenas: EscenaV[];
   total: number;
   extras: ExtrasV | null;
+  /** Importado antes del reencuadre por cara: se analiza una vez al abrirlo. */
+  carasPendientes: boolean;
 }
+
+/** Mensaje de una subida: el de éxito más lo que VectorCraft avisó al convertir (p. ej. una fuente que faltaba). */
+const conAvisos = (r: { avisos?: string[] }, ok: string) => (r.avisos?.length ? `${ok} Ojo: ${r.avisos.join(" · ")}` : ok);
 
 const t2 = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 
@@ -68,7 +82,20 @@ function medido(v: unknown): string {
   return String(v);
 }
 
-function InformeQc({ r, slug }: { r: Render; slug: string }) {
+/** Imágenes borrosas que la regla de nitidez propone vectorizar (ver `reglaAmpliacion`). */
+function vectorizables(g: Regla): { asset: string; donde: string }[] {
+  const m = g.medido as { vectorizables?: { asset: string; donde: string }[] } | null;
+  return g.id === "ampliacion" && !g.ok && Array.isArray(m?.vectorizables) ? m.vectorizables : [];
+}
+
+interface Vectorizar {
+  hacer: (asset: string, donde: string) => void;
+  /** La imagen sigue en el proyecto (el QC es del último render; puede haberse cambiado ya). */
+  sigue: (asset: string) => boolean;
+  ocupado: boolean;
+}
+
+function InformeQc({ r, slug, vectorizar }: { r: Render; slug: string; vectorizar?: Vectorizar }) {
   const inf = r.informeQc;
   if (!inf) return null;
   return (
@@ -80,7 +107,14 @@ function InformeQc({ r, slug }: { r: Render; slug: string }) {
           {inf.reglas.map((g) => (
             <tr key={g.id} className="border-t border-borde align-top">
               <td className="py-1 pr-2"><span aria-hidden>{g.ok ? "✓" : g.aviso ? "!" : "✗"}</span> <span className={g.ok ? "" : g.aviso ? "text-amber-300" : "text-red-300"}>{g.nombre}</span>
-                {g.detalle && !g.ok && <pre className="mt-1 whitespace-pre-wrap text-[11px] text-tenue">{g.detalle}</pre>}</td>
+                {g.detalle && !g.ok && <pre className="mt-1 whitespace-pre-wrap text-[11px] text-tenue">{g.detalle}</pre>}
+                {vectorizar && vectorizables(g).filter((x) => vectorizar.sigue(x.asset)).map((x) => (
+                  <button key={x.asset} type="button" className="boton mt-1 mr-1 py-0.5 text-[11px]" disabled={vectorizar.ocupado}
+                    title="Convierte la imagen en trazos nítidos con VectorCraft. Sirve para logos e íconos planos, no para fotos. Se deshace desde Historial."
+                    onClick={() => vectorizar.hacer(x.asset, x.donde)}>
+                    Vectorizar {x.donde.toLowerCase()} (si es un logo)
+                  </button>
+                ))}</td>
               <td className="pr-2 break-words">{medido(g.medido)}</td>
               <td className="break-all text-tenue">{g.objetivo}</td>
             </tr>
@@ -118,18 +152,23 @@ function EditorGrupo({ g, onGuardar, onQuitar, corregido }: { g: Grupo; corregid
   );
 }
 
-function TarjetaEscena({ e, slug, total, editar, subirClip, regenerarVoz, ocupado }: {
-  e: EscenaV; slug: string; total: number; ocupado: boolean;
+/** «2», «2 y 5», «2, 4 y 5». */
+function lista(n: number[]): string {
+  return n.length <= 1 ? String(n[0] ?? "") : `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}`;
+}
+
+function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subirClip, regenerarVoz, ocupado }: {
+  e: EscenaV; anterior?: EscenaV; slug: string; total: number; ocupado: boolean; formato: string; estilo: EstiloV | null;
   editar: (ed: object) => Promise<void>;
   subirClip: (escena: string, f: File) => Promise<void>;
   regenerarVoz: (escena: string) => Promise<void>;
 }) {
   return (
-    <li className="tarjeta flex flex-col gap-3 p-3 md:flex-row">
+    <li id={`escena-${e.id}`} className="tarjeta flex scroll-mt-4 flex-col gap-3 p-3 md:flex-row">
       <div className="shrink-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={`/api/miniatura?p=${slug}&ruta=${encodeURIComponent(e.visual.ruta)}&t=${(e.visual.inicio + 0.5).toFixed(1)}`} alt={`Escena ${e.indice + 1}`}
-          className="h-40 w-auto rounded bg-black object-contain md:h-44" />
+        <SelectorEncuadre escena={e.id} numero={e.indice + 1} encuadre={e.visual.encuadre} ocupado={ocupado}
+          src={`/api/miniatura?p=${slug}&ruta=${encodeURIComponent(e.visual.ruta)}&t=${(e.visual.inicio + 0.5).toFixed(1)}`}
+          elegir={(ajuste, ancla) => void editar({ tipo: "ajusteVisual", escena: e.id, ajuste, ancla })} />
       </div>
       <div className="min-w-0 flex-1 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
@@ -137,7 +176,7 @@ function TarjetaEscena({ e, slug, total, editar, subirClip, regenerarVoz, ocupad
           <span className="font-mono text-xs text-tenue">{t2(e.inicio)} – {t2(e.inicio + e.duracion)} ({e.duracion.toFixed(2)} s)</span>
           <span className="text-xs text-tenue">clip: {e.visual.source}{e.visual.source === "archivo" ? " (propio)" : ""} · voz: {e.voz.source}</span>
         </div>
-        <EdicionPorTexto escena={e.id} palabras={e.detalle} duracion={e.duracion} duracionOriginal={e.duracionOriginal} editar={editar} ocupado={ocupado} />
+        <EdicionPorTexto escena={e.id} audio={archivo(`${slug}/${e.voz.ruta}`)} palabras={e.detalle} duracion={e.duracion} duracionOriginal={e.duracionOriginal} editar={editar} ocupado={ocupado} />
         <ul className="space-y-1.5">
           {e.grupos.map((g) => (
             <EditorGrupo key={`${g.desde}-${g.hasta}-${g.mostradoPropio}`} g={g}
@@ -151,20 +190,15 @@ function TarjetaEscena({ e, slug, total, editar, subirClip, regenerarVoz, ocupad
           <button type="button" className="boton" disabled={ocupado || e.indice === total - 1} onClick={() => void editar({ tipo: "moverEscena", escena: e.id, a: e.indice + 1 })} aria-label={`Bajar escena ${e.indice + 1}`}>↓ Bajar</button>
           <label className="boton cursor-pointer">
             Reemplazar clip…
-            <input type="file" accept="video/*,image/*" className="sr-only" disabled={ocupado}
+            <input type="file" accept={`video/*,${ACCEPT_IMAGEN}`} className="sr-only" disabled={ocupado}
               onChange={(ev) => { const f = ev.target.files?.[0]; if (f) void subirClip(e.id, f); ev.target.value = ""; }} />
           </label>
-          <select aria-label="Encuadre" className="campo w-auto py-1" value={e.visual.ajuste} disabled={ocupado}
-            onChange={(ev) => void editar({ tipo: "ajusteVisual", escena: e.id, ajuste: ev.target.value === "auto" ? undefined : ev.target.value, ancla: e.visual.ancla === "centro" ? undefined : e.visual.ancla })}>
-            <option value="auto">Encuadre automático</option>
-            <option value="cubrir">Cubrir (recorta)</option>
-            <option value="contener">Contener (fondo desenfocado)</option>
-          </select>
           <button type="button" className="boton" disabled={ocupado} onClick={() => void regenerarVoz(e.id)}>Regenerar voz de la escena</button>
           <button type="button" className="boton boton-peligro" disabled={ocupado || total <= 1}
             onClick={() => { if (confirm(`¿Quitar la escena ${e.indice + 1}? Se quita también lo que se oye en ella. Puedes volver atrás en el historial.`)) void editar({ tipo: "quitarEscena", escena: e.id }); }}>Quitar</button>
         </div>
-        <EfectosEscena escena={e.id} indice={e.indice} efectos={e.efectos} editar={editar} ocupado={ocupado} />
+        <EfectosEscena escena={e.id} indice={e.indice} efectos={e.efectos} estilo={estilo} formato={formato}
+          imgA={anterior ? miniatura(slug, anterior) : undefined} imgB={miniatura(slug, e)} editar={editar} ocupado={ocupado} />
       </div>
     </li>
   );
@@ -175,15 +209,32 @@ export function EditorProyecto({ id }: { id: string }) {
   const { datos: pl } = useSondeo<{ plantillas: { slug: string; nombre: string }[] }>("/api/plantillas", 60_000);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Reencuadre por cara en proyectos viejos: se pide una sola vez al abrir; el aviso deja deshacerlo.
+  const [caras, setCaras] = useState<{ fase: "buscando" } | { fase: "listo"; escenas: { id: string; numero: number }[] } | null>(null);
+  const pedidoCaras = useRef(false);
+  const pendientes = v?.carasPendientes ?? false;
+  useEffect(() => {
+    if (!pendientes || pedidoCaras.current) return;
+    pedidoCaras.current = true;
+    setCaras({ fase: "buscando" });
+    postJson<{ escenas: { id: string; numero: number }[] }>(`/api/proyectos/${id}/caras`, { accion: "auto" })
+      .then((r) => { setCaras(r.escenas.length ? { fase: "listo", escenas: r.escenas } : null); return recargar(); })
+      .catch(() => setCaras(null)); // sin caras o sin OpenCV: el encuadre queda como estaba, sin molestar
+  }, [pendientes, id, recargar]);
+  const dejarComoEstaba = (escenas: string[]) => hacer(async () => {
+    await postJson(`/api/proyectos/${id}/caras`, { accion: "deshacer", escenas });
+    setCaras(null);
+  }, "Listo: esas escenas quedaron encuadradas como antes. Puedes cambiar cada una en «¿Qué se ve?».");
   const [mostrarTxt, setMostrarTxt] = useState<string | null>(null);
   const [pestana, setPestana] = useState<"vivo" | "render" | null>(null);
 
+  /** Si `fn` devuelve un texto, ése es el mensaje de éxito (p. ej. con avisos); si no, `ok`. */
   async function hacer(fn: () => Promise<unknown>, ok: string) {
     setOcupado(true);
     setMsg(null);
     try {
-      await fn();
-      setMsg({ tipo: "ok", texto: ok });
+      const r = await fn();
+      setMsg({ tipo: "ok", texto: typeof r === "string" ? r : ok });
       await recargar();
     } catch (e) {
       setMsg({ tipo: "error", texto: e instanceof Error ? e.message : String(e) });
@@ -192,11 +243,12 @@ export function EditorProyecto({ id }: { id: string }) {
     }
   }
   const editar = (ed: object) => hacer(() => postJson(`/api/proyectos/${id}/editar`, { edicion: ed }), "Guardado como versión nueva. Ya se ve en «En vivo»; renderiza para el QC y la descarga.");
+  const editarVarias = (eds: object[]) => hacer(() => postJson(`/api/proyectos/${id}/editar`, { ediciones: eds }), "Guardado como versión nueva. Ya se ve en «En vivo»; renderiza para el QC y la descarga.");
   const subirClip = (escena: string, f: File) => hacer(async () => {
     const fd = new FormData();
     fd.set("escena", escena);
     fd.set("archivo", f);
-    await pedir(`/api/proyectos/${id}/clip`, { method: "POST", body: fd });
+    return conAvisos(await pedir(`/api/proyectos/${id}/clip`, { method: "POST", body: fd }), `Clip reemplazado por «${f.name}»${esVector(f.name) ? " (convertido a SVG)" : ""}.`);
   }, `Clip reemplazado por «${f.name}».`);
   const regenerarVoz = (escena: string | null) => hacer(() => postJson(`/api/proyectos/${id}/voz`, { escena }),
     "Voz en cola (Kokoro y whisper en CPU). Al terminar se realinean los subtítulos y se vuelve a renderizar.");
@@ -205,14 +257,26 @@ export function EditorProyecto({ id }: { id: string }) {
     const r = await postJson<{ cambio: boolean; motivo?: string }>(`/api/proyectos/${id}/musica`, {});
     if (!r.cambio) throw new Error(r.motivo ?? "No se pudo alinear la música");
   }, "Música alineada: los pulsos quedan marcados y el QC mide cuántos cortes caen en pulso.");
+  const vectorizarImagen = (asset: string, donde: string) => hacer(async () =>
+    conAvisos(await postJson(`/api/proyectos/${id}/vectorizar`, { asset }), `${donde}: vectorizada (SVG nítido). Vuelve a renderizar para verla en el QC; si no te gusta, vuelve a la versión anterior en Historial.`),
+  "Vectorizada.");
   const subirLibre = (f: File, pista: string, inicio: number, licencia: string) => hacer(async () => {
     const fd = new FormData();
     fd.set("pista", pista);
     fd.set("inicio", String(inicio));
     fd.set("licencia", licencia);
     fd.set("archivo", f);
-    await pedir(`/api/proyectos/${id}/clip`, { method: "POST", body: fd });
+    return conAvisos(await pedir(`/api/proyectos/${id}/clip`, { method: "POST", body: fd }), `«${f.name}» agregado en ${inicio.toFixed(1)} s${esVector(f.name) ? " (convertido a SVG)" : ""}.`);
   }, `«${f.name}» agregado en ${inicio.toFixed(1)} s.`);
+
+  useAccionesProyecto(v?.p ? {
+    id, slug: v.fila.slug, formato: v.p.formato, plantilla: v.p.plantilla, plantillas: pl?.plantillas ?? [],
+    renderAprobado: v.fila.renders[0]?.estado === "aprobado" ? v.fila.renders[0].ruta : null,
+    hayMusica: !!v.extras?.musica, dudosas: v.extras?.confianza.dudosas ?? 0,
+    versionAnterior: v.fila.versiones.find((x) => x.numero < v.fila.versionActual)?.numero ?? null,
+    ocupado, editar, renderizar, alinearMusica, regenerarVoz,
+    volverA: (numero) => hacer(() => postJson(`/api/proyectos/${id}/version`, { numero }), `Volviste a la versión ${numero} (guardada como versión nueva).`),
+  } : null);
 
   if (error && !v) return <Aviso tipo="error">{error}</Aviso>;
   if (!v) return <p className="text-tenue">Cargando…</p>;
@@ -236,6 +300,20 @@ export function EditorProyecto({ id }: { id: string }) {
         </div>
       </header>
       {msg && <Aviso tipo={msg.tipo}>{msg.texto}</Aviso>}
+      {caras?.fase === "buscando" && <p className="text-sm text-tenue" role="status">Revisando los clips para encuadrar mejor las caras…</p>}
+      {caras?.fase === "listo" && (
+        <Aviso tipo="ok">
+          <p>
+            Encontramos caras en {caras.escenas.length === 1 ? "la escena" : "las escenas"} {lista(caras.escenas.map((e) => e.numero))} y
+            {caras.escenas.length === 1 ? " la encuadramos" : " las encuadramos"} para que la persona se vea a pantalla completa, en vez de achicada con fondo borroso.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <a className="boton" href={`#escena-${caras.escenas[0]!.id}`}>Ver {caras.escenas.length === 1 ? "la escena" : `la escena ${caras.escenas[0]!.numero}`}</a>
+            <button type="button" className="boton" disabled={ocupado} onClick={() => void dejarComoEstaba(caras.escenas.map((e) => e.id))}>Dejar como estaba</button>
+            <button type="button" className="boton" onClick={() => setCaras(null)}>Entendido</button>
+          </div>
+        </Aviso>
+      )}
       {activos.length > 0 && <Aviso tipo="info">Hay {activos.length} trabajo(s) en curso para este proyecto; abajo ves su avance y su log.</Aviso>}
       {!p && <Aviso tipo="info">Todavía no hay geeper.json: el proyecto se está generando o importando.</Aviso>}
 
@@ -317,8 +395,14 @@ export function EditorProyecto({ id }: { id: string }) {
       )}
 
       {p && v.extras && (
-        <PanelAvanzado extras={v.extras} formato={p.formato} total={v.total} editar={editar} alinearMusica={alinearMusica} subirLibre={subirLibre} ocupado={ocupado} />
+        <>
+          <PanelEstilo estilo={v.extras.estilo} escenas={escenas} formato={p.formato} imgs={escenas.slice(0, 2).map((e) => miniatura(fila.slug, e))}
+            editar={editar} editarVarias={editarVarias} ocupado={ocupado} />
+          <PanelAvanzado extras={v.extras} formato={p.formato} total={v.total} editar={editar} alinearMusica={alinearMusica} subirLibre={subirLibre} ocupado={ocupado} slug={fila.slug} />
+        </>
       )}
+
+      {p && <PanelPortada proyectoId={id} nombre={fila.nombre} version={fila.versionActual} vertical={fila.formato === "9:16"} />}
 
       {render?.estado === "aprobado" ? (
         <PanelPublicar proyectoId={id} render={render} nombre={fila.nombre} tema={fila.tema} publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
@@ -330,10 +414,12 @@ export function EditorProyecto({ id }: { id: string }) {
         </section>
       )}
 
+      {p && <PanelOtroEditor proyectoId={id} version={fila.versionActual} />}
+
       {render?.informeQc && (
         <section className="tarjeta p-4">
           <h2 className="mb-3 font-medium">Control de calidad del último render {render.informeQc.aprobado ? "(aprobado)" : "(no aprobado)"}</h2>
-          <InformeQc r={render} slug={fila.slug} />
+          <InformeQc r={render} slug={fila.slug} vectorizar={{ hacer: vectorizarImagen, sigue: (a) => !!v && (v.escenas.some((e) => e.visual.asset === a) || !!v.extras?.libres.some((pi) => pi.clips.some((c) => c.asset === a))), ocupado }} />
         </section>
       )}
 
@@ -341,8 +427,9 @@ export function EditorProyecto({ id }: { id: string }) {
         <section>
           <h2 className="mb-3 font-medium">Escenas</h2>
           <ol className="space-y-3">
-            {escenas.map((e) => (
-              <TarjetaEscena key={e.id} e={e} slug={fila.slug} total={escenas.length} editar={editar} subirClip={subirClip} regenerarVoz={regenerarVoz} ocupado={ocupado} />
+            {escenas.map((e, i) => (
+              <TarjetaEscena key={e.id} e={e} anterior={escenas[i - 1]} slug={fila.slug} total={escenas.length} formato={p?.formato ?? fila.formato}
+                estilo={v.extras?.estilo ?? null} editar={editar} subirClip={subirClip} regenerarVoz={regenerarVoz} ocupado={ocupado} />
             ))}
           </ol>
         </section>

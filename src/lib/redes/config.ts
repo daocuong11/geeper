@@ -8,10 +8,10 @@
  *   "facebook":  { "appId": "...", "appSecret": "..." }
  * }
  */
-import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import { leerPrivado, noExiste } from "./archivo-privado";
 import type { IdRed } from "./tipos";
 
 export function dirConfig(): string {
@@ -40,9 +40,11 @@ export type ConfigRedes = z.infer<typeof Config>;
 export function leerConfig(): ConfigRedes {
   let crudo: string;
   try {
-    crudo = fs.readFileSync(rutaRedes(), "utf8");
-  } catch {
-    return {};
+    crudo = leerPrivado(rutaRedes()).toString("utf8");
+  } catch (e) {
+    // Sin archivo no hay redes configuradas; con permisos inseguros, error claro (no «sin configurar»).
+    if (noExiste(e)) return {};
+    throw e;
   }
   const r = Config.safeParse(JSON.parse(crudo));
   if (!r.success) throw new Error(`${rutaRedes()} no tiene el formato esperado: ${r.error.issues.map((i) => i.path.join(".")).join(", ")}`);
@@ -61,14 +63,5 @@ export function configurada(red: IdRed): boolean {
     return !!leerConfig()[red];
   } catch {
     return false;
-  }
-}
-
-/** Permisos del archivo de credenciales: debe ser 600. */
-export function permisosRedes(): string | null {
-  try {
-    return (fs.statSync(rutaRedes()).mode & 0o777).toString(8);
-  } catch {
-    return null;
   }
 }

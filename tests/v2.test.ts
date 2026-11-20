@@ -84,6 +84,15 @@ describe("edición por texto", () => {
     expect(duracionEscenas(r)).toBeCloseTo(antes, 6);
   });
 
+  it("«Suena bien» confirma las palabras escuchadas y sólo esas", () => {
+    const p = proyectoDePrueba();
+    p.escenas.e01!.palabras = p.escenas.e01!.palabras.map((w) => ({ ...w, confianza: 0.3 }));
+    const q = ed(p, { tipo: "confirmarPalabras", escena: "e01", desde: 1, hasta: 3 });
+    expect(q.escenas.e01!.palabras.map((w) => w.confianza)).toEqual([0.3, 1, 1, 0.3, 0.3]);
+    expect(p.escenas.e01!.palabras[1]!.confianza).toBe(0.3); // no muta el original
+    expect(() => ed(p, { tipo: "confirmarPalabras", escena: "e01", desde: 2, hasta: 9 })).toThrow(/inválido/);
+  });
+
   it("no deja recortar una escena entera", () => {
     expect(() => ed(proyectoDePrueba(), { tipo: "recortarPalabras", escena: "e01", desde: 0, hasta: 5 })).toThrow(/vacía/);
   });

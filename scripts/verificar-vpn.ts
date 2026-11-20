@@ -2,7 +2,7 @@
  * pnpm tsx scripts/verificar-vpn.ts [PAIS] — comprueba que TODO el equipo sale por el VPN (docs/VPN.md).
  *
  * Revisa, desde Windows y desde WSL: IP y país de salida, fuga por IPv6, servidores DNS de Windows,
- * kill-switch (si existe el túnel) y que la zona horaria, la región y el idioma de Windows coincidan
+ * que el túnel de WireGuard esté corriendo y que la zona horaria, la región y el idioma de Windows coincidan
  * con el país. PAIS es el código ISO de 2 letras (US, ES, MX…). Si no se da, usa el de Sistema → Red.
  * Solo lee: no cambia nada. Sale con 1 si hay algún problema.
  */
@@ -61,10 +61,17 @@ async function main() {
     else anotar("mal", "Salida desde Windows", `${p} · ${ip} (se esperaba ${pais})`, "Activa el túnel en WireGuard con AllowedIPs = 0.0.0.0/0, ::/0.");
   }
 
-  // 3. Fuga por IPv6: si hay IPv6 pública y el túnel no la cubre, se ve la ubicación real.
-  const v6 = await ipv6Wsl();
+  // 3. Fuga por IPv6: si hay IPv6 pública y el túnel no la cubre, se ve la ubicación real. Se mide
+  // desde Windows (WSL en modo NAT casi nunca tiene IPv6 y no vería la fuga) y desde WSL.
+  const v6Win = await powershell(
+    "try { $ip = Invoke-RestMethod -TimeoutSec 8 https://api6.ipify.org; $p = (Invoke-RestMethod -TimeoutSec 8 \"https://api.country.is/$ip\").country; \"$p $ip\" } catch { '' }",
+  );
+  const v6 = v6Win ? { pais: v6Win.split(" ")[0], ip: v6Win.split(" ")[1] } : (await ipv6Wsl().then((ip) => (ip ? { pais: "", ip } : null)));
+  const arregloV6 = "En WireGuard incluye «::/0» en AllowedIPs, o desactiva IPv6 en el adaptador de red de Windows.";
   if (!v6) anotar("ok", "IPv6", "sin salida IPv6 (no hay fuga por esa vía)");
-  else anotar("aviso", "IPv6", `hay salida IPv6 (${v6}); confirma que es del VPN`, "En WireGuard incluye «::/0» en AllowedIPs, o desactiva IPv6 en el adaptador de red de Windows.");
+  else if (v6.pais === pais) anotar("ok", "IPv6", `${v6.pais} · ${v6.ip}`);
+  else if (v6.pais) anotar("mal", "IPv6", `${v6.pais} · ${v6.ip} (se esperaba ${pais}): fuga por IPv6`, arregloV6);
+  else anotar("aviso", "IPv6", `hay salida IPv6 (${v6.ip}); confirma que es del VPN`, arregloV6);
 
   // 4. Túnel y kill-switch de WireGuard.
   const tunel = await powershell("Get-Service -Name 'WireGuardTunnel$*' -ErrorAction SilentlyContinue | % { \"$($_.Name)=$($_.Status)\" }");

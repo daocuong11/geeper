@@ -127,6 +127,8 @@ export interface Red {
    * ya publicado (corte entre la llamada y el guardado) para no duplicar.
    */
   publicar?(c: CuentaDescifrada, s: Sesion, meta: MetaPublicacion): Promise<{ idExterno: string; url?: string }>;
+  /** Pone una miniatura propia al video ya subido (YouTube: thumbnails.set). Idempotente. */
+  miniatura?(c: CuentaDescifrada, idExterno: string, jpeg: Buffer): Promise<void>;
 }
 
 /**

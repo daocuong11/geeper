@@ -21,6 +21,7 @@ import { HYPERFRAMES_VERSION, MPT_CONTENEDOR, MPT_TAREAS } from "./rutas";
 import { segmentar } from "./segmentar";
 import { detectarSilencios, puntuarPalabras, resumirConfianza } from "./confianza";
 import { aplicarEdicion } from "./ediciones";
+import { conFocos, marcarAuto } from "./caras";
 import { proponerMusica } from "./pulsos";
 import { etiquetaPesos, huellaPesos } from "./modelos";
 import { alinear, MODELO_WHISPER, transcribir } from "./voz";
@@ -237,17 +238,21 @@ export async function importarMpt(ctx: Contexto, d: DatosImport): Promise<{ vers
     assets,
     pistas,
     escenas,
+    // Proyectos nuevos: movimiento de cámara con Easy Ease (los viejos siguen como estaban).
+    estilo: { curva: "suave" },
     marcadores: tramos.slice(1).map((t, i) => ({ id: `m${i + 1}`, tiempo: t.inicio, nombre: `Corte ${i + 1}`, tipo: "corte" as const })),
     origen: { mpt: { taskId: d.taskId, searchTerms: script.search_terms ?? [], params: script.params ?? {} } },
   });
   await escribirAtomico(path.join(ctx.dir, "mpt", `${d.taskId}.palabras.json`), JSON.stringify(palabras));
+  // Reencuadre: dónde está la cara de cada clip (YuNet, CPU). Si falla, sigue sin foco.
+  let final = (await conFocos(ctx, proyecto)).p;
+  await marcarAuto(ctx.dir); // nace analizado: abrirlo no vuelve a cambiar el encuadre
   // Música al ritmo: si la pista tiene pulso estable, empieza donde más cortes caen en pulso.
-  let final = proyecto;
   if (musica) {
     try {
-      const prop = await proponerMusica(proyecto, ctx.dir);
+      const prop = await proponerMusica(final, ctx.dir);
       if (prop?.despues) {
-        final = aplicarEdicion(proyecto, prop.edicion);
+        final = aplicarEdicion(final, prop.edicion);
         ctx.log(`Música: ${prop.bpm ?? "?"} BPM, empieza en ${prop.edicion.inicio.toFixed(2)} s; cortes en pulso ${prop.despues.enPulso}/${prop.despues.cortes}`);
       } else ctx.log("Música sin pulso estable: no se alinean los cortes");
     } catch (e) {

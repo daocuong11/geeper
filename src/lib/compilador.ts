@@ -9,13 +9,16 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pista, pistasLibres, type Asset, type Clip, type Encuadre, type Proyecto, type Texto } from "./esquema";
-import { ANCHO_CARACTER, dentro, metricas, PADDING_PASTILLA, type Caja, type Metricas } from "./formatos";
+import { ajusteDe, posicionCara, sigueCara } from "./caras";
+import { bezier, CURVAS, cssFusion, easeDe, esMascara, filtroEfectos, mascaraTransicion, scriptEfectos, svgDefs, unirFiltro, type Efecto, type EncuadreGsap, type Grano } from "./efectos";
+import { aplicarEstilo, pista, pistasLibres, type Asset, type Clip, type Encuadre, type Proyecto, type Texto, type Transicion } from "./esquema";
+import { ANCHO_CARACTER, caracteresPorLinea, dentro, metricas, PADDING_PASTILLA, type Caja, type Metricas } from "./formatos";
 import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type Grupo } from "./linea";
 import type { DatosPlantilla } from "./plantillas";
-import { lineas } from "./subtitulos";
+import { lineas, lineasDePalabras } from "./subtitulos";
+import { textoSobre } from "./colores-marca";
 
-export const VERSION_COMPILADOR = "compilador-hf-v2";
+export const VERSION_COMPILADOR = "compilador-hf-v3";
 
 export interface CajaRevisada {
   nombre: string;
@@ -63,13 +66,8 @@ export interface Anim {
   ease?: string;
 }
 
-/** Decide cubrir/contener: automático si la relación de aspecto difiere mucho del lienzo. */
-function ajusteDe(c: Clip, a: Asset, W: number, H: number): "cubrir" | "contener" {
-  if (c.ajuste) return c.ajuste;
-  if (!a.ancho || !a.alto) return "cubrir";
-  const r = a.ancho / a.alto / (W / H);
-  return Math.max(r, 1 / r) > 1.4 ? "contener" : "cubrir";
-}
+/** Decide cubrir/contener (vive en caras.ts para que la vista previa del encuadre use el mismo cálculo). */
+export { ajusteDe };
 
 const ENCUADRE_BASE: Encuadre = { escala: 1, x: 0, y: 0 };
 const mezclarEncuadre = (a: Encuadre, b: Encuadre, k: number): Record<string, number> => ({
@@ -118,8 +116,15 @@ export function cajaTexto(t: Texto, m: Metricas, altoMarca: number): Caja {
   return { x, y, w, h };
 }
 
-export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: string, dirProyecto: string): Compilado {
+/**
+ * `sustitutos`: id de asset → archivo que lo reemplaza al componer (p. ej. el clip con el look de color
+ * del canal, src/lib/looks.ts). El geeper.json no cambia.
+ */
+export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezcla: string, dirProyecto: string, sustitutos: Record<string, string> = {}): Compilado {
+  // El estilo del video se aplica a las escenas que no tienen el suyo.
+  const p = aplicarEstilo(original);
   const m = metricas(p.formato, opcionesDe(p));
+  const cplSubs = caracteresPorLinea(p.formato, opcionesDe(p));
   const { W, H } = m;
   const vertical = H > W;
   const escenas = escenasEnLinea(p);
@@ -129,9 +134,24 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
   const archivos: Record<string, string> = { "assets/mezcla.wav": rutaMezcla };
   const anims: Anim[] = [];
   const enlazar = (a: Asset) => {
-    const nombre = `assets/${a.id}${path.extname(a.ruta)}`;
-    archivos[nombre] = path.join(dirProyecto, a.ruta);
+    const fuente = sustitutos[a.id] ?? path.join(dirProyecto, a.ruta);
+    const nombre = `assets/${a.id}${path.extname(fuente)}`;
+    archivos[nombre] = fuente;
     return nombre;
+  };
+  // Efectos por pieza: se convierten en filtros al final, con la duración ya definitiva.
+  const efectosDe = new Map<Pieza, Efecto[]>();
+  /** Entrada de una transición sobre una pieza: las de máscara también le agregan su CSS. */
+  const entradaEn = (pz: Pieza, tr: Transicion, t0: number, d: number, enc: EncuadreGsap, opacidad = 1): Anim | null => {
+    if (!esMascara(tr.tipo)) return entrada(pz.id, tr.tipo, t0, d, opacidad);
+    const m = mascaraTransicion({ ...tr, tipo: tr.tipo }, W, H, enc);
+    pz.estilo = `${pz.estilo} ${m.estilo}`.trim();
+    return { id: pz.id, t: t0, dur: d, desde: m.desde, hasta: m.hasta, ease: m.ease };
+  };
+  /** Avance del movimiento de cámara con su curva (After Effects: Easy Ease y variantes). */
+  const curvaDe = (c: Clip) => {
+    const pc = CURVAS[c.movimiento?.curva ?? "lineal"];
+    return pc ? bezier(pc[0], pc[1], pc[2], pc[3]) : (k: number) => k;
   };
 
   // ---- Visuales: un tramo por escena; si el clip es más corto que la escena, se repite.
@@ -171,10 +191,13 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
         const pz = { ...comun, id: `v-${base}`, clase: "fondo contener", estilo: color };
         piezas.push(pz);
         propias.push(pz);
+        if (v.efectos?.length) efectosDe.set(pz, v.efectos);
       } else {
-        const pz = { ...comun, id: `v-${base}`, clase: `fondo ancla-${v.ancla ?? "centro"}`, estilo: color };
+        const cara = sigueCara(v, a) ? posicionCara(a, W, H) : null;
+        const pz = { ...comun, id: `v-${base}`, clase: cara ? "fondo" : `fondo ancla-${v.ancla ?? "centro"}`, estilo: `${cara ?? ""} ${color}`.trim() };
         piezas.push(pz);
         propias.push(pz);
+        if (v.efectos?.length) efectosDe.set(pz, v.efectos);
       }
       if (k === 0) ids.push(`v-${base}`);
       // Movimiento de cámara: cada tramo recorre su parte del camino desde → hasta.
@@ -183,7 +206,14 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
         const k1 = (t + dur + entradaSilencio) / largo;
         const d0 = { ...ENCUADRE_BASE, ...v.movimiento.desde };
         const d1 = { ...ENCUADRE_BASE, ...v.movimiento.hasta };
-        anims.push({ id: `v-${base}`, t: es.inicio + t, dur, desde: mezclarEncuadre(d0, d1, k0), hasta: mezclarEncuadre(d0, d1, k1), ease: "none" });
+        // Un solo tramo: la curva entera como ease. Varios tramos: cada uno, lineal entre sus puntos de la curva.
+        const entero = k0 < 1e-6 && k1 > 1 - 1e-6;
+        const cv = curvaDe(v);
+        anims.push({
+          id: `v-${base}`, t: es.inicio + t, dur,
+          desde: mezclarEncuadre(d0, d1, entero ? 0 : cv(k0)), hasta: mezclarEncuadre(d0, d1, entero ? 1 : cv(k1)),
+          ease: entero ? easeDe(v.movimiento.curva) : "none",
+        });
       }
       t += dur;
       desde = 0;
@@ -196,10 +226,12 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       const d = Math.min(tr.duracion, es.duracion);
       for (const u of ultimasDeEscena[es.indice - 1] ?? []) u.dur += d;
       const primera = propias[0];
-      const an = primera ? entrada(primera.id, tr.tipo, es.inicio, d) : null;
+      const enc = v.movimiento ? mezclarEncuadre({ ...ENCUADRE_BASE, ...v.movimiento.desde }, { ...ENCUADRE_BASE, ...v.movimiento.hasta }, 0) : {};
+      const an = primera ? entradaEn(primera, tr, es.inicio, d, enc) : null;
       if (an) anims.push(an);
       const fondo = piezas.find((x) => x.id === `b-${es.escena.id}-0`);
-      const anFondo = fondo ? entrada(fondo.id, tr.tipo, es.inicio, d) : null;
+      // El fondo desenfocado está escalado 1,15 por CSS (.fondo.desenfoque).
+      const anFondo = fondo ? entradaEn(fondo, tr, es.inicio, d, { scale: 1.15 }) : null;
       if (anFondo) anims.push(anFondo);
     } else if (!v.movimiento && tr?.tipo !== "corte") {
       // Por defecto (plantilla): golpe de zoom en el corte.
@@ -225,19 +257,22 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
         const ajuste = ajusteDe(c, a, W, H);
         const id = `s-${pi.id}-${j}`;
         const opacidad = c.opacidad ?? 1;
-        superpuestas.push({
+        const cara = ajuste === "cubrir" && sigueCara(c, a) ? posicionCara(a, W, H) : null;
+        const sp: Pieza = {
           id, src: enlazar(a), inicio: ini, dur, desde: c.rango.inicio, imagen, pista: 6 + n,
-          clase: `superpuesta ${ajuste === "contener" ? "contener" : `ancla-${c.ancla ?? "centro"}`}`,
-          estilo: `z-index: ${20 + n}; opacity: ${opacidad}; ${filtroColor(c)}`.trim(),
+          clase: `superpuesta ${ajuste === "contener" ? "contener" : cara ? "" : `ancla-${c.ancla ?? "centro"}`}`.trim(),
+          estilo: `z-index: ${20 + n}; opacity: ${opacidad}; ${cara ?? ""} ${filtroColor(c)} ${cssFusion(c.fusion)}`.replace(/\s+/g, " ").trim(),
           velocidad: imagen ? undefined : velocidad,
-        });
+        };
+        superpuestas.push(sp);
+        if (c.efectos?.length) efectosDe.set(sp, c.efectos);
+        const d0 = { ...ENCUADRE_BASE, ...c.movimiento?.desde };
+        const d1 = { ...ENCUADRE_BASE, ...c.movimiento?.hasta };
         if (c.movimiento) {
-          const d0 = { ...ENCUADRE_BASE, ...c.movimiento.desde };
-          const d1 = { ...ENCUADRE_BASE, ...c.movimiento.hasta };
-          anims.push({ id, t: ini, dur, desde: mezclarEncuadre(d0, d1, 0), hasta: mezclarEncuadre(d0, d1, 1), ease: "none" });
+          anims.push({ id, t: ini, dur, desde: mezclarEncuadre(d0, d1, 0), hasta: mezclarEncuadre(d0, d1, 1), ease: easeDe(c.movimiento.curva) });
         }
         if (c.transicion && c.transicion.tipo !== "corte") {
-          const an = entrada(id, c.transicion.tipo, ini, Math.min(c.transicion.duracion, dur), opacidad);
+          const an = entradaEn(sp, c.transicion, ini, Math.min(c.transicion.duracion, dur), c.movimiento ? mezclarEncuadre(d0, d1, 0) : {}, opacidad);
           if (an) anims.push(an);
         }
       });
@@ -250,13 +285,27 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       ? `      <img id="${x.id}" class="clip ${x.clase}" src="${e(x.src)}" data-start="${f3(x.inicio)}" data-duration="${f3(x.dur)}" data-track-index="${x.pista}"${estilo} alt="" />`
       : `      <video id="${x.id}" class="clip ${x.clase}" src="${e(x.src)}" data-start="${f3(x.inicio)}" data-duration="${f3(x.dur)}" data-media-start="${f3(x.desde)}" data-track-index="${x.pista}"${vel}${estilo} muted playsinline></video>`;
   };
-  const videos = [...piezas, ...superpuestas].map(media).join("\n");
+  // ---- Efectos (filtros SVG de efectos.ts), ya con la duración final de cada pieza.
+  const defsFx: string[] = [];
+  const granos: Grano[] = [];
+  for (const [pz, efs] of efectosDe) {
+    const fx = filtroEfectos(pz.id, efs, W, H, { t: pz.inicio, dur: pz.dur });
+    pz.estilo = unirFiltro(pz.estilo, fx);
+    defsFx.push(fx.defs);
+    granos.push(...fx.granos);
+  }
+  const videos = [svgDefs(defsFx), ...[...piezas, ...superpuestas].map(media)].filter(Boolean).join("\n");
 
   // ---- Subtítulos.
   const gruposHtml = grupos
     .map((g, gi) => {
-      const spans = g.fichas.map((f, wi) => `<span id="w${gi}-${wi}" class="palabra">${e(f.texto)}</span>`).join(" ");
-      return `        <div id="g${gi}" class="grupo"><div class="pastilla">${spans}</div></div>`;
+      // Las líneas las decide `lineasDePalabras` (equilibradas), las mismas que mide el QC.
+      let wi = 0;
+      const filas = lineasDePalabras(g.fichas.map((f) => f.texto), cplSubs).map((linea) => {
+        const spans = linea.map((texto) => `<span id="w${gi}-${wi++}" class="palabra">${e(texto)}</span>`).join(" ");
+        return `<div class="linea">${spans}</div>`;
+      });
+      return `        <div id="g${gi}" class="grupo"><div class="pastilla">${filas.join("")}</div></div>`;
     })
     .join("\n");
   const iv = intervalos(grupos, inicioTarjeta);
@@ -285,7 +334,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
   const tituloCpl = Math.max(4, Math.floor((S.w - 60) / (m.tituloFs * ANCHO_CARACTER)));
   const tituloLineas = lineas(plantilla.tarjetaFinal.titulo.toUpperCase(), tituloCpl);
   const tituloW = Math.min(S.w - 60, Math.max(...tituloLineas.map((l) => anchoTexto(l, m.tituloFs))));
-  const ctaW = anchoTexto(plantilla.cta, m.ctaFs) + 80;
+  const ctaW = anchoTexto(p.cta ?? plantilla.cta, m.ctaFs) + 80;
   const cierreH = tituloLineas.length * m.tituloFs + 28 + m.ctaFs * 1.2 + 32;
   const cajasBase: { nombre: string; caja: Caja }[] = [
     { nombre: "marca", caja: { x: centroX - chipW / 2, y: m.marcaTop, w: chipW, h: chipH } },
@@ -331,6 +380,9 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
         --acento2: ${c.acento2};
         --fondo-pastilla: ${c.fondoPastilla};
         --fondo-cierre: ${c.fondoCierre};
+        /* Letras sobre los acentos: la tinta si se lee (≥ 3:1); si no, casi negro o blanco. */
+        --tinta-boton: ${textoSobre(c.acento1, c.tinta)};
+        --tinta-titulo: ${textoSobre([c.acento1, c.acento2], c.tinta)};
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: ${W}px; height: ${H}px; overflow: hidden; background: #000; }
@@ -348,8 +400,8 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       #marca .txt { font-size: ${m.marcaFs}px; letter-spacing: 0.06em; text-transform: uppercase;
                     background: linear-gradient(90deg, var(--acento1), var(--acento2));
                     -webkit-background-clip: text; background-clip: text; color: transparent; }
-      .texto { position: absolute; z-index: 35; text-align: center; line-height: 1.15; padding: 16px 24px; border-radius: 18px; opacity: 0; }
-      .texto-titulo { font-family: ${fuenteTitulos}; text-transform: uppercase; color: var(--tinta);
+      .texto { position: absolute; z-index: 35; text-align: center; text-wrap: balance; line-height: 1.15; padding: 16px 24px; border-radius: 18px; opacity: 0; }
+      .texto-titulo { font-family: ${fuenteTitulos}; text-transform: uppercase; color: var(--tinta-titulo);
                       background: linear-gradient(90deg, var(--acento1), var(--acento2)); }
       .texto-rotulo { font-family: ${fuenteTitulos}; color: var(--tinta); background: var(--fondo-pastilla); }
       .texto-cita { font-family: ${fuenteTexto}; font-weight: ${t.pesoTexto}; font-style: italic; color: var(--tinta);
@@ -357,14 +409,15 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
       #subtitulos { position: absolute; left: ${m.subs.x}px; top: ${m.subs.y}px; width: ${m.subs.w}px; height: ${m.subs.h}px; z-index: 40; overflow: visible; }
       .grupo { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; overflow: visible; }
       .pastilla { max-width: ${m.pastillaMax}px; padding: 18px ${PADDING_PASTILLA}px 22px; border-radius: 26px; background: var(--fondo-pastilla);
-                  text-align: center; line-height: 1.12; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px ${Math.round(m.subsFs * 0.42)}px; overflow: visible; }
+                  text-align: center; line-height: 1.12; display: flex; flex-direction: column; align-items: center; gap: 6px; overflow: visible; }
+      .linea { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px ${Math.round(m.subsFs * 0.42)}px; }
       .palabra { display: inline-block; font-family: ${fuenteTitulos}; font-size: ${m.subsFs}px; color: var(--tinta); text-shadow: 0 4px 14px rgba(0,0,0,0.65); }
       #cierre { position: absolute; inset: 0; z-index: 60; background: var(--fondo-cierre); }
       #cierre .contenido { position: absolute; left: ${S.x}px; top: ${S.y}px; width: ${S.w}px; height: ${S.h}px;
                            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; }
-      #cierre .titulo { font-size: ${m.tituloFs}px; text-transform: uppercase; text-align: center; line-height: 1.0; padding: 0 30px;
+      #cierre .titulo { font-size: ${m.tituloFs}px; text-transform: uppercase; text-align: center; text-wrap: balance; line-height: 1.0; padding: 0 30px;
                         background: linear-gradient(90deg, var(--acento1), var(--acento2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-      #cierre .cta { font-family: ${fuenteTexto}; font-weight: ${t.pesoTexto}; font-size: ${m.ctaFs}px; color: var(--tinta);
+      #cierre .cta { font-family: ${fuenteTexto}; font-weight: ${t.pesoTexto}; font-size: ${m.ctaFs}px; color: var(--tinta-boton);
                      padding: 16px 40px; border-radius: 999px; background: var(--acento1); }
     </style>
   </head>
@@ -382,7 +435,7 @@ ${gruposHtml}
       <div id="cierre" class="clip" data-start="${f3(inicioTarjeta)}" data-duration="${f3(total - inicioTarjeta)}" data-track-index="4">
         <div class="contenido">
           <div class="titulo">${e(plantilla.tarjetaFinal.titulo)}</div>
-          <div class="cta">${e(plantilla.cta)}</div>
+          <div class="cta">${e(p.cta ?? plantilla.cta)}</div>
         </div>
       </div>
     </div>
@@ -394,6 +447,8 @@ ${gruposHtml}
       const ACTIVA = ${jsonScript(c.activa)};
       const TINTA = ${jsonScript(c.tinta)};
       const tl = gsap.timeline({ paused: true });
+      // Curvas de movimiento y grano por fotograma (efectos.ts).
+      ${scriptEfectos(granos, p.fps)}
       // Golpe de zoom en cada corte de escena (las que no tienen transición ni movimiento propios).
       CORTES.forEach((c) => {
         c.ids.forEach((id) => tl.fromTo("#" + id, { scale: 1.07 }, { scale: 1, duration: 0.4, ease: "power3.out" }, c.t));

@@ -1,6 +1,7 @@
 /** Plantillas de canal: datos (colores, tipografía, logo, CTA, tarjeta final, voz), no código. */
 import { z } from "zod";
-import { Mostrar, Voz } from "./esquema";
+import { Formato, Mostrar, Voz } from "./esquema";
+import { AjustesColor, COLOR_POR_DEFECTO } from "./looks";
 
 const Color = z.string().regex(/^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s.,]+\))$/);
 
@@ -48,6 +49,19 @@ export const DatosPlantilla = z.object({
     licencia: z.string(),
   }),
   mostrar: z.array(Mostrar).default([]),
+  /** Portada (docs/PHOTOCRAFT.md): PSD propio por formato con capas `@titulo`, `@imagen`, `@marca`…; sin PSD, la base. */
+  portada: z
+    .object({
+      /** Ruta absoluta a un PSD (o .pcraft) por formato. */
+      plantillas: z.partialRecord(Formato, z.string()).default({}),
+      /** Segundo del render del que sale la imagen. null = al 30 % del video. */
+      segundo: z.number().min(0).nullable().default(null),
+      /** Diseño de la portada base cuando no hay PSD propio (src/lib/portada.ts, ESTILOS_PORTADA). */
+      estilo: z.enum(["abajo", "centro", "banda"]).default("abajo"),
+    })
+    .default({ plantillas: {}, segundo: null, estilo: "abajo" }),
+  /** Look de color del canal y mejora automática de las imágenes generadas (src/lib/looks.ts). */
+  color: AjustesColor.default(COLOR_POR_DEFECTO),
 });
 export type DatosPlantilla = z.infer<typeof DatosPlantilla>;
 
@@ -86,6 +100,8 @@ export const PLANTILLAS_INICIALES: { slug: string; nombre: string; datos: DatosP
         licencia: "desconocida: resource/songs de MPT (su README dice que viene de YouTube)",
       },
       mostrar: [{ de: "GTA seis", a: "GTA VI" }],
+      portada: { plantillas: {}, segundo: null, estilo: "abajo" },
+      color: COLOR_POR_DEFECTO,
     },
   },
   {
@@ -117,6 +133,8 @@ export const PLANTILLAS_INICIALES: { slug: string; nombre: string; datos: DatosP
       },
       musica: { volumen: 0.12, ducking: true, carpeta: null, licencia: "sin música" },
       mostrar: [],
+      portada: { plantillas: {}, segundo: null, estilo: "abajo" },
+      color: COLOR_POR_DEFECTO,
     },
   },
 ];

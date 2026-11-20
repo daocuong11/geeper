@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Paleta } from "@/components/paleta";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Geeper", description: "Estudio de video local de Dimerso" };
@@ -16,9 +17,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <Link href="/" className="text-tenue hover:text-white">Proyectos</Link>
             <Link href="/nuevo" className="text-tenue hover:text-white">Nuevo</Link>
             <Link href="/trabajos" className="text-tenue hover:text-white">Trabajos</Link>
+            <Link href="/anuncios" className="text-tenue hover:text-white">Anuncios</Link>
             <Link href="/plantillas" className="text-tenue hover:text-white">Plantillas</Link>
             <Link href="/cuentas" className="text-tenue hover:text-white">Cuentas</Link>
             <Link href="/sistema" className="text-tenue hover:text-white">Sistema</Link>
+            <Paleta />
           </nav>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>

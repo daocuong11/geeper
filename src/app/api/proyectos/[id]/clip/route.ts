@@ -2,14 +2,18 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describirAsset, guardarProyecto, registrarAssetsEnDb } from "@/lib/almacen";
+import { conFocos } from "@/lib/caras";
 import { db } from "@/lib/db";
 import { aplicarEdicion, registrarAsset, reemplazarVisual } from "@/lib/ediciones";
 import { json, manejar } from "@/lib/http";
 import { LICENCIAS } from "@/lib/licencias";
+import { detectarMezcla } from "@/lib/mezcla-auto";
 import { versionDeProyecto } from "@/lib/render";
-import { dirProyecto } from "@/lib/rutas";
+import { dirProyecto, VECTORCRAFT_VERSION } from "@/lib/rutas";
+import { MAX_SVG, revisarSvg } from "@/lib/svg";
+import { aSvg, esVector } from "@/lib/vectorcraft";
 
-const IMAGEN = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const IMAGEN = new Set([".jpg", ".jpeg", ".png", ".webp", ".svg"]);
 const VIDEO = new Set([".mp4", ".mov", ".webm", ".m4v"]);
 const AUDIO = new Set([".mp3", ".wav", ".m4a", ".ogg", ".flac"]);
 const MAX = 2 * 1024 ** 3;
@@ -29,14 +33,26 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     const archivo = form.get("archivo");
     if (!(archivo instanceof File)) throw new Error("Falta el archivo");
     if (archivo.size > MAX) throw new Error("El archivo pasa de 2 GB");
-    const ext = path.extname(archivo.name).toLowerCase();
+    // Un logo de Illustrator, PDF, EPS o Affinity entra como SVG (lo convierte VectorCraft).
+    const vector = esVector(archivo.name);
+    let ext = path.extname(archivo.name).toLowerCase();
     const libre = Boolean(pista);
-    if (!IMAGEN.has(ext) && !VIDEO.has(ext) && !(libre && AUDIO.has(ext))) throw new Error(`Formato no admitido: ${ext || "sin extensión"}`);
+    if (!vector && !IMAGEN.has(ext) && !VIDEO.has(ext) && !(libre && AUDIO.has(ext))) throw new Error(`Formato no admitido: ${ext || "sin extensión"}`);
     if (!libre && !escena) throw new Error("Falta la escena o la pista");
     const licencia = String(form.get("licencia") ?? "").trim() || LICENCIAS.archivo!;
     const fila = await db.proyecto.findUniqueOrThrow({ where: { id } });
     const dir = dirProyecto(fila.slug);
-    const datos = Buffer.from(await archivo.arrayBuffer());
+    if ((ext === ".svg" || vector) && archivo.size > MAX_SVG) throw new Error("El archivo pasa de 20 MB: expórtalo más liviano");
+    let datos: Buffer = Buffer.from(await archivo.arrayBuffer());
+    let avisosVector: string[] = [];
+    if (vector) {
+      const r = await aSvg(datos, archivo.name);
+      datos = r.svg;
+      avisosVector = r.avisos;
+      ext = ".svg";
+    }
+    // Antes de escribir nada: un SVG con scripts o referencias externas no entra al proyecto.
+    if (ext === ".svg") revisarSvg(datos.toString("utf8"));
     const hash = createHash("sha256").update(datos).digest("hex");
     const assetId = `subido-${hash.slice(0, 12)}`;
     const ruta = `assets/${assetId}${ext}`;
@@ -49,26 +65,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
       tipo: IMAGEN.has(ext) ? "imagen" : AUDIO.has(ext) ? "audio" : "video",
       source: "archivo",
       licencia,
-      regenerar: { nombreOriginal: archivo.name },
+      regenerar: { nombreOriginal: archivo.name, ...(vector ? { convertido: `VectorCraft ${VECTORCRAFT_VERSION} (texto en contornos)` } : {}) },
     });
     const { p } = await versionDeProyecto(id);
     let nuevo;
-    let nota;
+    let nota = "";
     if (libre) {
       const inicio = Number(form.get("inicio") ?? 0);
       const duracion = form.get("duracion") ? Number(form.get("duracion")) : undefined;
+      // Superposición: mezcla elegida sola (fondo negro → Aclarar, blanco → Oscurecer); se cambia en la UI.
+      const mezcla = asset.tipo !== "audio" ? await detectarMezcla(path.join(dir, ruta), asset.tipo === "video") : null;
       nuevo = aplicarEdicion(registrarAsset(p, asset), {
         tipo: "agregarClipLibre", pista, asset: assetId, inicio, duracion, desde: 0,
         volumen: asset.tipo === "audio" ? 1 : undefined,
         transicion: asset.tipo !== "audio" ? { tipo: "fundido", duracion: 0.3 } : undefined,
+        fusion: mezcla?.fusion,
       });
-      nota = `${asset.tipo === "audio" ? "Efecto de sonido" : "Superposición"} en ${pista} (${inicio.toFixed(1)} s): ${archivo.name}`;
+      nota = `${asset.tipo === "audio" ? "Efecto de sonido" : "Superposición"} en ${pista} (${inicio.toFixed(1)} s): ${archivo.name}` +
+        (mezcla && mezcla.mezcla !== "normal" ? ` · mezcla automática: ${mezcla.mezcla} (${mezcla.motivo})` : "");
     } else {
       nuevo = reemplazarVisual(p, escena, asset);
       nota = `Clip propio en ${escena}: ${archivo.name}`;
     }
+    // Reencuadre: busca la cara del clip nuevo (unos segundos en CPU; si falla, queda sin foco).
+    if (asset.tipo !== "audio") nuevo = (await conFocos({ dir, log: (l) => console.log(`[clip ${fila.slug}] ${l}`) }, nuevo, { ids: [assetId], signal: req.signal })).p;
+    if (vector) nota += " · convertido a SVG";
     const n = await guardarProyecto(id, nuevo, nota);
     await registrarAssetsEnDb(id, nuevo);
-    return json({ version: n, asset: assetId }, 201);
+    return json({ version: n, asset: assetId, ...(avisosVector.length ? { avisos: avisosVector } : {}) }, 201);
   });
 }

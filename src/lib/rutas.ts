@@ -26,6 +26,12 @@ export const MPT_API = process.env.GEEPER_MPT_API ?? "http://127.0.0.1:8080";
 export const MPT_CONTENEDOR = "moneyprinterturbo-api";
 export const MPT_TAREAS = "/MoneyPrinterTurbo/storage/tasks";
 export const HYPERFRAMES_VERSION = "0.9.27";
+/** CLI de PhotoCraft (MIT/Apache 2.0): portadas desde plantillas PSD. Ver docs/PHOTOCRAFT.md. */
+export const PHOTOCRAFT_CLI = process.env.GEEPER_PHOTOCRAFT ?? path.join(ESTUDIO, "photocraft", "actual", "bin", "photocraft-cli");
+export const PHOTOCRAFT_VERSION = "0.23.1";
+/** CLI de VectorCraft (MIT/Apache 2.0): logos de Illustrator, PDF, EPS o Affinity a SVG, y vectorizar. Ver docs/HEREDADO.md. */
+export const VECTORCRAFT_CLI = process.env.GEEPER_VECTORCRAFT ?? path.join(ESTUDIO, "vectorcraft", "actual", "bin", "vectorcraft-cli");
+export const VECTORCRAFT_VERSION = "0.24.1";
 /** Raíz del repo (para localizar py/ y otros recursos). */
 export const RAIZ_REPO = process.env.GEEPER_REPO ?? process.cwd();
 /** Python con kokoro-onnx para `hyperframes tts` (el venv del estudio). */

@@ -4,6 +4,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { dentroDe } from "@/lib/archivos";
 import { dirDatos } from "@/lib/rutas";
+import { CSP_SVG, esSvg } from "@/lib/svg";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ ruta: string[] 
   const tipo = TIPOS[path.extname(abs).toLowerCase()] ?? "application/octet-stream";
   const descarga = new URL(req.url).searchParams.has("descargar");
   const cab: Record<string, string> = { "content-type": tipo, "accept-ranges": "bytes", "cache-control": "no-cache" };
+  if (esSvg(abs)) cab["content-security-policy"] = CSP_SVG;
   if (descarga) cab["content-disposition"] = `attachment; filename="${encodeURIComponent(path.basename(abs))}"`;
   const rango = req.headers.get("range");
   const m = rango ? /^bytes=(\d*)-(\d*)$/.exec(rango) : null;

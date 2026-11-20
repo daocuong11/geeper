@@ -11,6 +11,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { escribirAtomico, sha256Archivo } from "./archivos";
+import { rutaYunet, YUNET } from "./caras";
 import { dirDatos } from "./rutas";
 
 const CACHE_HF = path.join(os.homedir(), ".cache", "hyperframes");
@@ -19,6 +20,8 @@ const CACHE_HF = path.join(os.homedir(), ".cache", "hyperframes");
 export const PESOS: Record<string, string> = {
   "whisper-medium": path.join(CACHE_HF, "whisper", "models", "ggml-medium.bin"),
   "kokoro-82m-onnx": path.join(CACHE_HF, "tts", "models", "kokoro-v1.0.onnx"),
+  // Detector de caras para el reencuadre (src/lib/caras.ts); se descarga con su SHA-256 fijado.
+  [YUNET.id]: rutaYunet(),
 };
 
 interface Entrada {

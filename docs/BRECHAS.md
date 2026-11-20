@@ -15,7 +15,10 @@
 | Q2 pico real y zonas por plataforma | **Hecho**. Siguen pendientes el contraste WCAG y la decisión de 17 car./s |
 | Q4 máster de archivo | **Hecho** (`entrega.master`: MOV calidad alta) |
 | Q5 hash de los pesos | **Hecho** para whisper y Kokoro locales; los modelos dentro de MPT no se ven |
-| E3, E4, G1, G2, G4, G5, Q3, D1–D3, P1, P2 | Pendientes |
+| Efectos y transiciones de EffectCraft | **Hecho** (2026-11-19): barrido, radial, iris y persianas; tinte, niveles, viñeta, grano y desenfoque; modos de fusión; Easy Ease. Ver EFFECTCRAFT.md |
+| E4 reencuadre por cara | **Hecho** (punto fijo por clip con YuNet; falta el seguimiento dinámico): ver HEREDADO.md, LightCraft |
+| D1 portada | **Hecho** (2026-11-19): portada en 3 pasos (escena, 3 títulos con IA local, diseño) con PhotoCraft, diseños propios .psd y miniatura en YouTube (docs/PHOTOCRAFT.md). Falta descripción y hashtags con IA |
+| E3, G1, G2, G4, G5, Q3, D2, D3, P1, P2 | Pendientes |
 
 ## 0. Qué significa «el mejor» aquí
 

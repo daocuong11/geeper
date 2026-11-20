@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { AvisoPrivados } from "./aviso-privados";
 import { Aviso, Estado, pedir, useSondeo } from "./comun";
 
 export interface RedInfo {
@@ -29,7 +30,7 @@ export interface Vpn {
   detalle: string;
   salida: { ip: string | null; pais: string | null; fuente: string | null; medido: string } | null;
 }
-export interface DatosCuentas { cuentas: CuentaInfo[]; redes: RedInfo[]; ajustes: Ajustes; vpn: Vpn }
+export interface DatosCuentas { cuentas: CuentaInfo[]; redes: RedInfo[]; ajustes: Ajustes; vpn: Vpn; privadosBloquean?: boolean }
 
 const ESTADO_VPN: Record<Vpn["estado"], { texto: string; color: string }> = {
   activo: { texto: "activo", color: "text-emerald-300" },
@@ -212,8 +213,8 @@ function TarjetaCuenta({ c, red, puedeConectar, alCambiar, avisar }: {
   );
 }
 
-function SeccionRed({ red, cuentas, vpn, alCambiar, avisar }: {
-  red: RedInfo; cuentas: CuentaInfo[]; vpn: Vpn; alCambiar: () => void;
+function SeccionRed({ red, cuentas, vpn, bloqueada, alCambiar, avisar }: {
+  red: RedInfo; cuentas: CuentaInfo[]; vpn: Vpn; bloqueada: boolean; alCambiar: () => void;
   avisar: (m: { tipo: "ok" | "error"; t: string }) => void;
 }) {
   const puedeConectar = red.configurada && vpn.ok;
@@ -228,7 +229,10 @@ function SeccionRed({ red, cuentas, vpn, alCambiar, avisar }: {
             : <button type="button" className="boton boton-primario ml-auto" disabled title={vpn.detalle}>Conectar {red.nombre}</button>
         )}
       </div>
-      {!red.configurada && (
+      {!red.configurada && bloqueada && (
+        <p className="text-sm text-amber-300">No disponible hasta que protejas tus datos de acceso (aviso de arriba).</p>
+      )}
+      {!red.configurada && !bloqueada && (
         <Aviso tipo="info">
           Faltan las credenciales de la app de {red.nombre}. Agrégalas en <code>~/.config/geeper/redes.json</code> (permisos 600, ver docs/PUBLICAR.md §6)
           y registra este redirect URI en la consola de la red: <code className="break-all">{red.callback}</code>
@@ -282,9 +286,10 @@ export function Cuentas({ ok, error, aviso }: { ok: string | null; error: string
       {!datos && !errorCarga && <p className="text-tenue">Cargando…</p>}
       {datos && (
         <>
+          <AvisoPrivados alCambiar={() => void recargar()} />
           <BarraVpn ajustes={datos.ajustes} vpn={datos.vpn} alCambiar={() => void recargar()} />
           {datos.redes.map((r) => (
-            <SeccionRed key={r.id} red={r} cuentas={datos.cuentas.filter((c) => c.red === r.id)} vpn={datos.vpn} alCambiar={() => void recargar()} avisar={setMsg} />
+            <SeccionRed key={r.id} red={r} cuentas={datos.cuentas.filter((c) => c.red === r.id)} vpn={datos.vpn} bloqueada={!!datos.privadosBloquean} alCambiar={() => void recargar()} avisar={setMsg} />
           ))}
         </>
       )}

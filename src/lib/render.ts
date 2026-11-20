@@ -8,6 +8,8 @@ import path from "node:path";
 import { sha256Archivo } from "./archivos";
 import { db } from "./db";
 import { compilar, escribirProyectoHf, VERSION_COMPILADOR } from "./compilador";
+import { conColor, prepararColor } from "./looks";
+import { ampliaciones } from "./nitidez";
 import { resumirConfianza } from "./confianza";
 import { pistasLibres, validarProyecto, type Proyecto } from "./esquema";
 import { metricas } from "./formatos";
@@ -109,7 +111,10 @@ export async function renderEntregar(
 
   // 2. Compilar a Hyperframes (siempre: es barato y determinista).
   await ctx.etapa("Compilando a Hyperframes", 0.1);
-  const comp = compilar(p, plantilla.datos, rutaMezcla, dir);
+  // El look de color del canal y la mejora automática se hornean en copias de los clips (src/lib/looks.ts).
+  if (conColor(plantilla.datos.color)) await ctx.etapa("Aplicando el color del canal", 0.08);
+  const sustitutos = await prepararColor(p, dir, plantilla.datos.color, ctx.log);
+  const comp = compilar(p, plantilla.datos, rutaMezcla, dir, sustitutos);
   const dirBuild = path.join(dir, "build", `hf-${p.formato.replace(":", "x")}`);
   await escribirProyectoHf(dirBuild, comp);
   const indexHtml = path.join(dirBuild, "index.html");
@@ -226,6 +231,7 @@ export async function renderEntregar(
       comercial: p.comercial,
       confianza: resumirConfianza(escenasEnLinea(p).map((e) => ({ id: e.escena.id, palabras: e.escena.palabras }))),
       ritmo: ritmoDe(p),
+      ampliaciones: ampliaciones(p, m.W, m.H),
       check,
     },
     path.join(dir, "renders", `${base}-hoja`),

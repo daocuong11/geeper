@@ -17,6 +17,7 @@
  * v1 → v2 (`migrar`): sólo agrega campos con valor por defecto; un proyecto v1 se lee igual.
  */
 import { z } from "zod";
+import { Curva, Efecto, Fusion, OpcionesMascara, TIPOS_MASCARA } from "./efectos-esquema";
 
 export const SCHEMA_VERSION = 2 as const;
 
@@ -38,6 +39,23 @@ const Segundos = z.number().finite().min(0);
 export const Rango = z.object({ inicio: Segundos, duracion: z.number().finite().positive() });
 export type Rango = z.infer<typeof Rango>;
 
+/** Dónde está la cara principal de un asset visual (src/lib/caras.ts). Fracciones del cuadro (0..1). */
+export const Foco = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  /** Ancho de la cara en fracción del ancho del cuadro. */
+  ancho: z.number().min(0).max(1),
+  confianza: z.number().min(0).max(1),
+  /** Fracción de las muestras con cara. */
+  cobertura: z.number().min(0).max(1),
+  /** Cuánto se mueve el centro (p90 de |x − mediana|, fracción del ancho). */
+  dispersion: z.number().min(0).max(1),
+  muestras: z.number().int().positive(),
+  /** Detector que lo calculó (p. ej. yunet-2023mar). */
+  modelo: z.string().min(1),
+});
+export type Foco = z.infer<typeof Foco>;
+
 export const Asset = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   tipo: z.enum(["video", "audio", "imagen"]),
@@ -52,6 +70,8 @@ export const Asset = z.object({
   alto: z.number().int().positive().optional(),
   /** Lo necesario para regenerarlo: prompt, semilla, modelo, hash de los pesos, tarea de MPT, voz, texto... */
   regenerar: z.record(z.string(), z.unknown()).default({}),
+  /** Sólo video o imagen: cara principal detectada; sin ancla fijada, el encuadre la sigue. */
+  foco: Foco.optional(),
 });
 export type Asset = z.infer<typeof Asset>;
 
@@ -64,9 +84,11 @@ export const Encuadre = z.object({
 export type Encuadre = z.infer<typeof Encuadre>;
 
 export const Transicion = z.object({
-  tipo: z.enum(["corte", "fundido", "deslizar", "zoom"]),
+  /** barrido, radial, iris y persianas revelan el clip con una máscara (efectos.ts). */
+  tipo: z.enum(["corte", "fundido", "deslizar", "zoom", ...TIPOS_MASCARA]),
   /** Segundos; el fundido se monta sobre el final del clip anterior. */
   duracion: z.number().min(0.1).max(2).default(0.4),
+  ...OpcionesMascara,
 });
 export type Transicion = z.infer<typeof Transicion>;
 
@@ -92,13 +114,17 @@ export const Clip = z.object({
   /** Sólo video: transición de entrada (en la pista visual, desde la escena anterior). */
   transicion: Transicion.optional(),
   /** Sólo video: movimiento de cámara de principio a fin del clip (Ken Burns, zoom). */
-  movimiento: z.object({ desde: Encuadre, hasta: Encuadre }).optional(),
+  movimiento: z.object({ desde: Encuadre, hasta: Encuadre, curva: Curva.optional() }).optional(),
   /** Sólo video: velocidad de reproducción (0,1–10; el audio propio conserva el tono). */
   velocidad: z.number().min(0.1).max(10).optional(),
   /** Sólo video: ajuste de color. */
   color: Color.optional(),
+  /** Sólo video: efectos en orden (tinte, niveles, viñeta, desenfoque, grano), después del color. */
+  efectos: z.array(Efecto).max(8).optional(),
   /** Pistas libres de video: opacidad de la superposición. */
   opacidad: z.number().min(0).max(1).optional(),
+  /** Pistas libres de video: modo de fusión con lo de abajo. */
+  fusion: Fusion.optional(),
   /** Sólo audio: ganancia lineal. */
   volumen: z.number().min(0).max(4).optional(),
 });
@@ -181,6 +207,18 @@ export const Voz = z.object({
 });
 export type Voz = z.infer<typeof Voz>;
 
+/**
+ * Estilo del video: aspecto (efectos), transición entre escenas y ritmo del movimiento de cámara.
+ * Una escena que tiene su propio valor lo usa (excepción); si no, hereda éste. Sin estilo, cada
+ * escena se ve como antes (golpe de zoom de la plantilla, sin efectos, movimiento constante).
+ */
+export const EstiloVideo = z.object({
+  efectos: z.array(Efecto).max(8).optional(),
+  transicion: Transicion.optional(),
+  curva: Curva.optional(),
+});
+export type EstiloVideo = z.infer<typeof EstiloVideo>;
+
 export const Fps = z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(60)]);
 
 export const Proyecto = z
@@ -205,6 +243,10 @@ export const Proyecto = z
     /** Dónde se va a publicar: ajusta la banda segura a lo que tapa cada interfaz. */
     plataformas: z.array(Plataforma).default([]),
     entrega: z.object({ master: z.boolean().default(false) }).default({ master: false }),
+    /** Estilo del video: lo heredan las escenas que no fijan el suyo (ver `aplicarEstilo`). */
+    estilo: EstiloVideo.optional(),
+    /** Botón de la tarjeta final sólo para este video (variantes de anuncios). Sin él, el de la plantilla. */
+    cta: z.string().trim().min(1).max(60).optional(),
     origen: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((p, ctx) => {
@@ -224,6 +266,25 @@ export function pista(p: Pick<Proyecto, "pistas">, id: string): Pista {
   const encontrada = p.pistas.find((x) => x.id === id);
   if (!encontrada) throw new Error(`Falta la pista ${id}`);
   return encontrada;
+}
+
+/**
+ * Proyecto con el estilo del video aplicado a los clips visuales que no tienen el suyo: es lo que
+ * compilan Hyperframes y OTIO. Una lista de efectos vacía en la escena es una excepción («sin
+ * efectos»), no una herencia.
+ */
+export function aplicarEstilo(p: Proyecto): Proyecto {
+  const e = p.estilo;
+  if (!e || (!e.efectos?.length && !e.transicion && !e.curva)) return p;
+  const visual = p.pistas.find((x) => x.id === "visual");
+  if (!visual) return p;
+  const clips = visual.clips.map((c, i) => ({
+    ...c,
+    transicion: c.transicion ?? (i > 0 ? e.transicion : undefined),
+    efectos: c.efectos ?? (e.efectos?.length ? e.efectos : undefined),
+    movimiento: c.movimiento && !c.movimiento.curva && e.curva ? { ...c.movimiento, curva: e.curva } : c.movimiento,
+  }));
+  return { ...p, pistas: p.pistas.map((x) => (x === visual ? { ...x, clips } : x)) };
 }
 
 /** Pistas libres (superposiciones y efectos): todo lo que no es visual, voz ni música. */

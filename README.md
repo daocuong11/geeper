@@ -16,7 +16,8 @@ calidad. Uso interno, en esta PC, US$0 al mes. Ver `docs/PRODUCTO.md` (qué es y
 4. **Editar por texto:** recortar palabras de lo que se oye (se quita su audio y su tiempo), acortar
    silencios largos y quitar muletillas. Las palabras con tiempos dudosos se marcan.
 5. **Efectos y capas:** transición de entrada, movimiento de cámara, velocidad y color por escena;
-   textos en pantalla (título, rótulo, cita); imágenes o videos encima y efectos de sonido en su
+   textos en pantalla (título, rótulo, cita); imágenes (también SVG: logos y rótulos nítidos en todo
+   formato, ver HEREDADO.md «VectorCraft») o videos encima y efectos de sonido en su
    segundo; música alineada para que los cortes caigan en el pulso.
 6. **Regenerar la voz** de una escena o del guion (Kokoro de MPT, en CPU) y realinear los subtítulos.
    Lo recortado ya no se vuelve a decir.
@@ -55,18 +56,32 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
 - **Nuevo** (`/nuevo`): tema o lote, formato y plantilla. Generar usa la GPU: pide confirmar que
   guardaste tu trabajo (Windows se ha reiniciado sin aviso durante generaciones).
 - **Proyecto** (`/proyectos/<id>`): vista previa «En vivo» (cada cambio guardado se ve al instante, sin renderizar) y «Último render», QC, escenas con miniatura, texto, tiempos y
-  subtítulos editables, ajustes, historial y trabajos del proyecto.
+  subtítulos editables, ajustes, historial y trabajos del proyecto. En cada escena, «¿Qué se ve?»
+  marca sobre la miniatura qué parte del clip entra en el video; si hay una cara, el encuadre automático
+  la sigue (los proyectos viejos se revisan solos la primera vez que se abren).
+  También la **portada** en tres pasos (escena, títulos que propone la IA local, diseño), que se sube
+  como miniatura al publicar en YouTube. Ver `docs/PHOTOCRAFT.md`.
 - **Trabajos** (`/trabajos`): avance en vivo, log, relanzar o cancelar.
-- **Plantillas** y **Sistema**: datos de cada plantilla y el diagnóstico del doctor.
+- **Anuncios** (`/anuncios`): campañas con brief, conceptos (cada uno genera su video con el guion
+  exacto), revisión pass/fail/sin saber por ubicación, diseño de prueba A/B y exportación. Geeper no
+  toca las cuentas de anuncios. Ver `docs/ANUNCIOS.md`.
+- **Plantillas** → «Color y portada»: look de color del canal (9, con muestras), mejora automática de
+  las imágenes hechas con IA y diseño de portada (3 listos o un .psd propio).
+- **Plantillas**: editor visual (marca, logo, colores con su legibilidad y arreglo de un toque, letra, cierre,
+  música) con vista previa; colores sacados del logo; «Duplicar» para probar sin tocar los proyectos.
+- **Sistema**: el diagnóstico del doctor.
+- **Buscar acción** (Ctrl+K o ⌘K, o el botón de la barra): escribe lo que quieres hacer («quitar silencios»,
+  «16:9», «renderizar») y Enter.
 
 Desde la terminal (útil para Claude, ver `.claude/skills/geeper/SKILL.md`):
 
 ```bash
 pnpm tsx scripts/importar-mpt.ts <task_id> "<tema>" [9:16|16:9|1:1] [plantilla]
-pnpm tsx scripts/proponer.ts <slug> propuesta.json [--aplicar]   # valida y muestra diferencias
+pnpm tsx scripts/proponer.ts <slug> propuesta.json [--aplicar] [--informe]   # valida y muestra diferencias
 pnpm tsx scripts/encolar.ts <slug> render.entregar
 pnpm tsx scripts/revisar-subtitulos.ts <slug>                       # QC de subtítulos sin renderizar
-pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio para FilmCraft, Resolve o Premiere
+pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio con rutas de Linux (en la web: «Terminar en otro editor», con rutas de Windows y guía)
+pnpm tsx scripts/analizar-caras.ts <slug> [--aplicar]             # busca caras para el reencuadre (lo nuevo lo hace solo)
 ```
 
 Datos de cada proyecto en `~/geeper-data/<slug>/`: `geeper.json`, `assets/`, `renders/`

@@ -96,18 +96,83 @@ export function agrupar<T extends { texto: string; inicio: number; fin: number }
   return grupos;
 }
 
-/** Corta un texto en líneas de como mucho `max` caracteres (sin partir palabras). */
-export function lineas(texto: string, max: number): string[] {
-  const out: string[] = [];
-  let actual = "";
-  for (const w of texto.split(/\s+/).filter(Boolean)) {
-    if (!actual) actual = w;
-    else if ((actual + " " + w).length <= max) actual += " " + w;
-    else {
+/** Corte voraz: llena cada línea hasta `max` caracteres. Da el mínimo de líneas posible. */
+function lineasVoraces(palabras: string[], max: number): string[][] {
+  const out: string[][] = [];
+  let actual: string[] = [];
+  let largo = 0;
+  for (const w of palabras) {
+    if (actual.length && largo + 1 + w.length > max) {
       out.push(actual);
-      actual = w;
+      actual = [];
+      largo = 0;
+    }
+    largo += (actual.length ? 1 : 0) + w.length;
+    actual.push(w);
+  }
+  if (actual.length) out.push(actual);
+  return out;
+}
+
+/**
+ * Palabras que no deben cerrar una línea: separan el artículo, la preposición o la conjunción de lo
+ * que sigue («la / casa», «de / los faros»). Pauta habitual de subtitulado en español.
+ */
+const DEBILES = new Set(
+  ("el la los las lo un una unos unas al del a ante bajo con contra de desde en entre hacia hasta para por " +
+    "segun sin sobre tras y e o u ni que si pero mas me te se le les nos su sus mi mis tu tus")
+    .split(" "),
+);
+
+function debil(w: string): boolean {
+  // Con puntuación pegada («que,») ya es un buen punto de corte.
+  return !/[.,;:!?…»")\]]$/.test(w) && DEBILES.has(norm(w));
+}
+
+/**
+ * Reparte palabras en líneas de como mucho `max` caracteres (sin partir palabras), con las mismas
+ * líneas que el corte voraz pero lo más parejas posible, y sin cerrar una línea en palabra débil si
+ * el costo en equilibrio es razonable. Es el «Balance Ragged Lines» de DesignCraft
+ * (`crates/compose/src/breaker.rs:1065`) hecho como programación dinámica sobre caracteres.
+ */
+export function lineasDePalabras(palabras: string[], max: number): string[][] {
+  const voraz = lineasVoraces(palabras, max);
+  const k = voraz.length;
+  const n = palabras.length;
+  if (k < 2 || n > 200) return voraz;
+  const largo = (i: number, j: number) => palabras.slice(i, j).reduce((a, w) => a + w.length, 0) + (j - i - 1);
+  const penalDebil = (max * max) / 8;
+  // costo[l][j]: mejor reparto de las primeras j palabras en l líneas; desde[l][j]: inicio de la última.
+  const costo = Array.from({ length: k + 1 }, () => new Array<number>(n + 1).fill(Infinity));
+  const desde = Array.from({ length: k + 1 }, () => new Array<number>(n + 1).fill(-1));
+  costo[0]![0] = 0;
+  for (let l = 1; l <= k; l++) {
+    for (let j = l; j <= n; j++) {
+      for (let i = l - 1; i < j; i++) {
+        const previo = costo[l - 1]![i]!;
+        if (previo === Infinity) continue;
+        const len = largo(i, j);
+        // Una palabra sola más larga que la línea se acepta (como en el corte voraz).
+        if (len > max && j - i > 1) continue;
+        const c = previo + len * len + (j < n && debil(palabras[j - 1]!) ? penalDebil : 0);
+        if (c < costo[l]![j]!) {
+          costo[l]![j] = c;
+          desde[l]![j] = i;
+        }
+      }
     }
   }
-  if (actual) out.push(actual);
+  if (costo[k]![n] === Infinity) return voraz;
+  const out: string[][] = [];
+  for (let l = k, j = n; l > 0; l--) {
+    const i = desde[l]![j]!;
+    out.unshift(palabras.slice(i, j));
+    j = i;
+  }
   return out;
+}
+
+/** Corta un texto en líneas de como mucho `max` caracteres (ver `lineasDePalabras`). */
+export function lineas(texto: string, max: number): string[] {
+  return lineasDePalabras(texto.split(/\s+/).filter(Boolean), max).map((l) => l.join(" "));
 }

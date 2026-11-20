@@ -17,6 +17,7 @@ const NOTAS: Record<Edicion["tipo"], string> = {
   cambiarVoz: "Voz cambiada",
   recortarPalabras: "Palabras recortadas",
   restaurarPalabras: "Palabras restauradas",
+  confirmarPalabras: "Palabras revisadas: suenan bien",
   quitarSilencios: "Silencios largos acortados",
   quitarMuletillas: "Muletillas quitadas",
   quitarRecortes: "Recortes deshechos",
@@ -26,7 +27,10 @@ const NOTAS: Record<Edicion["tipo"], string> = {
   quitarTexto: "Texto quitado",
   agregarClipLibre: "Superposición o efecto agregado",
   quitarClipLibre: "Superposición o efecto quitado",
+  editarClipLibre: "Superposición ajustada",
+  estiloVideo: "Estilo del video cambiado",
   cambiarDestino: "Destino cambiado",
+  cambiarCta: "Botón final cambiado",
   fijarMusica: "Música alineada",
 };
 

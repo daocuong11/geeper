@@ -2,14 +2,19 @@
 import fs from "node:fs/promises";
 import { correr } from "./proceso";
 import { apiViva } from "./mpt";
-import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, PYTHON_VOZ, dirDatos } from "./rutas";
+import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, PHOTOCRAFT_CLI, PHOTOCRAFT_VERSION, PYTHON_VOZ, VECTORCRAFT_CLI, VECTORCRAFT_VERSION, dirDatos } from "./rutas";
+import { versionPhotocraft } from "./photocraft";
+import { versionVectorcraft } from "./vectorcraft";
 import { existe } from "./archivos";
 import { db } from "./db";
 import { existeClave, rutaClave } from "./redes/cifrado";
-import { leerConfig, permisosRedes, rutaRedes, urlCallback, type ConfigRedes } from "./redes/config";
+import { ErrorArchivoPrivado } from "./redes/archivo-privado";
+import { leerConfig, rutaRedes, urlCallback, type ConfigRedes } from "./redes/config";
+import { revisarPrivados } from "./redes/privados";
 import { obtenerRed } from "./redes/index";
 import { juzgar, leerAjustes, salidaActual, verificarSalida } from "./redes/salida";
 import { REDES_IDS } from "./redes/tipos";
+import { PYTHON_CARAS } from "./caras";
 
 export interface Chequeo {
   nombre: string;
@@ -72,6 +77,20 @@ export async function diagnosticar(): Promise<Chequeo[]> {
     nombre: `Hyperframes ${HYPERFRAMES_VERSION}`, ok: hf.codigo === 0 && vhf.includes(HYPERFRAMES_VERSION), detalle: vhf || hf.stderr.slice(0, 200),
     arreglo: hf.codigo === 0 ? undefined : `npx --yes hyperframes@${HYPERFRAMES_VERSION} browser ensure   (necesita internet la primera vez)`,
   });
+  // PhotoCraft (portadas): opcional, sólo avisa.
+  const pc = await versionPhotocraft();
+  c.push({
+    nombre: `PhotoCraft ${PHOTOCRAFT_VERSION} (portadas)`, ok: !!pc?.includes(PHOTOCRAFT_VERSION), aviso: !pc?.includes(PHOTOCRAFT_VERSION),
+    detalle: pc ?? `no está ${PHOTOCRAFT_CLI}`,
+    arreglo: pc?.includes(PHOTOCRAFT_VERSION) ? undefined : "Botón «Instalar con un clic» aquí abajo (o a mano: docs/PHOTOCRAFT.md §3). Sin ella no hay portadas ni looks de color.",
+  });
+  // VectorCraft (logos .ai/.pdf/.eps → SVG, vectorizar): opcional, sólo avisa.
+  const vc = await versionVectorcraft();
+  c.push({
+    nombre: `VectorCraft ${VECTORCRAFT_VERSION} (logos vectoriales)`, ok: !!vc?.includes(VECTORCRAFT_VERSION), aviso: !vc?.includes(VECTORCRAFT_VERSION),
+    detalle: vc ?? `no está ${VECTORCRAFT_CLI}`,
+    arreglo: vc?.includes(VECTORCRAFT_VERSION) ? undefined : "Botón «Instalar con un clic» aquí abajo. Sin ella, los logos se suben como SVG o PNG (no .ai, .pdf ni .eps).",
+  });
   const whisper = await existe(`${process.env.HOME}/.cache/hyperframes/whisper/models/ggml-medium.bin`);
   c.push({
     nombre: "whisper medium (Hyperframes)", ok: whisper, detalle: whisper ? "modelo en caché" : "falta el modelo",
@@ -93,6 +112,14 @@ export async function diagnosticar(): Promise<Chequeo[]> {
     nombre: "venv del estudio (Kokoro para regenerar voz)", ok: py.codigo === 0,
     detalle: py.codigo === 0 ? `kokoro-onnx ok, torch ${py.stdout.trim()}` : "no responde: regenerar la voz no funcionará",
     arreglo: py.codigo === 0 ? undefined : "source ~/dev/video-tools/estudio.sh  (ver ESTUDIO.md)",
+  });
+
+  // Reencuadre por cara: OpenCV con FaceDetectorYN (YuNet se descarga solo, 232 KB).
+  const cv = await intento(PYTHON_CARAS, ["-I", "-c", "import cv2; cv2.FaceDetectorYN; print(cv2.__version__)"], 30_000);
+  c.push({
+    nombre: "OpenCV para el reencuadre por cara", ok: cv.codigo === 0, aviso: cv.codigo !== 0,
+    detalle: cv.codigo === 0 ? `opencv ${cv.stdout.trim()} (${PYTHON_CARAS})` : `no responde: los clips se encuadran como antes (${PYTHON_CARAS})`,
+    arreglo: cv.codigo === 0 ? undefined : "uv pip install --python ~/dev/video-tools/venvs/geeper-clips/bin/python opencv-python-headless  (o GEEPER_CARAS_PYTHON=<python con cv2>)",
   });
 
   // GPU y VRAM.
@@ -145,9 +172,14 @@ async function diagnosticarRedes(): Promise<Chequeo[]> {
   try {
     config = leerConfig();
   } catch (e) {
+    // Los permisos inseguros se informan abajo, en lenguaje simple y con su arreglo.
     // El mensaje de leerConfig sólo nombra los campos con problema, no sus valores.
-    c.push({ nombre: "Credenciales de redes", ok: false, detalle: e instanceof Error ? e.message : String(e), arreglo: `Corrige ${ruta} (formato en src/lib/redes/config.ts)` });
+    if (!(e instanceof ErrorArchivoPrivado)) {
+      c.push({ nombre: "Credenciales de redes", ok: false, detalle: e instanceof Error ? e.message : String(e), arreglo: `Corrige ${ruta} (formato en src/lib/redes/config.ts)` });
+    }
   }
+  const privados = revisarPrivados();
+  const bloquean = privados.some((a) => a.problema);
   for (const id of REDES_IDS) {
     let nombre: string = id;
     try {
@@ -156,15 +188,20 @@ async function diagnosticarRedes(): Promise<Chequeo[]> {
       /* adaptador sin cargar: se usa el id */
     }
     const presente = !!config[id];
+    if (bloquean) continue; // no es que falten: están sin proteger (ver abajo)
     c.push({
       nombre: `Credenciales de ${nombre}`, ok: presente, aviso: !presente,
       detalle: presente ? `presentes en ${ruta}` : "faltan: no se pueden conectar cuentas de esta red",
       arreglo: presente ? undefined : `Agrega "${id}" a ${ruta} (chmod 600) y registra el redirect URI ${urlCallback(id)}`,
     });
   }
-  const permisos = permisosRedes();
-  if (permisos && permisos !== "600") {
-    c.push({ nombre: "Permisos de redes.json", ok: false, aviso: true, detalle: `${ruta} tiene permisos ${permisos}`, arreglo: `chmod 600 ${ruta}` });
+  for (const a of privados.filter((x) => x.problema)) {
+    c.push({
+      nombre: a.nombre, ok: false, detalle: `${a.mensaje} (${a.ruta}${a.modo ? `, permisos ${a.modo}` : ""})`,
+      arreglo: a.arreglable
+        ? `Pulsa «Protegerlos ahora» en Sistema o en Cuentas (o: chmod 600 ${a.ruta})`
+        : `Revísalo a mano: debe ser un archivo normal tuyo con permisos 600 (${a.ruta})`,
+    });
   }
 
   const clave = existeClave();

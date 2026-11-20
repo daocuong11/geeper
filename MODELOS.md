@@ -16,6 +16,7 @@ guarda su licencia en `geeper.json` y en la tabla `Asset`; el QC avisa (sin bloq
 | whisper `medium` (ggml) | Tiempos por palabra (`hyperframes transcribe`, whisper.cpp sin CUDA) | CPU | OpenAI Whisper / whisper.cpp | MIT | Sí |
 | Parakeet TDT 0.6B v3 (int8) | Transcripción rápida (6–12× whisper) para directos; instalado con `hyperframes models install parakeet` | CPU (sherpa-onnx) | [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | CC-BY-4.0 | Sí, citando a NVIDIA |
 | faster-whisper `large-v3` | Subtítulos internos de MPT (Geeper no los usa) | CPU, Docker | OpenAI Whisper / SYSTRAN | MIT | Sí |
+| YuNet 2023mar (232 KB) | Dónde está la cara, para reencuadrar (`src/lib/caras.ts`) | CPU (OpenCV del venv `geeper-clips`) | [opencv_zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet), URL fijada a un commit y SHA-256 comprobado | MIT (pesos); entrenado con WIDER FACE, cuyos términos no cubre esa licencia | Sí (los pesos); detecta, no identifica |
 | Wan 2.2 TI2V-5B | Plano generativo (M5, opcional) | GPU | [Wan-AI/Wan2.2-TI2V-5B-Diffusers](https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B-Diffusers) | Apache 2.0 (verificado en la ficha descargada, ver ESTUDIO.md) | Sí |
 
 ## Motores y bibliotecas

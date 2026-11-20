@@ -6,6 +6,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { compilar, escribirProyectoHf, VERSION_COMPILADOR } from "./compilador";
+import { prepararColor } from "./looks";
 import { db } from "./db";
 import { metricas } from "./formatos";
 import { duracionEscenas } from "./linea";
@@ -68,7 +69,8 @@ async function preparar(proyectoId: string): Promise<VistaPrevia> {
   const rutaMezcla = path.join(dir, "build", "vista-mezcla.wav");
   await fs.mkdir(path.dirname(rutaMezcla), { recursive: true });
   await mezclar(p, dir, total, plantilla.datos.musica.ducking, rutaMezcla, () => {});
-  const comp = compilar(p, plantilla.datos, rutaMezcla, dir);
+  const sustitutos = await prepararColor(p, dir, plantilla.datos.color);
+  const comp = compilar(p, plantilla.datos, rutaMezcla, dir, sustitutos);
   await escribirProyectoHf(dirVista, { ...comp, html: comp.html.replace("</body>", '<script src="hyperframe.runtime.js"></script>\n</body>') });
   await fs.copyFile(RUNTIME, path.join(dirVista, "hyperframe.runtime.js"));
   await fs.writeFile(sello, clave);

@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { ErrorArchivoPrivado, leerPrivado, protegerPrivado, revisarPrivado } from "@/lib/redes/archivo-privado";
+import { privadosBloquean, protegerPrivados, revisarPrivados } from "@/lib/redes/privados";
 import { cifrar, descifrar, ErrorClave } from "@/lib/redes/cifrado";
+import { leerConfig } from "@/lib/redes/config";
 import { abrir, challenge, nuevoEstado, sellar } from "@/lib/redes/oauth";
 import { juzgar } from "@/lib/redes/salida";
 import { registrarSecreto, tapar } from "@/lib/redes/secretos";
@@ -24,7 +27,12 @@ describe("cifrado de tokens", () => {
     expect(() => descifrar(a, randomBytes(32))).toThrow(ErrorClave);
     const clave = randomBytes(32);
     const c = cifrar("x", clave);
-    const roto = c.slice(0, -2) + (c.endsWith("A") ? "B" : "A") + c.slice(-1);
+    // Se altera un byte real del texto cifrado: cambiar un carácter del base64 junto al «=» puede
+    // tocar sólo bits de relleno (o ninguno) y el test fallaba al azar.
+    const [v, datos] = c.split(":");
+    const b = Buffer.from(datos!, "base64");
+    b[b.length - 1]! ^= 0x01;
+    const roto = `${v}:${b.toString("base64")}`;
     expect(() => descifrar(roto, clave)).toThrow(ErrorClave);
   });
 
@@ -34,6 +42,83 @@ describe("cifrado de tokens", () => {
     const st = fs.statSync(path.join(process.env.GEEPER_CONFIG!, "clave"));
     expect(st.size).toBe(32);
     expect((st.mode & 0o777).toString(8)).toBe("600");
+  });
+});
+
+describe("archivos secretos (clave, redes.json)", () => {
+  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "geeper-privado-"));
+
+  it("lee un archivo 600 propio y deja pasar el ENOENT", () => {
+    const d = tmp();
+    fs.writeFileSync(path.join(d, "ok"), "secreto", { mode: 0o600 });
+    expect(leerPrivado(path.join(d, "ok")).toString()).toBe("secreto");
+    expect(() => leerPrivado(path.join(d, "no-hay"))).toThrow(expect.objectContaining({ code: "ENOENT" }));
+  });
+
+  it("rechaza permisos abiertos, enlaces simbólicos y directorios", () => {
+    const d = tmp();
+    const abierto = path.join(d, "abierto");
+    fs.writeFileSync(abierto, "x", { mode: 0o644 });
+    fs.chmodSync(abierto, 0o644);
+    expect(() => leerPrivado(abierto)).toThrow(/permisos 644/);
+    const real = path.join(d, "real");
+    fs.writeFileSync(real, "x", { mode: 0o600 });
+    fs.symlinkSync(real, path.join(d, "enlace"));
+    expect(() => leerPrivado(path.join(d, "enlace"))).toThrow(ErrorArchivoPrivado);
+    expect(() => leerPrivado(d)).toThrow(ErrorArchivoPrivado);
+  });
+
+  it("revisa sin leer y protege sólo archivos normales propios", () => {
+    const d = tmp();
+    const abierto = path.join(d, "abierto");
+    fs.writeFileSync(abierto, "x");
+    fs.chmodSync(abierto, 0o644);
+    expect(revisarPrivado(abierto)).toEqual({ estado: "abierto", modo: "644" });
+    expect(protegerPrivado(abierto)).toBe("ok");
+    expect((fs.statSync(abierto).mode & 0o777).toString(8)).toBe("600");
+    expect(revisarPrivado(path.join(d, "no-hay")).estado).toBe("falta");
+    // Un enlace no se toca: ni él ni el archivo al que apunta.
+    const real = path.join(d, "real");
+    fs.writeFileSync(real, "x");
+    fs.chmodSync(real, 0o644);
+    fs.symlinkSync(real, path.join(d, "enlace"));
+    expect(protegerPrivado(path.join(d, "enlace"))).toBe("enlace");
+    expect((fs.statSync(real).mode & 0o777).toString(8)).toBe("644");
+  });
+
+  it("explica los archivos de Geeper y los protege con el botón", () => {
+    const antes = process.env.GEEPER_CONFIG;
+    const d = tmp();
+    process.env.GEEPER_CONFIG = d;
+    try {
+      expect(revisarPrivados().every((a) => a.estado === "falta" && !a.problema)).toBe(true);
+      fs.writeFileSync(path.join(d, "redes.json"), "{}");
+      fs.chmodSync(path.join(d, "redes.json"), 0o664);
+      expect(privadosBloquean()).toBe(true);
+      const redes = revisarPrivados().find((a) => a.id === "redes")!;
+      expect(redes).toMatchObject({ problema: true, arreglable: true });
+      expect(redes.mensaje).not.toMatch(/chmod/); // lenguaje simple; el comando va en el detalle
+      expect(protegerPrivados().some((a) => a.problema)).toBe(false);
+      expect(leerConfig()).toEqual({});
+    } finally {
+      process.env.GEEPER_CONFIG = antes;
+    }
+  });
+
+  it("no reemplaza una clave con permisos inseguros: falla", () => {
+    const antes = process.env.GEEPER_CONFIG;
+    const d = tmp();
+    process.env.GEEPER_CONFIG = d;
+    try {
+      fs.writeFileSync(path.join(d, "clave"), randomBytes(32), { mode: 0o600 });
+      fs.chmodSync(path.join(d, "clave"), 0o640);
+      expect(() => cifrar("x")).toThrow(/chmod 600/);
+      fs.writeFileSync(path.join(d, "redes.json"), "{}", { mode: 0o666 });
+      fs.chmodSync(path.join(d, "redes.json"), 0o666);
+      expect(() => leerConfig()).toThrow(ErrorArchivoPrivado);
+    } finally {
+      process.env.GEEPER_CONFIG = antes;
+    }
   });
 });
 

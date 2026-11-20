@@ -9,10 +9,31 @@
  * Cada clip visual lleva un marcador con el texto de su escena; los subtítulos van aparte en el .srt.
  */
 import path from "node:path";
-import { pistasLibres, type Asset, type Proyecto } from "./esquema";
+import { aplicarEstilo, pistasLibres, type Asset, type Proyecto } from "./esquema";
+import { metricas } from "./formatos";
 import { ENTRADA, duracionEscenas, escenasEnLinea } from "./linea";
 
 type J = Record<string, unknown>;
+
+/**
+ * Volumen lineal (el que usa `mezcla.ts`) → ganancia en dB para FilmCraft (`metadata.filmcraft.gain_db`,
+ * `crates/interchange/src/otio.rs`). Sin esto, FilmCraft pone la música a 0 dB y tapa la voz.
+ */
+const aDb = (v: number): number => Math.round(Math.max(-96, 20 * Math.log10(Math.max(v, 1e-6))) * 100) / 100;
+
+/**
+ * Ajustes de secuencia que lee FilmCraft (`SequenceSettings` de `crates/project/src/sequence.rs`). Sin
+ * ellos crea la secuencia en 1920×1080 y un short 9:16 abre en horizontal. Todos estos campos son
+ * obligatorios en su deserializador: si falta uno, descarta el bloque entero en silencio.
+ */
+function ajustesFilmcraft(p: Proyecto): J {
+  const { W, H } = metricas(p.formato);
+  return {
+    width: W, height: H, frame_rate: { num: p.fps, den: 1 }, par: [1, 1], sample_rate: 48_000, drop_frame: false,
+    preset: `Custom ${W}x${H} ${p.fps}`, audio_master: "Stereo", preview_codec: "ProRes 422",
+    max_bit_depth: false, max_render_quality: false, working_space: "Rec. 709",
+  };
+}
 
 const rt = (s: number, rate: number): J => ({ OTIO_SCHEMA: "RationalTime.1", rate, value: Math.round(s * rate * 1000) / 1000 });
 const tr = (inicio: number, duracion: number, rate: number): J => ({
@@ -55,7 +76,8 @@ const pistaOtio = (nombre: string, kind: "Video" | "Audio", children: J[]): J =>
   OTIO_SCHEMA: "Track.1", name: nombre, kind, source_range: null, children, effects: [], markers: [], enabled: true, metadata: {},
 });
 
-export function aOtio(p: Proyecto, dirProyecto: string): J {
+export function aOtio(original: Proyecto, dirProyecto: string): J {
+  const p = aplicarEstilo(original);
   const rate = p.fps;
   const activo = (id: string): Asset => {
     const a = p.assets[id];
@@ -76,14 +98,15 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
     const meta = {
       geeper: {
         escena: e.escena.id, ajuste: v.ajuste ?? null, ancla: v.ancla ?? null,
-        movimiento: v.movimiento ?? null, color: v.color ?? null, transicion: v.transicion ?? null,
+        movimiento: v.movimiento ?? null, color: v.color ?? null, transicion: v.transicion ?? null, efectos: v.efectos ?? null,
       },
     };
     // Fundido de entrada: transición OTIO entre la escena anterior y ésta.
     if (e.indice > 0 && v.transicion?.tipo === "fundido") {
       const d = Math.min(v.transicion.duracion, e.duracion);
       visual.push({
-        OTIO_SCHEMA: "Transition.1", name: "Fundido", transition_type: "SMPTE_Dissolve",
+        // «Cross Dissolve»: el nombre que FilmCraft reconoce sin aviso (Resolve y Premiere usan el tipo).
+        OTIO_SCHEMA: "Transition.1", name: "Cross Dissolve", transition_type: "SMPTE_Dissolve",
         in_offset: rt(0, rate), out_offset: rt(d, rate), metadata: { geeper: { transicion: v.transicion } },
       });
     }
@@ -126,7 +149,9 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
     const a = activo(m.asset);
     const dur = Math.min(total, a.duracion ? a.duracion - m.rango.inicio : total);
     pistas.push(pistaOtio("Música", "Audio", [
-      clip("Música", a, dirProyecto, m.rango.inicio, dur, rate, { metadata: { geeper: { volumen: m.volumen ?? 0.15, ducking: true } } }),
+      clip("Música", a, dirProyecto, m.rango.inicio, dur, rate, {
+        metadata: { geeper: { volumen: m.volumen ?? 0.15, ducking: true }, filmcraft: { gain_db: aDb(m.volumen ?? 0.15) } },
+      }),
     ]));
   }
   // Pistas libres: superposiciones de video y efectos de sonido, con huecos hasta cada clip.
@@ -139,7 +164,13 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
       const a = activo(c.asset);
       const enLinea = c.rango.duracion / (c.velocidad ?? 1);
       hijos.push(clip(c.id, a, dirProyecto, c.rango.inicio, c.rango.duracion, rate, {
-        metadata: { geeper: { volumen: c.volumen ?? null, opacidad: c.opacidad ?? null, transicion: c.transicion ?? null, movimiento: c.movimiento ?? null } },
+        metadata: {
+          geeper: {
+            volumen: c.volumen ?? null, opacidad: c.opacidad ?? null, transicion: c.transicion ?? null, movimiento: c.movimiento ?? null,
+            efectos: c.efectos ?? null, fusion: c.fusion ?? null,
+          },
+          ...(pi.tipo === "audio" && c.volumen !== undefined ? { filmcraft: { gain_db: aDb(c.volumen) } } : {}),
+        },
       }));
       cursor = Math.max(cursor, ini + enLinea);
     }
@@ -170,8 +201,25 @@ export function aOtio(p: Proyecto, dirProyecto: string): J {
         proyecto: p.id, formato: p.formato, plantilla: p.plantilla, fps: p.fps, duracion: total,
         comercial: p.comercial, plataformas: p.plataformas,
       },
+      filmcraft: { settings: ajustesFilmcraft(p) },
     },
   };
+}
+
+/**
+ * Las rutas del .otio son de Linux (`file:///home/...`) y un editor en Windows no las encuentra: las pasa a
+ * la carpeta de red de WSL (`file://wsl.localhost/<distro>/home/...`, que FilmCraft lee como
+ * `\\wsl.localhost\<distro>\home\...`). Devuelve una copia; no cambia el original.
+ */
+export function rutasParaWindows(otio: J, distro: string): J {
+  const host = `file://wsl.localhost/${encodeURIComponent(distro)}`;
+  const recorrer = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(recorrer);
+    if (!v || typeof v !== "object") return v;
+    return Object.fromEntries(Object.entries(v).map(([k, x]) =>
+      [k, k === "target_url" && typeof x === "string" && x.startsWith("file:///") ? host + x.slice("file://".length) : recorrer(x)]));
+  };
+  return recorrer(otio) as J;
 }
 
 /** Lo que sólo vive en el render de Hyperframes y no viaja en el .otio. */
@@ -179,7 +227,7 @@ export const NO_VIAJA = [
   "subtítulos animados (van en el .srt)",
   "chip de marca, zoom en los cortes y tarjeta final",
   "fondo desenfocado del modo «contener»",
-  "ducking de la música (se anota en metadata.geeper)",
+  "ducking de la música (el volumen sí viaja: gain_db para FilmCraft; el ducking se anota en metadata.geeper)",
   "textos superpuestos (van como marcadores con su duración)",
-  "movimiento de cámara, color, opacidad y transiciones que no son fundido (en metadata.geeper)",
+  "movimiento de cámara, color, efectos, modo de fusión, opacidad y transiciones que no son fundido (en metadata.geeper)",
 ] as const;

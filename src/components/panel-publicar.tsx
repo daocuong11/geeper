@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Aviso, Estado, postJson, useSondeo } from "./comun";
+import { Aviso, Estado, archivo, postJson, useSondeo } from "./comun";
 import type { CuentaInfo, DatosCuentas, RedInfo } from "./cuentas";
 
 export interface PublicacionV {
@@ -19,7 +19,10 @@ export interface PublicacionV {
 
 interface ReglaQc { id: string; nombre: string; ok: boolean; aviso?: boolean; detalle?: string }
 
-interface Campos { titulo: string; descripcion: string; privacidad: string; programada: string }
+interface Campos { titulo: string; descripcion: string; privacidad: string; programada: string; portada: boolean }
+
+/** Portada elegida del proyecto (panel «Portada del video»). */
+interface PortadaV { archivo: string; titulo: string; creada: string }
 
 const PRIVACIDAD: Record<string, string> = { publico: "Público", no_listado: "No listado", privado: "Privado", borrador: "Borrador" };
 const NOMBRE_RED: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook" };
@@ -71,7 +74,7 @@ export function ListaPublicaciones({ publicaciones, alCambiar }: { publicaciones
   );
 }
 
-function CamposDestino({ c, red, v, cambiar }: { c: CuentaInfo; red: RedInfo; v: Campos; cambiar: (v: Campos) => void }) {
+function CamposDestino({ c, red, v, cambiar, portada, perfil }: { c: CuentaInfo; red: RedInfo; v: Campos; cambiar: (v: Campos) => void; portada: PortadaV | null; perfil: string }) {
   const pre = `pub-${c.id}`;
   return (
     <div className="grid gap-3 border-l-2 border-borde pl-3 sm:grid-cols-2">
@@ -95,6 +98,22 @@ function CamposDestino({ c, red, v, cambiar }: { c: CuentaInfo; red: RedInfo; v:
           <input id={`${pre}-prog`} type="datetime-local" className="campo" value={v.programada} onChange={(e) => cambiar({ ...v, programada: e.target.value })} />
         </div>
       )}
+      {red.id === "youtube" && (
+        <div className="sm:col-span-2">
+          {perfil !== "youtube-16x9" ? (
+            <p className="text-xs text-tenue">En los Shorts, YouTube elige la miniatura desde su app: la portada no se sube.</p>
+          ) : portada ? (
+            <label className="flex items-center gap-3 text-sm">
+              <input type="checkbox" checked={v.portada} onChange={(e) => cambiar({ ...v, portada: e.target.checked })} />
+              {/* eslint-disable-next-line @next/next/no-img-element -- archivo local */}
+              <img src={`${archivo(portada.archivo)}?v=${encodeURIComponent(portada.creada)}`} alt="" className="h-10 rounded" />
+              <span>Usar la portada del video como miniatura <span className="block text-xs text-tenue">YouTube la acepta si el canal está verificado por teléfono.</span></span>
+            </label>
+          ) : (
+            <p className="text-xs text-tenue">Sin portada: YouTube elegirá una imagen del video. Puedes crearla arriba, en «Portada del video».</p>
+          )}
+        </div>
+      )}
       <div className="space-y-1 text-xs sm:col-span-2">
         {red.id === "instagram" && <p className="text-amber-300">Instagram no tiene privado: el Reel se publica apenas termina la subida.</p>}
         {red.id === "tiktok" && v.privacidad === "borrador" && <p className="text-tenue">En borrador, el video llega a la bandeja de la app de TikTok y se publica desde el teléfono.</p>}
@@ -113,6 +132,8 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
   alCambiar: () => void;
 }) {
   const { datos, error } = useSondeo<DatosCuentas>("/api/cuentas", 60_000);
+  const { datos: dp } = useSondeo<{ elegida: PortadaV | null }>(`/api/proyectos/${proyectoId}/portada`, 60_000);
+  const portada = dp?.elegida ?? null;
   const [marcadas, setMarcadas] = useState<Record<string, Campos>>({});
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; t: string } | null>(null);
@@ -134,7 +155,9 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
         return resto;
       }
       const red = redes.get(c.red)!;
-      return { ...m, [c.id]: { titulo: nombre.slice(0, 100), descripcion: tema.slice(0, 5000), privacidad: red.privacidades[0] ?? "privado", programada: "" } };
+      // El título de la portada elegida, si hay: es el que la persona eligió para este video.
+      const titulo = (portada?.titulo ?? nombre).slice(0, 100);
+      return { ...m, [c.id]: { titulo, descripcion: tema.slice(0, 5000), privacidad: red.privacidades[0] ?? "privado", programada: "", portada: red.id === "youtube" && render.perfil === "youtube-16x9" && !!portada } };
     });
   }
 
@@ -145,7 +168,7 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
     try {
       const destinos = elegidas.map((c) => {
         const v = marcadas[c.id]!;
-        return { cuentaId: c.id, titulo: v.titulo.trim(), descripcion: v.descripcion, privacidad: v.privacidad, programada: v.programada ? new Date(v.programada).toISOString() : null };
+        return { cuentaId: c.id, titulo: v.titulo.trim(), descripcion: v.descripcion, privacidad: v.privacidad, programada: v.programada ? new Date(v.programada).toISOString() : null, ...(v.portada ? { portada: true } : {}) };
       });
       await postJson(`/api/proyectos/${proyectoId}/publicar`, { renderId: render.id, destinos });
       setMsg({ tipo: "ok", t: `${destinos.length === 1 ? "1 publicación en cola" : `${destinos.length} publicaciones en cola`}. El avance se ve abajo y en Trabajos.` });
@@ -190,7 +213,7 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
                   {c.alias && <span className="text-tenue">{c.usuario}</span>}
                   {publicada && <span className="text-xs text-tenue">(este render ya está en esta cuenta)</span>}
                 </label>
-                {marcadas[c.id] && <CamposDestino c={c} red={red} v={marcadas[c.id]!} cambiar={(v) => setMarcadas((m) => ({ ...m, [c.id]: v }))} />}
+                {marcadas[c.id] && <CamposDestino c={c} red={red} v={marcadas[c.id]!} cambiar={(v) => setMarcadas((m) => ({ ...m, [c.id]: v }))} portada={portada} perfil={render.perfil} />}
               </div>
             );
           })}

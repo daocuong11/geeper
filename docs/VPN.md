@@ -12,24 +12,23 @@ pnpm tsx scripts/verificar-vpn.ts US   # el código ISO del país elegido
 ```
 
 Revisa desde Windows y desde WSL la IP y el país de salida, la fuga por IPv6, el túnel, el DNS, el
-servicio de ubicación de Windows y la zona y región. No cambia nada. Hoy (18-11-2026) da: salida por
-CR, sin túnel, DNS del router y ubicación de Windows activada.
+servicio de ubicación de Windows y la zona y región. No cambia nada. El 18-11-2026 daba: salida por
+CR, sin túnel y DNS del router. La ubicación de Windows ya está desactivada (19-11-2026).
 
 ## 1. Elegir el servidor
 
-Hace falta un servidor WireGuard **en el país elegido y con IP fija**. Hay dos opciones, y ninguna es
-gratis:
+Hace falta un servidor WireGuard **en el país elegido y con IP fija**.
 
-| Opción | Costo aprox. | Ventaja | Desventaja |
+| Opción | Costo | Ventaja | Desventaja |
 |---|---|---|---|
-| **VPS propio con WireGuard** (Hetzner, Vultr, DigitalOcean, Linode…) | US$4–6/mes | IP **dedicada y fija**, solo tuya. Las redes ven siempre la misma IP | Es una IP de centro de datos. Hay que instalarlo una vez (§3) |
-| **VPN comercial que entregue archivos WireGuard** (Mullvad, Proton VPN de pago, IVPN…) | US$5–10/mes | Sin mantenimiento, muchos países | La IP es **compartida** con miles de usuarios. Algunas redes la marcan como VPN y piden verificaciones |
+| **Oracle Cloud Always Free + WireGuard** (recomendada) | **US$0** | IP **dedicada y fija**, solo tuya. 10 TB de tráfico al mes | Pide tarjeta para verificar (no cobra). La región de inicio no se puede cambiar después. A veces no hay cupo |
+| VPS de pago (Vultr, DigitalOcean, Hetzner…) | US$4–6/mes | Igual que Oracle, sin trámites de cupo | Cuesta |
+| VPN gratis (Proton VPN Free) | US$0 | Sin servidor | IP **compartida** que cambia y no siempre se puede elegir el país. Las redes la marcan como VPN |
 
-**Recomendación: VPS propio.** Una IP fija y exclusiva levanta menos sospechas que una IP compartida
-de VPN comercial. Además, todas tus cuentas ven siempre la misma IP, que es lo que busca §0.3 de
-TRAMITES.md.
-
-Esto choca con el principio de US$0 al mes de PRODUCTO.md, así que es una decisión tuya.
+**Recomendación: Oracle Cloud Always Free.** Cumple el US$0 al mes de PRODUCTO.md y da una IP fija y
+exclusiva, que levanta menos sospechas que una IP compartida. Además, todas tus cuentas ven siempre
+la misma IP, que es lo que busca §0.3 de TRAMITES.md. El script de §3 sirve igual en un VPS de pago si
+algún día hace falta cambiar.
 
 > **Ojo con el resto de tus cuentas.** Con todo el equipo en otro país, también tu banco, tu Google
 > personal y tus suscripciones te van a ver ahí. Algunos te pedirán verificar el inicio de sesión y
@@ -72,37 +71,43 @@ WSL sale a internet por Windows, así que con el túnel en Windows queda cubiert
 
 ## 3. Servidor propio (VPS) en el país elegido
 
-1. Crea un VPS Ubuntu 24.04 en una región del país elegido (el plan más chico alcanza).
-2. Entra por SSH y corre:
+1. Crea la cuenta en [oracle.com/cloud/free](https://www.oracle.com/cloud/free/). Como **región de
+   inicio** elige una del país (para US: *US East (Ashburn)*, *US West (Phoenix)* o *US West (San
+   Jose)*). No se puede cambiar después. Pide tarjeta solo para verificar, y no cobra mientras uses
+   recursos «Always Free».
+2. **Compute → Instances → Create instance**:
+   - Image: **Canonical Ubuntu 24.04**.
+   - Shape: **VM.Standard.E2.1.Micro** (Always Free), o **VM.Standard.A1.Flex** con 1 OCPU y 6 GB
+     (también Always Free, más potente). Si sale «Out of capacity», prueba el otro shape u otro
+     *availability domain*, o reintenta más tarde.
+   - Networking: deja que cree la VCN y la subred pública, con **Assign a public IPv4 address**.
+   - SSH keys: **Paste public key** → el contenido de `cat ~/.ssh/id_ed25519.pub` en WSL (si no
+     existe, créala con `ssh-keygen -t ed25519`).
+   - Anota la **IP pública** cuando quede *Running*.
+3. Abre el puerto en la nube: en la instancia, **Subnet → Security Lists → Default Security List →
+   Add Ingress Rules**: Source CIDR `0.0.0.0/0`, IP Protocol **UDP**, Destination Port **51820**.
+4. Recomendado: **Upgrade a Pay As You Go** (Billing → Upgrade). Sigue sin cobrar nada si te quedas en
+   lo Always Free, y evita que Oracle recupere la instancia por estar «ociosa» (un VPN casi no gasta
+   CPU, así que podría parecerlo).
+5. Desde WSL, en la carpeta de Geeper, corre:
    ```bash
-   sudo apt update && sudo apt install -y wireguard qrencode
-   sudo sysctl -w net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1
-   echo -e "net.ipv4.ip_forward=1\nnet.ipv6.conf.all.forwarding=1" | sudo tee /etc/sysctl.d/99-wg.conf
-   cd /etc/wireguard && umask 077
-   wg genkey | tee servidor.key | wg pubkey > servidor.pub
-   wg genkey | tee pc.key | wg pubkey > pc.pub
-   IFACE=$(ip route show default | awk '{print $5; exit}')
-   cat > wg0.conf <<EOF
-   [Interface]
-   Address = 10.8.0.1/24, fd08::1/64
-   ListenPort = 51820
-   PrivateKey = $(cat servidor.key)
-   PostUp = iptables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE; ip6tables -t nat -A POSTROUTING -o $IFACE -j MASQUERADE
-   PostDown = iptables -t nat -D POSTROUTING -o $IFACE -j MASQUERADE; ip6tables -t nat -D POSTROUTING -o $IFACE -j MASQUERADE
-
-   [Peer]
-   PublicKey = $(cat pc.pub)
-   AllowedIPs = 10.8.0.2/32, fd08::2/128
-   EOF
-   sudo systemctl enable --now wg-quick@wg0
-   sudo ufw allow 51820/udp 2>/dev/null; sudo ufw allow OpenSSH 2>/dev/null
+   ssh ubuntu@IP_DEL_VPS 'sudo bash -s' < scripts/vpn/instalar-servidor.sh > ~/geeper.conf
    ```
-3. Arma el `.conf` del PC con la plantilla de §2 paso 3: `PrivateKey` = el contenido de `pc.key`,
-   `PublicKey` = el de `servidor.pub`, `Endpoint` = IP pública del VPS. Pásalo a Windows por un medio
-   seguro (no por chat ni correo) y **borra `pc.key` del servidor** después.
-4. Si el VPS no tiene IPv6, quita las partes `fd08::…` y la línea de `ip6tables`, y desactiva IPv6 en el
-   adaptador de red de Windows (Panel de control → Conexiones de red → propiedades → desmarcar IPv6).
-   Si no, el IPv6 de tu conexión se escaparía.
+   [`scripts/vpn/instalar-servidor.sh`](../scripts/vpn/instalar-servidor.sh) instala WireGuard, activa
+   el reenvío y el NAT, abre el firewall propio de la imagen de Oracle (y `ufw` si está encendido),
+   fija la MTU del túnel y detecta si el VPS tiene IPv6. Escribe el `.conf` del PC en `~/geeper.conf`.
+   La clave privada del PC viaja solo por SSH y no queda en el servidor. Si el VPS ya tiene un `wg0`,
+   no toca nada.
+6. Pasa el `.conf` a Windows y bórralo de WSL:
+   ```bash
+   W=$(wslpath "$(cmd.exe /c 'echo %USERPROFILE%' 2>/dev/null | tr -d '\r')")
+   mv ~/geeper.conf "$W/Documents/geeper.conf"
+   ```
+   Luego sigue con §2 desde el paso 2. Una vez importado en WireGuard, borra también ese archivo:
+   WireGuard guarda su propia copia cifrada.
+7. Si el script avisa que el VPS no tiene IPv6, no hace falta tocar nada más. El `.conf` igual lleva
+   `::/0`, así que el kill-switch corta el IPv6 de tu conexión normal en vez de dejarlo escaparse. El
+   verificador lo confirma.
 
 ## 4. Que Windows también «esté» en ese país
 
@@ -110,7 +115,7 @@ El VPN cambia la IP. Hay otras señales de ubicación que no dependen de la IP:
 
 | Señal | Dónde se cambia | ¿Hace falta? |
 |---|---|---|
-| **Servicio de ubicación** (Wi-Fi, GPS): los navegadores y las apps lo usan para la geolocalización | Configuración → Privacidad y seguridad → **Ubicación → desactivar** | **Sí.** Hoy está activado y revela la ubicación real aunque uses VPN |
+| **Servicio de ubicación** (Wi-Fi, GPS): los navegadores y las apps lo usan para la geolocalización | Configuración → Privacidad y seguridad → **Ubicación → desactivar** | **Sí.** Ya está desactivado (19-11-2026); si se reactiva, revela la ubicación real aunque uses VPN |
 | **Zona horaria** | Configuración → Hora e idioma → Fecha y hora → desactiva «automática» y elige la del país | Recomendado: una IP de un país con la hora de otro es incoherente |
 | **País o región** | Configuración → Hora e idioma → Idioma y región → País o región | Recomendado. Hoy dice «Brasil» |
 | **Formato regional e idioma** | Igual que la anterior → Formato regional | Opcional. Puedes dejar el español |

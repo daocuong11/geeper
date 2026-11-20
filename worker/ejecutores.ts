@@ -103,7 +103,8 @@ async function mptGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const pararTelemetria = telemetria(path.join(dir, "logs", `${t.id}-telemetria.csv`));
   try {
     if (!taskId) {
-      const cuerpo = cuerpoVideo(proyecto.tema, Formato.parse(proyecto.formato), plantilla.datos.mpt);
+      const guion = typeof t.payload.guion === "string" ? t.payload.guion : undefined;
+      const cuerpo = cuerpoVideo(proyecto.tema, Formato.parse(proyecto.formato), plantilla.datos.mpt, guion);
       taskId = await crearVideo(cuerpo);
       // Se guarda ANTES de esperar: si el worker muere, al relanzar se retoma esta misma tarea.
       await guardarPayload(t.id, { ...t.payload, mptTaskId: taskId });

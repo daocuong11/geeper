@@ -1,0 +1,42 @@
+/** Explicaciones en lenguaje simple para quien nunca hizo anuncios (las muestra el botón «?»). */
+export const QUE = {
+  objetivo: "Lo que más te importa que pase cuando alguien ve el anuncio. La plataforma lo usa para decidir a quién mostrárselo.",
+  boton: "El botón que aparece debajo del video en la plataforma (por ejemplo «Comprar»). Lo eliges al crear el anuncio; aquí sólo lo anotas.",
+  oferta: "Lo que la persona recibe si responde: el producto, un descuento, una prueba gratis… Incluye condiciones como precio, plazo o región.",
+  destino: "La página que se abre al tocar el anuncio. Debe hablar de lo mismo que el video.",
+  audiencia: "Quién quieres que vea el anuncio: qué hace, qué le preocupa, por qué le serviría. Escribe lo que sabes de verdad (preguntas de clientes, ventas), no suposiciones.",
+  categoria: "Algunos temas (salud, dinero, empleo, apuestas, política…) tienen reglas especiales en cada plataforma y país. Si es tu caso, revisarás esas reglas antes de lanzar.",
+  ubicaciones: "Los lugares donde se verá el video. Cada uno tiene una forma: vertical (9:16) para Reels, TikTok y Shorts; horizontal (16:9) para YouTube; cuadrado (1:1) para el feed.",
+  afirmaciones: "Cualquier dato que el anuncio diga como hecho («envío gratis», «30 % más barato»). Si no puedes demostrarlo, no lo digas: la plataforma puede rechazar el anuncio y puede traerte problemas.",
+  plantilla: "Colores, letra, voz y música con que Geeper hace los videos de esta campaña.",
+  gancho: "Lo primero que se ve y se oye. En redes la gente decide en 1 o 2 segundos si sigue mirando, así que es lo más importante del video.",
+  guion: "Todo lo que dice la voz, de principio a fin. Empieza con el gancho y termina diciendo qué hacer. Frases cortas.",
+  cta: "Lo que le pides a la persona al final: «pide tu bolsa», «agenda tu cita»…",
+  principal: "Dónde se va a ver sobre todo. Define la forma del video (vertical, horizontal o cuadrado).",
+  insight: "Algo que sabes de tu público y que hace que esta idea le importe. Ejemplo: «creen que el café es así porque nunca probaron uno fresco».",
+  promesa: "El beneficio principal, dicho de forma que lo puedas cumplir.",
+  marco: "Formas conocidas de ordenar un mensaje (problema → solución, antes → después…). Ayudan a pensar, pero ninguna garantiza resultados.",
+  hipotesis: "Lo que crees que va a pasar con esta idea y por qué. Sirve para aprender aunque no funcione.",
+  variable: "Lo único que cambia entre las ideas que comparas. Si cambias varias cosas a la vez, no sabrás cuál hizo la diferencia.",
+  metrica: "El número que decide quién gana: clics, compras, registros… Elige uno solo antes de empezar.",
+  guardarrailes: "Algo que no puede empeorar aunque gane la métrica principal. Por ejemplo, que cada venta no te cueste mucho más.",
+  tasaBase: "De cada 100 personas que ven tu anuncio hoy, cuántas hacen la acción. La plataforma lo muestra como CTR (clics) o tasa de conversión. Si no lo sabes, corre tus anuncios una semana y vuelve.",
+  efecto: "La mejora más pequeña que te haría cambiar de decisión. Cuanto más pequeña, más gente necesita ver la prueba.",
+  volumen: "Cuántas personas ve cada anuncio por día, más o menos. Sale de tu presupuesto diario; la plataforma te lo estima al crear el anuncio.",
+  alfa: "Qué tanto riesgo aceptas de creer que algo ganó cuando fue suerte. 5 % es lo habitual.",
+  potencia: "Qué tan seguro quieres estar de notar una mejora si existe. 80 % es lo habitual.",
+  unidad: "A quién se reparte cada versión. Lo normal es por persona: cada una ve sólo una versión.",
+  parada: "Cuándo termina la prueba, decidido antes de empezar. Cortarla cuando el resultado te gusta lleva a conclusiones falsas.",
+  resultados: "Copia de la plataforma, para cada anuncio, cuántas personas lo vieron (impresiones) y cuántas hicieron la acción (clics, compras…).",
+  revision: "Geeper revisa cada idea antes de lanzarla. Pasa = está bien; Falla = hay que arreglarlo; Sin saber = falta un dato o una revisión que sólo tú puedes hacer. Nunca adivina.",
+} as const;
+
+/** Objetivos en palabras simples. */
+export const OBJETIVO_SIMPLE: Record<string, { titulo: string; detalle: string }> = {
+  ventas: { titulo: "Vender", detalle: "Que compren en tu tienda o página." },
+  trafico: { titulo: "Visitas", detalle: "Que entren a tu página o tienda en línea." },
+  clientes: { titulo: "Contactos", detalle: "Que te dejen sus datos o te escriban." },
+  reconocimiento: { titulo: "Que te conozcan", detalle: "Que mucha gente vea tu marca." },
+  interaccion: { titulo: "Comunidad", detalle: "Que comenten, compartan y te sigan." },
+  app: { titulo: "Descargas", detalle: "Que instalen tu aplicación." },
+};

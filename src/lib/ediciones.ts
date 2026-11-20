@@ -19,6 +19,7 @@ import {
   type Proyecto,
   type Recorte,
 } from "./esquema";
+import { Curva, Efecto, Fusion } from "./efectos-esquema";
 import { norm } from "./subtitulos";
 
 const Id = z.string().regex(/^[a-z0-9-]+$/);
@@ -47,6 +48,8 @@ export const Edicion = z.discriminatedUnion("tipo", [
   // ---- Edición por texto: quitar lo que se oye (y su tiempo) sin regenerar nada.
   z.object({ tipo: z.literal("recortarPalabras"), escena: z.string(), desde: z.number().int().min(0), hasta: z.number().int().positive() }),
   z.object({ tipo: z.literal("restaurarPalabras"), escena: z.string(), desde: z.number().int().min(0), hasta: z.number().int().positive() }),
+  // Una persona escuchó esas palabras y su tiempo es correcto: dejan de ser dudosas (confianza 1).
+  z.object({ tipo: z.literal("confirmarPalabras"), escena: z.string(), desde: z.number().int().min(0), hasta: z.number().int().positive() }),
   z.object({
     tipo: z.literal("quitarSilencios"),
     escena: z.string().optional(),
@@ -61,9 +64,20 @@ export const Edicion = z.discriminatedUnion("tipo", [
     tipo: z.literal("efectosVisual"),
     escena: z.string(),
     transicion: Transicion.nullable().optional(),
-    movimiento: z.object({ desde: Encuadre, hasta: Encuadre }).nullable().optional(),
+    movimiento: z.object({ desde: Encuadre, hasta: Encuadre, curva: Curva.optional() }).nullable().optional(),
     velocidad: z.number().min(0.1).max(10).nullable().optional(),
     color: Color.nullable().optional(),
+    /** Efectos en orden (efectos.ts); [] = sin efectos en esta escena; null = vuelve al estilo del video. */
+    efectos: z.array(Efecto).max(8).nullable().optional(),
+    /** Ritmo del movimiento sólo de esta escena; null = vuelve al estilo del video. */
+    curva: Curva.nullable().optional(),
+  }),
+  // ---- Estilo del video: lo heredan las escenas sin valor propio (null lo quita).
+  z.object({
+    tipo: z.literal("estiloVideo"),
+    efectos: z.array(Efecto).max(8).nullable().optional(),
+    transicion: Transicion.nullable().optional(),
+    curva: Curva.nullable().optional(),
   }),
   // ---- Textos superpuestos.
   z.object({ tipo: z.literal("agregarTexto"), texto: Texto.omit({ id: true }).extend({ id: Id.optional() }) }),
@@ -80,8 +94,18 @@ export const Edicion = z.discriminatedUnion("tipo", [
     volumen: z.number().min(0).max(4).optional(),
     opacidad: z.number().min(0).max(1).optional(),
     transicion: Transicion.optional(),
+    fusion: Fusion.optional(),
   }),
   z.object({ tipo: z.literal("quitarClipLibre"), clip: z.string().min(1) }),
+  // ---- Ajustes de una superposición ya agregada (null quita el ajuste).
+  z.object({
+    tipo: z.literal("editarClipLibre"),
+    clip: z.string().min(1),
+    fusion: Fusion.optional(),
+    efectos: z.array(Efecto).max(8).nullable().optional(),
+    transicion: Transicion.nullable().optional(),
+    opacidad: z.number().min(0).max(1).nullable().optional(),
+  }),
   // ---- Destino y entrega.
   z.object({
     tipo: z.literal("cambiarDestino"),
@@ -89,6 +113,8 @@ export const Edicion = z.discriminatedUnion("tipo", [
     plataformas: z.array(Plataforma).optional(),
     master: z.boolean().optional(),
   }),
+  // ---- Botón de la tarjeta final sólo para este video (null o vacío = el de la plantilla).
+  z.object({ tipo: z.literal("cambiarCta"), cta: z.string().trim().max(60).nullable() }),
   // ---- Música: desde qué segundo suena y sus pulsos (ver pulsos.ts).
   z.object({ tipo: z.literal("fijarMusica"), inicio: z.number().min(0), pulsos: z.array(z.number().min(0)).optional() }),
 ]);
@@ -239,6 +265,12 @@ export function aplicarEdicion(original: Proyecto, ed: Edicion): Proyecto {
       e.recortes = e.recortes.filter((r) => r.fin <= desde.inicio || r.inicio >= hasta.fin);
       break;
     }
+    case "confirmarPalabras": {
+      const e = escenaDe(p, ed.escena);
+      if (ed.hasta <= ed.desde || ed.hasta > e.palabras.length) throw new Error("Rango de palabras inválido");
+      for (let i = ed.desde; i < ed.hasta; i++) e.palabras[i] = { ...e.palabras[i]!, confianza: 1 };
+      break;
+    }
     case "quitarSilencios": {
       const ids = ed.escena ? [ed.escena] : pista(p, "voz").clips.map((c) => c.escena!);
       for (const id of ids) {
@@ -281,6 +313,31 @@ export function aplicarEdicion(original: Proyecto, ed: Edicion): Proyecto {
       if (ed.movimiento !== undefined) c.movimiento = ed.movimiento ?? undefined;
       if (ed.velocidad !== undefined) c.velocidad = ed.velocidad === null || ed.velocidad === 1 ? undefined : ed.velocidad;
       if (ed.color !== undefined) c.color = ed.color ?? undefined;
+      if (ed.efectos !== undefined) c.efectos = ed.efectos ?? undefined;
+      if (ed.curva !== undefined && c.movimiento) {
+        const { curva: _, ...sin } = c.movimiento;
+        c.movimiento = ed.curva ? { ...sin, curva: ed.curva } : sin;
+      }
+      break;
+    }
+    case "estiloVideo": {
+      const e = { ...p.estilo };
+      if (ed.efectos !== undefined) e.efectos = ed.efectos?.length ? ed.efectos : undefined;
+      if (ed.transicion !== undefined) e.transicion = ed.transicion ?? undefined;
+      if (ed.curva !== undefined) e.curva = ed.curva ?? undefined;
+      p.estilo = e.efectos || e.transicion || e.curva ? e : undefined;
+      break;
+    }
+    case "editarClipLibre": {
+      const c = p.pistas
+        .filter((x) => !(PISTAS_RESERVADAS as readonly string[]).includes(x.id) && x.tipo === "video")
+        .flatMap((x) => x.clips)
+        .find((x) => x.id === ed.clip);
+      if (!c) throw new Error(`No hay una superposición ${ed.clip}`);
+      if (ed.fusion !== undefined) c.fusion = ed.fusion === "normal" ? undefined : ed.fusion;
+      if (ed.efectos !== undefined) c.efectos = ed.efectos?.length ? ed.efectos : undefined;
+      if (ed.transicion !== undefined) c.transicion = ed.transicion ?? undefined;
+      if (ed.opacidad !== undefined) c.opacidad = ed.opacidad ?? undefined;
       break;
     }
     case "agregarTexto": {
@@ -326,6 +383,7 @@ export function aplicarEdicion(original: Proyecto, ed: Edicion): Proyecto {
         volumen: tipo === "audio" ? ed.volumen : undefined,
         opacidad: tipo === "video" ? ed.opacidad : undefined,
         transicion: tipo === "video" ? ed.transicion : undefined,
+        fusion: tipo === "video" && ed.fusion !== "normal" ? ed.fusion : undefined,
       });
       pi.clips.sort((x, y) => (x.inicio ?? 0) - (y.inicio ?? 0));
       break;
@@ -338,6 +396,10 @@ export function aplicarEdicion(original: Proyecto, ed: Edicion): Proyecto {
       limpiarAssets(p);
       break;
     }
+    case "cambiarCta":
+      if (ed.cta) p.cta = ed.cta;
+      else delete p.cta;
+      break;
     case "cambiarDestino":
       if (ed.comercial !== undefined) p.comercial = ed.comercial;
       if (ed.plataformas !== undefined) p.plataformas = [...new Set(ed.plataformas)];

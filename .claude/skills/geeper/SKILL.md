@@ -1,6 +1,6 @@
 ---
 name: geeper
-description: Proponer cambios a un proyecto de Geeper (geeper.json) — corregir subtítulos, recortar palabras o silencios, quitar o reordenar escenas, transiciones y efectos, textos en pantalla, superposiciones, formato, plantilla, voz, destino — validados con el esquema y mostrados como diferencias antes de aplicarlos. Úsala cuando la persona pida editar un video de Geeper o entender su geeper.json.
+description: Proponer cambios a un proyecto de Geeper (geeper.json) — corregir subtítulos, recortar palabras o silencios, quitar o reordenar escenas, transiciones y efectos, textos en pantalla, superposiciones, formato, plantilla, voz, destino — validados con el esquema y mostrados como diferencias antes de aplicarlos. Úsala cuando la persona pida editar un video de Geeper o entender su geeper.json, y para proponer conceptos, ganchos, guiones o afirmaciones de una campaña de la sección Anuncios.
 ---
 
 # Geeper: editar un proyecto vía geeper.json
@@ -26,12 +26,27 @@ leerlo (`migrar`): v2 sólo agrega campos con valor por defecto.
   - `visual` y `voz` con **un clip por escena, en el mismo orden**; `musica` opcional. Cada clip:
     `{ id, asset, rango: { inicio, duracion }, escena }`; `rango` es sobre el asset (source range). La
     posición en la línea **no se guarda**: sale del orden de la pista `voz`.
-  - Efectos del clip visual de una escena: `transicion` (`corte | fundido | deslizar | zoom`, entra sobre
-    la escena anterior), `movimiento` (`{ desde, hasta }` con `{ escala, x, y }`: Ken Burns, paneos),
-    `velocidad` (0,1–10) y `color` (`{ brillo, contraste, saturacion }`).
+  - Efectos del clip visual de una escena: `transicion` (`corte | fundido | deslizar | zoom | barrido |
+    radial | iris | persianas`, entra sobre la escena anterior; las cuatro últimas son máscaras y aceptan
+    `angulo` en grados (90 = de izquierda a derecha; en `radial`, el ángulo de inicio), `suavizado` en px
+    (borde suave), `ancho` en px (persianas) y `sentido: horario|antihorario|ambos` (radial)),
+    `movimiento` (`{ desde, hasta, curva? }` con `{ escala, x, y }`: Ken Burns, paneos; `curva`:
+    `lineal | suave | acelera | frena`, donde `suave` es el Easy Ease de After Effects), `velocidad`
+    (0,1–10), `color` (`{ brillo, contraste, saturacion }`) y `efectos`: lista en orden de aplicación,
+    de hasta 8, con `{tipo:"tinte", negro, blanco (#rrggbb), cantidad 0–1}`,
+    `{tipo:"niveles", entradaNegro, entradaBlanco, gamma, salidaNegro, salidaBlanco}` (0–1; gamma
+    0,1–10), `{tipo:"vineta", cantidad 0–1, angulo 1–179}`, `{tipo:"desenfoque", radio px}` y
+    `{tipo:"grano", cantidad 0–1, color, semilla}`. Fórmulas y límites en docs/EFFECTCRAFT.md.
   - **Pistas libres** (cualquier otro `id`, p. ej. `broll`, `efectos`): superposiciones de video/imagen
     o efectos de sonido. Cada clip lleva `inicio` en la línea final, y además `opacidad`, `volumen`,
-    `transicion`, `movimiento`.
+    `transicion`, `movimiento`, `efectos` y `fusion` (modo de fusión con lo de abajo: `normal |
+    multiplicar | trama | superponer | oscurecer | aclarar | sobreexponer | subexponer | luz-fuerte |
+    luz-suave | diferencia | exclusion | tono | saturacion | color | luminosidad | anadir`; para luces o
+    polvo sobre fondo negro, `trama` o `anadir`).
+- `estilo` (opcional): estilo del video, `{ efectos?, transicion?, curva? }`. Lo heredan los clips
+  visuales que no tienen el suyo (la primera escena nunca tiene entrada). En una escena, un valor propio
+  es una excepción; `efectos: []` es «sin efectos» como excepción. Prefiere cambiar el estilo antes que
+  repetir lo mismo en cada escena.
 - `textos`: títulos, rótulos o citas superpuestos: `{ id, texto, inicio, duracion, estilo: titulo|rotulo|cita, posicion: arriba|centro|abajo }`.
 - `escenas`: `{ id: { texto (lo que se oye), palabras: [{ texto, inicio, fin, confianza? }] (en el tiempo
   del asset de voz), correcciones: [{ desde, hasta, texto }], recortes: [{ inicio, fin, motivo }] } }`.
@@ -55,23 +70,59 @@ Los subtítulos no se guardan: se calculan (grupos de hasta 4 palabras, ≤ 2 l�
    - `{"tipo":"cambiarFormato","formato":"16:9"}` · `{"tipo":"cambiarPlantilla","plantilla":"dimerso"}`
    - `{"tipo":"cambiarMostrar","mostrar":[{"de":"GTA seis","a":"GTA VI"}]}`
    - `{"tipo":"ajusteVisual","escena":"e01","ajuste":"contener","ancla":"arriba"}`
+     Sin `ajuste` ni `ancla`, si el asset tiene `foco` (cara detectada con YuNet), el clip cubre el cuadro
+     siguiendo la cara; fijar `ancla` lo desactiva. Proyectos viejos: `pnpm tsx scripts/analizar-caras.ts <slug>`.
    - `{"tipo":"cambiarVoz","velocidad":0.9}`
    - Edición por texto: `{"tipo":"recortarPalabras","escena":"e02","desde":3,"hasta":5}` ·
      `{"tipo":"restaurarPalabras","escena":"e02","desde":3,"hasta":5}` ·
      `{"tipo":"quitarSilencios","umbral":0.6,"dejar":0.25}` · `{"tipo":"quitarMuletillas"}` ·
      `{"tipo":"quitarRecortes"}` (todas aceptan `"escena"` para limitarse a una)
-   - `{"tipo":"efectosVisual","escena":"e03","transicion":{"tipo":"fundido","duracion":0.5},"movimiento":{"desde":{"escala":1},"hasta":{"escala":1.15}},"velocidad":1.25,"color":{"saturacion":1.2}}` (`null` quita un efecto)
+   - `{"tipo":"efectosVisual","escena":"e03","transicion":{"tipo":"fundido","duracion":0.5},"movimiento":{"desde":{"escala":1},"hasta":{"escala":1.15}},"velocidad":1.25,"color":{"saturacion":1.2}}` (`null` quita un efecto) · `{"tipo":"efectosVisual","escena":"e02","transicion":{"tipo":"barrido","duracion":0.6,"angulo":135,"suavizado":60},"efectos":[{"tipo":"tinte","negro":"#1f1408","blanco":"#fff1d6","cantidad":0.85},{"tipo":"grano","cantidad":0.08}]}`
+   - Estilo del video: `{"tipo":"estiloVideo","efectos":[{"tipo":"vineta","cantidad":0.35},{"tipo":"grano","cantidad":0.08}],"transicion":{"tipo":"barrido","duracion":0.6,"angulo":90,"suavizado":60},"curva":"suave"}` (`null` quita cada parte) · en una escena, `"efectos":null`, `"transicion":null` o `"curva":null` dentro de `efectosVisual` la devuelven al estilo
+   - Superposición ya agregada: `{"tipo":"editarClipLibre","clip":"broll-1","fusion":"trama","transicion":{"tipo":"iris","duracion":0.5},"efectos":null}`
    - `{"tipo":"agregarTexto","texto":{"texto":"Dato","inicio":2,"duracion":3,"estilo":"titulo","posicion":"arriba"}}` · `{"tipo":"editarTexto","id":"texto-1","cambios":{"inicio":3}}` · `{"tipo":"quitarTexto","id":"texto-1"}`
-   - `{"tipo":"agregarClipLibre","pista":"broll","asset":"<id ya registrado>","inicio":6,"duracion":1.5}` · `{"tipo":"quitarClipLibre","clip":"broll-1"}`
+   - `{"tipo":"agregarClipLibre","pista":"broll","asset":"<id ya registrado>","inicio":6,"duracion":1.5,"fusion":"trama"}` · `{"tipo":"quitarClipLibre","clip":"broll-1"}`
      (para un archivo nuevo, súbelo desde la UI: «Superposiciones y efectos de sonido»)
    - `{"tipo":"cambiarDestino","comercial":true,"plataformas":["tiktok","youtube"],"master":false}`
+   - `{"tipo":"confirmarPalabras","escena":"e02","desde":3,"hasta":4}` (sólo si la persona escuchó el tramo y confirmó que el tiempo es correcto: deja la confianza en 1)
    - `{"tipo":"fijarMusica","inicio":1.25}` (mejor: botón «Alinear cortes al ritmo», que detecta los pulsos)
+   - `{"tipo":"cambiarCta","cta":"Compra hoy"}` (botón de la tarjeta final sólo de este video; `null` vuelve al de la plantilla)
+   - **Pasos encadenados:** un paso usa lo que creó otro. `"$1.id"` es el id que creó el paso 1 (texto o
+     clip), `"$ultimo.id"` el del paso anterior, `"${1.id}"` dentro de un texto, `$$` un `$` literal:
+     `[{"tipo":"agregarTexto","texto":{"texto":"50 % OFF","inicio":1,"duracion":3}},`
+     ` {"tipo":"editarTexto","id":"$1.id","cambios":{"posicion":"centro"}}]`
 3. Valida y muestra las diferencias (no aplica nada):
    `cd ~/dev/dimerso/products/geeper && pnpm tsx scripts/proponer.ts <slug> /tmp/propuesta.json`
+   Si un paso falla, dice cuál (`paso N (tipo): error — motivo`), omite los siguientes, no aplica nada
+   y sale con código 1. Con `--informe`, la salida es un JSON (`pasos` con lo que creó cada uno en
+   `resultado`, `diferencias`, `aplicada`).
 4. Enséñale las diferencias a la persona. **Sólo con su aprobación**, aplica:
    `pnpm tsx scripts/proponer.ts <slug> /tmp/propuesta.json --aplicar`
 5. Renderizar y regenerar la voz se piden desde la UI (botones «Renderizar» y «Regenerar voz»), o:
    `pnpm tsx scripts/encolar.ts <slug> render.entregar` · `pnpm tsx scripts/encolar.ts <slug> voz.regenerar '{"escena":null,"cadena":["render.entregar"]}'`.
+
+## Anuncios: proponer conceptos y guiones
+
+La sección `/anuncios` guarda campañas (brief, conceptos, revisión, prueba). Claude propone; la persona
+aprueba en la app. Detalle en `docs/ANUNCIOS.md`.
+
+1. Mira la campaña y lo pendiente: `pnpm tsx scripts/anuncio.ts listar` y
+   `pnpm tsx scripts/anuncio.ts ver <id>` (brief, conceptos y cada chequeo que falla o queda «sin saber»).
+2. Escribe `/tmp/propuesta.json`:
+   `{"brief": {...campos...}, "conceptos": [{"nombre": "...", "marco": "pas", "gancho": "...", "promesa": "...",
+   "narrativa": "...", "cta": "...", "objeciones": "...", "hipotesis": "...", "guion": "...", "principal": "youtube-shorts"}],
+   "quitar": ["c-id"]}`. Un concepto con `id` existente se edita; sin `id`, es nuevo.
+3. Valida y muestra las diferencias: `pnpm tsx scripts/anuncio.ts proponer <id> /tmp/propuesta.json`.
+   Enséñaselas a la persona y **sólo con su aprobación** repite con `--aplicar`.
+
+Reglas de contenido (de claude-ads):
+- Conceptos **materialmente distintos** (otra idea, otro gancho), no la misma frase reescrita.
+- **No inventes** cifras, testimonios, garantías, urgencia ni comparaciones. Si el guion necesita una
+  afirmación, propónla en `brief.afirmaciones` con su `prueba`: entra **sin aprobar** y la aprueba la persona.
+- El guion va tal cual a MPT: abre con el gancho, cierra con el CTA, frases cortas (≤ 17 car./s al leer).
+- Un marco (`aida`, `pas`, `bab`, `4p`, `fab`, `historia`, `ninguno`) ordena el mensaje; no promete resultados.
+- No vincules videos ni marques verificaciones manuales: eso es de la persona en la app. Generar el
+  video usa la GPU y se pide desde la UI.
 
 ## Reglas
 
