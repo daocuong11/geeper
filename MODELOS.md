@@ -17,6 +17,7 @@ guarda su licencia en `geeper.json` y en la tabla `Asset`; el QC avisa (sin bloq
 | Parakeet TDT 0.6B v3 (int8) | Transcripción rápida (6–12× whisper) para directos; instalado con `hyperframes models install parakeet` | CPU (sherpa-onnx) | [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) | CC-BY-4.0 | Sí, citando a NVIDIA |
 | faster-whisper `large-v3` | Subtítulos internos de MPT (Geeper no los usa) | CPU, Docker | OpenAI Whisper / SYSTRAN | MIT | Sí |
 | YuNet 2023mar (232 KB) | Dónde está la cara, para reencuadrar (`src/lib/caras.ts`) | CPU (OpenCV del venv `geeper-clips`) | [opencv_zoo](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet), URL fijada a un commit y SHA-256 comprobado | MIT (pesos); entrenado con WIDER FACE, cuyos términos no cubre esa licencia | Sí (los pesos); detecta, no identifica |
+| FastWan 2.2 TI2V-5B (LoRA de FastVideo) | «Animar esta escena», opción Rápido (3 pasos, vía Wan2GP) | GPU | [FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers](https://huggingface.co/FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers) | Apache 2.0 (verificado en Hugging Face, 2026-11-20) | Sí |
 | Wan 2.2 TI2V-5B | Plano generativo (M5, opcional) | GPU | [Wan-AI/Wan2.2-TI2V-5B-Diffusers](https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B-Diffusers) | Apache 2.0 (verificado en la ficha descargada, ver ESTUDIO.md) | Sí |
 
 ## Motores y bibliotecas
@@ -28,6 +29,7 @@ guarda su licencia en `geeper.json` y en la tabla `Asset`; el QC avisa (sin bloq
 | GSAP 3.15 | Licencia estándar de GSAP (sin costo, también comercial) | Lo carga la composición de Hyperframes |
 | ffmpeg 6.1 (Ubuntu) | LGPL/GPL según build | Binario aparte (`~/.local/bin/ffmpeg`) |
 | OpenMontage | AGPLv3 | Sólo M5, como proceso aparte por CLI; Geeper no importa su código |
+| Wan2GP (opcional; se instala con un clic desde Sistema, en el commit fijado) | WanGP Community License 2.0: uso gratis también en empresa y venta de lo generado (citando a WanGP); prohíbe venderlo, embeberlo en un producto pago u ofrecerlo como servicio | Proceso aparte (`wgp.py --process`) para «Animar esta escena» (`src/lib/wan2gp.ts`); se descarga de su repo al instalarlo, no viaja dentro del instalador de Geeper. Los pesos (Wan 2.2 TI2V-5B e I2V-A14B: Apache 2.0; LTX-2.3: licencia de Lightricks, «revisar») tienen la suya |
 | Next.js, React, Prisma, Zod, better-sqlite3 | MIT / Apache 2.0 | Dependencias de la app |
 
 ## Material

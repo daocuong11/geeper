@@ -396,3 +396,73 @@ no se justifica; sus fuentes (Inter, Source Sans 3, Source Serif 4, JetBrains Mo
 Hyperframes ya descarga y fija las tipografías de las plantillas al renderizar; el render, PDF/X, EPUB,
 IDML, INDD y PPTX (no hay salida impresa en Geeper); el soporte CJK y árabe; la UI egui y el build wasm;
 y la escritura atómica (Geeper ya la tiene en `src/lib/archivos.ts`).
+
+## Open-Generative-AI (Anil-matcha, MIT) — revisión 2026-11-20
+
+Estudio de imagen y video (Next.js + Electron), commit `7858e08`. Casi todo es una interfaz para
+**MuAPI, un servicio de pago en la nube** (600+ modelos: Kling, Veo, Sora, Seedance, Nano Banana…),
+vendido como «sin filtros»; Geeper es local y a US$0. Lo útil es lo poco que corre en el equipo.
+
+| Pieza | Qué hace | En Geeper |
+|---|---|---|
+| `electron/lib/wan2gp{Local,Catalog,Output}.js` | Corre [Wan2GP](https://github.com/deepbeepmeep/Wan2GP) sin interfaz (`wgp.py --process ajustes.json --output-dir`), lee el avance por fases, el archivo guardado y los fallos (sin VRAM, archivo faltante, traceback), mira qué pesos hay en `ckpts/`, valida con `--dry-run` y mata todo el árbol al cancelar | **Portado** a `src/lib/wan2gp.ts` + `scripts/plano.ts`: primer paso de G4 (planos generativos). Arreglado respecto del original: sin `image_prompt_type: "S"`, `wgp.py` descarta `image_start` (`wgp.py` ~l. 1643) y TI2V hacía texto → video sin la imagen de la escena. Cuadros según los fps de cada modelo (Wan 4k+1, LTX 8k+1), formatos y licencias de Geeper, GPU por `gpu-solo` (pausa Ollama y el servidor de imágenes de MPT) o el candado de `gpu.ts`. Pruebas con un `wgp.py` falso (`tests/fixtures-wan2gp/`, también de ellos) |
+| `src/lib/promptUtils.js` (Cinema Studio) | Cámara, lente, focal y apertura → texto del prompt | **Portado** a `src/lib/prompt-camara.ts` con nombres en español, más movimientos de cámara (propios). Opciones `--camara --lente --focal --apertura --movimiento` de `scripts/plano.ts` |
+| sd.cpp empaquetado (Z-Image, SDXL, SD 1.5) | Imágenes locales con un binario C++ | **No**: Geeper ya hace Z-Image-Turbo en la GPU con MPT. Si un día la app de escritorio necesita imágenes sin Docker, es la opción a mirar (`electron/lib/localInference*.js`: descarga reanudable con avance) |
+| Wan2GP por MCP (`wan2gpMcp.js`) | El mismo motor en otra máquina de la red | **No por ahora**: la GPU está en esta PC. Sirve si el PC del estudio y el de edición se separan |
+| Image/Video/Audio/LipSync/Cinema/Marketing/Recast/Influencer Studio, AI Clipping, Workflows, Agentes | Formularios sobre la API de MuAPI | **No**: todo pasa por MuAPI (de pago, con la clave en `localStorage`). AI Clipping es su endpoint `runClipping`; Geeper ya tiene `/clips` local |
+| Catálogos de modelos (`packages/studio/src/*Models.js`, `*Parameters.js`) | Parámetros por modelo de nube (duraciones, relaciones de aspecto) | **No**: modelos de pago |
+
+**Animar esta escena** (2026-11-20). En cada escena del proyecto, «Animar esta escena con IA» convierte
+su imagen en un video corto con movimiento. A la vista: cómo se mueve la cámara (quieta, acercarse,
+alejarse, girar, rodear, en mano o «que decida la IA»), la duración y **Rápido** (FastWan, 3 pasos) o
+**Calidad** (TI2V-5B, 50 pasos). En «Más opciones»: qué tiene que pasar (prompt), lente, focal,
+desenfoque, tipo de cámara, motor (también I2V-A14B y LTX-2.3), partir o no de la imagen y semilla. Va a
+la cola (`plano.generar`, motor `mpt`: nunca corre a la vez que MPT), muestra el avance en palabras
+(«Bajando el modelo: 3,2 GB», «Animando: paso 2 de 3») y guarda una versión nueva que «Historial» deshace.
+Lógica en `src/lib/plano.ts`; API `/api/proyectos/[id]/plano`; panel `src/components/panel-animar.tsx`.
+
+- Imagen de inicio: la de la escena o, si es un clip de MPT (zoom sobre la imagen), su cuadro donde
+  empieza el clip. Prompt por defecto: el de la imagen de MPT; si no hay, lo que se dice en la escena.
+- Se salta el **primer cuadro** del plano: es la imagen de inicio tal cual y desde el segundo el modelo
+  la reinterpreta (otra escala, detalles nuevos), así que se veía un parpadeo al entrar la escena.
+- Si el plano es hasta un 40 % más corto que la escena, se pasa más lento para llenarla (en vez de
+  repetirse); si es más corto todavía, se repite y el panel lo avisa.
+- Los valores de cada modelo (`<Wan2GP>/defaults/<modelo>.json`: pasos, guidance, flow_shift) van debajo
+  de los ajustes de Geeper: con `--process`, `wgp.py` no los completa solo.
+
+**Instalar** (Sistema → «Wan2GP (animar escenas)» → «Instalar con un clic», o
+`pnpm tsx scripts/instalar-wan2gp.ts`): código de Wan2GP en el commit fijado `f4cfc12` (v20) como checkout
+de git en `~/dev/video-tools/Wan2GP` (`GEEPER_WAN2GP` lo cambia), Python 3.11 propio con uv en su `venv`,
+PyTorch 2.10 con CUDA 13 (lo que recomienda Wan2GP para RTX 20xx–50xx; driver R580 o más nuevo) y sus
+dependencias con PyTorch fijado por restricciones (sin mezclar índices: `unsafe-best-match` dejaría colar
+un paquete homónimo de otro índice, hallazgo de la revisión con Nemotron). Al final prueba que PyTorch vea
+la GPU y que `wgp.py --dry-run` valide una tarea. Cada paso se salta si ya está; un Wan2GP con cambios
+propios no se toca. Ocupa 8,5 GB; los pesos de TI2V-5B (int8), su VAE y el codificador de texto, unos
+14 GB más, los baja Wan2GP la primera vez que se anima (Rápido y Calidad comparten pesos). macOS: no
+disponible (hace falta GPU NVIDIA). Windows: sin probar (necesita Git).
+
+Su licencia, WanGP Community License 2.0, deja usarlo gratis también en una empresa y vender los videos
+(citando a WanGP cuando se vende el video mismo), pero no venderlo, embeberlo en un producto pago ni
+ofrecerlo como servicio: se baja de su repo al instalarlo y corre como proceso aparte; no va dentro del
+instalador de Geeper. Los pesos tienen la suya (`MODELOS_PLANO` en `wan2gp.ts`; LTX-2.3 queda en
+«revisar» y el QC lo bloquea en proyectos de uso comercial).
+
+Terminal:
+
+```bash
+pnpm tsx scripts/plano.ts --estado                              # ¿está instalado? ¿qué motores bajaron?
+pnpm tsx scripts/plano.ts <slug> <escena> --probar              # wgp.py --dry-run, sin GPU
+pnpm tsx scripts/plano.ts <slug> <escena> [--modelo rapido|ti2v|i2v|ltx2] [--prompt "…"] [--segundos N] \
+  [--movimiento acercar] [--lente anamorfico --focal 35]        # genera y guarda una versión nueva
+```
+
+**Medido** (2026-11-20, RTX 5080, «faros-en-costas-escarpadas», escena 2, Rápido, acercarse, semilla 7):
+614 s en total la primera vez, casi todo bajando 14 GB de pesos; el trabajo en sí, unos 100 s (codificar
+el texto 33 s, 3 pasos 21 s, armar el video y guardar el resto). VRAM pico 11 GB de 16 (con `gpu-solo`,
+que pausó y volvió a levantar Ollama y el servidor de imágenes de MPT). Salió 121 cuadros a 24 fps en
+800×1152: Wan2GP conserva la proporción de la imagen de MPT (832×1216) y la composición la encuadra a
+9:16 como antes. El faro se mantiene fiel y aparecen personas caminando; el «acercarse» casi no se nota
+con 3 pasos. Render v6 con el plano: QC aprobado. **Sin medir:** Calidad (50 pasos; estimado ~8 min por
+~7 s/paso), I2V-A14B y LTX-2.3.
+
+Falta: comparar Rápido y Calidad lado a lado; botón «Cancelar» en el propio panel (hoy, desde Trabajos).

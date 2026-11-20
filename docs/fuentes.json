@@ -444,6 +444,48 @@
         "tests/revision-texto.test.ts",
         "tests/busquedas.test.ts"
       ]
+    },
+    {
+      "id": "open-generative-ai",
+      "repo": "Anil-matcha/Open-Generative-AI",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "commit": "7858e08",
+      "revisado": "2026-11-20",
+      "que": "Cómo correr Wan2GP sin interfaz (ajustes, avance, archivo guardado, fallos, pesos en ckpts/, --dry-run, cancelar) y el vocabulario de cámara de Cinema Studio. El resto es interfaz para MuAPI (nube de pago).",
+      "archivos": [
+        "src/lib/wan2gp.ts",
+        "src/lib/prompt-camara.ts",
+        "src/lib/plano.ts",
+        "tests/fixtures-wan2gp/wgp.py"
+      ],
+      "docs": "docs/HEREDADO.md#open-generative-ai-anil-matcha-mit--revisión-2026-11-20",
+      "pruebas": [
+        "tests/wan2gp.test.ts"
+      ]
+    },
+    {
+      "id": "wan2gp",
+      "repo": "deepbeepmeep/Wan2GP",
+      "tipo": "commits",
+      "como": [
+        "servicio"
+      ],
+      "revisado": "2026-11-20",
+      "que": "Motor local para «Animar esta escena» (Wan 2.2 TI2V-5B y FastWan, I2V-A14B, LTX-2) con manejo de VRAM; Geeper lo instala con un clic en el commit fijado (WAN2GP_COMMIT en src/lib/instalar-wan2gp.ts) y corre wgp.py --process. Al subir de versión: revisar requirements.txt y la versión de PyTorch recomendada (docs/INSTALLATION.md), el formato de ajustes (image_prompt_type, image_start), los mensajes que lee wan2gp.ts y los nombres de defaults/*.json; probar con scripts/plano.ts --probar. Licencia WanGP Community License 2.0.",
+      "archivos": [
+        "src/lib/wan2gp.ts",
+        "src/lib/instalar-wan2gp.ts",
+        "src/lib/plano.ts"
+      ],
+      "docs": "docs/HEREDADO.md#open-generative-ai-anil-matcha-mit--revisión-2026-11-20",
+      "pruebas": [
+        "tests/wan2gp.test.ts"
+      ],
+      "commit": "f4cfc12",
+      "version": "v20"
     }
   ]
 }

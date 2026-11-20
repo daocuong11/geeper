@@ -56,7 +56,8 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
 - **Nuevo** (`/nuevo`): tema o lote, formato y plantilla. Generar usa la GPU: pide confirmar que
   guardaste tu trabajo (Windows se ha reiniciado sin aviso durante generaciones).
 - **Proyecto** (`/proyectos/<id>`): vista previa «En vivo» (cada cambio guardado se ve al instante, sin renderizar) y «Último render», QC, escenas con miniatura, texto, tiempos y
-  subtítulos editables, ajustes, historial y trabajos del proyecto. En cada escena, «¿Qué se ve?»
+  subtítulos editables, ajustes, historial y trabajos del proyecto. En cada escena, «Animar esta escena con IA» convierte su imagen
+  en un video corto con movimiento (Wan2GP en la GPU de esta PC; se instala una vez desde Sistema). «¿Qué se ve?»
   marca sobre la miniatura qué parte del clip entra en el video; si hay una cara, el encuadre automático
   la sigue (los proyectos viejos se revisan solos la primera vez que se abren).
   También la **portada** en tres pasos (escena, títulos que propone la IA local, diseño), que se sube
@@ -90,6 +91,8 @@ pnpm tsx scripts/encolar.ts <slug> render.entregar
 pnpm tsx scripts/revisar-subtitulos.ts <slug>                       # QC de subtítulos sin renderizar
 pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio con rutas de Linux (en la web: «Terminar en otro editor», con rutas de Windows y guía)
 pnpm tsx scripts/analizar-caras.ts <slug> [--aplicar]             # busca caras para el reencuadre (lo nuevo lo hace solo)
+pnpm tsx scripts/plano.ts <slug> <escena> [--probar]              # animar una escena con Wan2GP (usa la GPU; en la web: «Animar esta escena con IA»)
+pnpm tsx scripts/instalar-wan2gp.ts                                # instala Wan2GP (en la web: Sistema → «Instalar con un clic»)
 ```
 
 **Clips de material largo** (VOD, video publicado o grabación propia; nunca un directo en vivo): desde la

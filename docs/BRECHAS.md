@@ -93,7 +93,8 @@ cortar al ritmo; y efectos de sonido (whoosh en cortes, golpes en títulos) desd
 etiquetada.
 
 **G4. Planos generativos** (M5, no hecho). Primero terminar Wan 2.2 TI2V-5B por plano, que está
-medido en esta PC. Después:
+medido en esta PC. Hecho el 2026-11-20 con Wan2GP: «Animar esta escena con IA» en cada escena, instalación con
+un clic y medido en la GPU (ver HEREDADO.md «Open-Generative-AI»). Después:
 - **Consistencia** de personaje y estilo entre planos: generar primero una imagen de referencia por
   personaje o lugar y animarla (imagen → video), en vez de texto → video suelto.
 - **Escalado e interpolación** de 576×1024 a 1080×1920: Real-ESRGAN o SeedVR2 y RIFE (verificar la
