@@ -13,8 +13,7 @@ import path from "node:path";
 import { sha256Archivo } from "./archivos";
 import type { Proyecto } from "./esquema";
 import { duracionEscenas, escenasEnLinea } from "./linea";
-import { correr } from "./proceso";
-import { HF } from "./voz";
+import { correrHf } from "./hyperframes";
 
 /** Un corte está «en pulso» si cae a menos de esto de un pulso (s): ~2 fotogramas a 30 fps. */
 export const TOLERANCIA = 0.07;
@@ -38,11 +37,7 @@ export async function detectarPulsos(rutaMusica: string, dirCache: string): Prom
   }
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "geeper-pulsos-"));
   try {
-    const r = await correr("npx", [...HF, "beats", rutaMusica, "--json"], {
-      cwd: tmp,
-      env: { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" },
-      permitirFallo: true,
-    });
+    const r = await correrHf(["beats", rutaMusica, "--json"], { cwd: tmp, permitirFallo: true });
     let j: { bpm?: number | null; beatTimes?: number[] } = {};
     try {
       j = JSON.parse(r.stdout) as typeof j;

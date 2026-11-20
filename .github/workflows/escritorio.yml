@@ -1,0 +1,49 @@
+# Instaladores de la app de escritorio (docs/ESCRITORIO.md). Cada sistema se construye en su propia
+# máquina: Windows (.exe NSIS) y macOS Apple Silicon (.dmg). A mano desde la pestaña Actions, o al subir
+# una etiqueta v* (entonces también crea la release con los instaladores).
+name: Escritorio
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  instalador:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+          - os: macos-14
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma generate
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm escritorio:empaquetar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: geeper-${{ matrix.os }}
+          path: |
+            dist-escritorio/*.exe
+            dist-escritorio/*.dmg
+            dist-escritorio/latest*.yml
+          if-no-files-found: error
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist-escritorio/*.exe
+            dist-escritorio/*.dmg

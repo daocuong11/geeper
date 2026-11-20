@@ -1,0 +1,34 @@
+{
+  "$comentario": "Programas que van dentro del instalador, por sistema, con versión y SHA-256 fijados. Los baja y verifica scripts/escritorio/empaquetar.ts. Para actualizarlos: cambiar url y sha256 (y probar el render).",
+  "ffmpeg": {
+    "win32-x64": {
+      "version": "9.1 (Gyan essentials, con NVENC)",
+      "archivos": [
+        {
+          "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.1/ffmpeg-9.1-essentials_build.zip",
+          "sha256": "b9bbbb3acece000cbeec994f856649354e52c773807841e78908374b24d658fd",
+          "sacar": { "ffmpeg-9.1-essentials_build/bin/ffmpeg.exe": "ffmpeg.exe", "ffmpeg-9.1-essentials_build/bin/ffprobe.exe": "ffprobe.exe" }
+        }
+      ]
+    },
+    "darwin-arm64": {
+      "version": "9.0.2 (Martin Riedl, macOS arm64, con VideoToolbox)",
+      "archivos": [
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffmpeg.zip",
+          "sha256": "c8ed4c4e6978a03c485edbfe4e0a5dc2380f8a30bba5150531b31b094492d924",
+          "sacar": { "ffmpeg": "ffmpeg" }
+        },
+        {
+          "url": "https://ffmpeg.martin-riedl.de/download/macos/arm64/1789931890_9.0.2/ffprobe.zip",
+          "sha256": "fcbe839537485eaee7a7a8bc5cbc0f90d53617e80943e8a5b2e31cb851197ea6",
+          "sacar": { "ffprobe": "ffprobe" }
+        }
+      ]
+    },
+    "linux-x64": {
+      "version": "el del sistema (sólo para probar el empaquetado en Linux/WSL)",
+      "copiarDe": ["~/.local/bin/ffmpeg", "~/.local/bin/ffprobe"]
+    }
+  }
+}

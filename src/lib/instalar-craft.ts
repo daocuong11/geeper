@@ -13,9 +13,24 @@ import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { sumaEsperada, type EstadoInstalacion } from "./instalar-photocraft";
 import { correr } from "./proceso";
+import { archivoCraft, SISTEMA } from "./plataforma";
 import { ESTUDIO } from "./rutas";
+
+export interface EstadoInstalacion {
+  fase: "inactiva" | "descargando" | "verificando" | "descomprimiendo" | "lista" | "error";
+  progreso: number;
+  detalle: string;
+}
+
+/** Suma esperada de `archivo`, leída de SHA256SUMS.txt (función pura). */
+export function sumaEsperada(sumas: string, archivo: string): string | null {
+  for (const linea of sumas.split("\n")) {
+    const m = /^([a-f0-9]{64})\s+\*?(.+)$/i.exec(linea.trim());
+    if (m && m[2]!.trim() === archivo) return m[1]!.toLowerCase();
+  }
+  return null;
+}
 
 export interface AppCraft {
   /** Nombre del repo y de la carpeta (p. ej. «vectorcraft»). */
@@ -69,8 +84,45 @@ export async function bajar(url: string, intentos = 3, espera = 2000): Promise<R
   }
 }
 
+/**
+ * Descomprime un zip sin depender de programas del sistema (no hay unzip ni python en todo Windows).
+ * Rechaza rutas absolutas o con «..» (zip slip) y conserva el permiso de ejecución que trae el zip.
+ */
+export async function extraerZip(archivo: string, destino: string): Promise<void> {
+  const { unzipSync } = await import("fflate");
+  const datos = await fs.readFile(archivo);
+  const raiz = path.resolve(destino);
+  for (const [nombre, contenido] of Object.entries(unzipSync(new Uint8Array(datos)))) {
+    const destinoArchivo = path.resolve(raiz, nombre);
+    if (path.isAbsolute(nombre) || (destinoArchivo !== raiz && !destinoArchivo.startsWith(raiz + path.sep))) throw new Error(`El zip trae una ruta peligrosa: ${nombre}`);
+    if (nombre.endsWith("/")) {
+      await fs.mkdir(destinoArchivo, { recursive: true });
+      continue;
+    }
+    await fs.mkdir(path.dirname(destinoArchivo), { recursive: true });
+    await fs.writeFile(destinoArchivo, contenido);
+  }
+  if (SISTEMA !== "windows") await marcarEjecutables(raiz);
+}
+
+/** fflate no guarda los permisos: lo que parece un binario (sin extensión, en bin/ o *-cli) queda ejecutable. */
+async function marcarEjecutables(dir: string): Promise<void> {
+  for (const e of await fs.readdir(dir, { withFileTypes: true, recursive: true })) {
+    if (!e.isFile()) continue;
+    const abs = path.join(e.parentPath, e.name);
+    if (!path.extname(e.name) || /-cli$/.test(e.name) || path.basename(e.parentPath) === "bin") await fs.chmod(abs, 0o755);
+  }
+}
+
 /** Cambia el enlace `actual` de forma atómica (un enlace temporal y rename). */
 export async function apuntar(dir: string, actual: string, destino: string): Promise<void> {
+  if (SISTEMA === "windows") {
+    // Un enlace simbólico de carpeta pide permisos de administrador en Windows; un «junction», no. Y
+    // rename no reemplaza un enlace existente ahí: se borra primero (sólo el enlace, no su destino).
+    await fs.rm(actual, { force: true }).catch(() => fs.unlink(actual).catch(() => {}));
+    await fs.symlink(destino, actual, "junction");
+    return;
+  }
   const enlaceTmp = path.join(dir, `.actual-${process.pid}`);
   await fs.rm(enlaceTmp, { force: true });
   await fs.symlink(destino, enlaceTmp);
@@ -79,8 +131,11 @@ export async function apuntar(dir: string, actual: string, destino: string): Pro
 
 export function crearInstalador(c: AppCraft) {
   const base = `https://github.com/storytold/${c.app}/releases/download/v${c.version}`;
-  const tarball = c.archivo ?? `${c.app}-${c.version}-linux-x86_64.tar.gz`;
-  const raiz = c.raiz ?? `${c.app}-${c.version}-linux-x86_64`;
+  // Por defecto, el CLI de este sistema (plataforma.ts): tarball de Linux, zip portable de Windows o zip del CLI de macOS.
+  const propio = archivoCraft(c.app, c.version);
+  const tarball = c.archivo ?? propio.archivo;
+  const raiz = c.raiz ?? propio.raiz;
+  const extraer = c.extraer ?? (c.archivo ? "tar" : propio.extraer);
   const dir = path.join(ESTUDIO, c.carpeta ?? c.app);
   let estado: EstadoInstalacion = { fase: "inactiva", progreso: 0, detalle: "" };
   let enCurso: Promise<void> | null = null;
@@ -119,7 +174,8 @@ export function crearInstalador(c: AppCraft) {
       const extraido = path.join(tmp, "x");
       await fs.mkdir(extraido);
       // zipfile de Python descarta rutas absolutas y «..» al extraer.
-      if (c.extraer === "zip") await correr("python3", ["-I", "-m", "zipfile", "-e", archivo, extraido], { timeout: 300_000 });
+      if (extraer === "zip") await extraerZip(archivo, extraido);
+      // tar viene con Windows 10+ y macOS; en Linux siempre está.
       else await correr("tar", ["-xzf", archivo, "-C", extraido], { timeout: 300_000 });
       await c.preparar?.(path.join(extraido, raiz));
       await fs.rm(destino, { recursive: true, force: true });

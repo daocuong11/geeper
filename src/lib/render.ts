@@ -19,11 +19,11 @@ import { huellaFfmpeg, probar } from "./media";
 import { mezclar } from "./mezcla";
 import { paso, type Contexto } from "./pasos";
 import { obtenerPlantilla } from "./plantillas";
-import { correr } from "./proceso";
 import { cortesDe, medirRitmo, type Ritmo } from "./pulsos";
 import { asegurarPicoReal, correrQc, duplicadosEsperados, ENTREGA, normalizarAudio, TOPES_PICO, type InformeQc } from "./qc";
 import { HYPERFRAMES_VERSION, dirProyecto } from "./rutas";
-import { HF } from "./voz";
+import { correrHf } from "./hyperframes";
+import { SISTEMA } from "./plataforma";
 import { origenClip, reglaClip } from "./clips";
 
 const ENV_HF = { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" };
@@ -131,7 +131,7 @@ export async function renderEntregar(
     { archivos: [indexHtml, ...Object.values(comp.archivos)], params: { formato: p.formato }, motor: huella },
     [rutaCheck],
     async ([tmp]) => {
-      const r = await correr("npx", [...HF, "check", "--json", "--no-cache", "--no-craft"], {
+      const r = await correrHf(["check", "--json", "--no-cache", "--no-craft"], {
         cwd: dirBuild, env: ENV_HF, permitirFallo: true, signal: ctx.signal, timeout: 15 * 60_000,
       });
       await fs.writeFile(tmp!, r.stdout || "{}");
@@ -160,14 +160,15 @@ export async function renderEntregar(
     { archivos: [indexHtml, ...Object.values(comp.archivos)], params: { calidad: "delivery", fps: p.fps }, motor: huella },
     [crudo],
     async ([tmp]) => {
-      const candado = await tomarGpu(`render ${fila.slug}`, { esperar: false, signal: ctx.signal });
+      // NVENC sólo con NVIDIA: en macOS el render va por CPU (VideoToolbox queda para cuando se pruebe en un Mac).
+      const candado = SISTEMA === "mac" ? null : await tomarGpu(`render ${fila.slug}`, { esperar: false, signal: ctx.signal });
       gpu = candado !== null;
-      ctx.log(gpu ? "GPU libre: render con NVENC (gpu-lock tomado)" : "GPU ocupada: render con CPU (libx264), sin esperar");
+      ctx.log(gpu ? "GPU libre: render con NVENC (gpu-lock tomado)" : SISTEMA === "mac" ? "macOS: render con CPU (libx264)" : "GPU ocupada: render con CPU (libx264), sin esperar");
       try {
-        const args = [...HF, "render", "--output", tmp!, "--quality", "delivery", "--fps", String(p.fps), "--quiet"];
+        const args = ["render", "--output", tmp!, "--quality", "delivery", "--fps", String(p.fps), "--quiet"];
         if (gpu) args.push("--gpu");
         else args.push("--no-browser-gpu");
-        await correr("npx", args, { cwd: dirBuild, env: ENV_HF, log: ctx.log, signal: ctx.signal, timeout: 60 * 60_000 });
+        await correrHf(args, { cwd: dirBuild, env: ENV_HF, log: ctx.log, signal: ctx.signal, timeout: 60 * 60_000 });
       } finally {
         candado?.liberar();
       }
@@ -200,7 +201,7 @@ export async function renderEntregar(
       async ([tmp]) => {
         // Sin GPU: el máster nunca compite con una generación ni la espera.
         const salida = `${tmp!}.mov`;
-        await correr("npx", [...HF, "render", "--output", salida, "--format", "mov", "--quality", "high", "--fps", String(p.fps), "--quiet", "--no-browser-gpu"], {
+        await correrHf(["render", "--output", salida, "--format", "mov", "--quality", "high", "--fps", String(p.fps), "--quiet", "--no-browser-gpu"], {
           cwd: dirBuild, env: ENV_HF, log: ctx.log, signal: ctx.signal, timeout: 60 * 60_000,
         });
         await fs.rename(salida, tmp!);

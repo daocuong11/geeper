@@ -1,5 +1,6 @@
 /** ¿Se reinició Windows desde el último latido del worker? (eventos Kernel-Power 41 y arranque de WSL) */
 import fs from "node:fs/promises";
+import os from "node:os";
 import { correr } from "./proceso";
 
 export interface Reinicio {
@@ -24,7 +25,9 @@ export async function eventosKernelPower41(): Promise<string[] | null> {
   }
 }
 
+/** Arranque de la máquina: en Linux/WSL, de /proc/stat; en Windows y macOS, de cuánto lleva encendida. */
 export async function arranqueWsl(): Promise<Date> {
+  if (process.platform !== "linux") return new Date(Date.now() - os.uptime() * 1000);
   const stat = await fs.readFile("/proc/stat", "utf8");
   const btime = Number(/btime (\d+)/.exec(stat)?.[1] ?? 0);
   return new Date(btime * 1000);

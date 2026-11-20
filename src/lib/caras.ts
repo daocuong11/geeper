@@ -11,7 +11,6 @@
  * `.part` y rename. Corre con el OpenCV del venv `geeper-clips` (`cv2.FaceDetectorYN`), en CPU.
  */
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { z } from "zod";
 import { escribirAtomico, existe, rutaTemporal, sha256Archivo } from "./archivos";
@@ -20,7 +19,8 @@ import { escenasEnLinea } from "./linea";
 import type { Contexto } from "./pasos";
 import { correr } from "./proceso";
 import { esSvg } from "./svg";
-import { dirDatos, RAIZ_REPO } from "./rutas";
+import { pythonDeVenv } from "./plataforma";
+import { dirDatos, RAIZ_REPO, VENV_CLIPS } from "./rutas";
 
 export const YUNET = {
   id: "yunet-2023mar",
@@ -38,7 +38,7 @@ export const rutaYunet = () => path.join(dirDatos(), "modelos", YUNET.archivo);
 
 /** Python con OpenCV ≥ 4.8 (trae FaceDetectorYN). */
 export const PYTHON_CARAS =
-  process.env.GEEPER_CARAS_PYTHON ?? path.join(os.homedir(), "dev", "video-tools", "venvs", "geeper-clips", "bin", "python");
+  process.env.GEEPER_CARAS_PYTHON ?? pythonDeVenv(VENV_CLIPS);
 
 /** Deja YuNet en disco, comprobado por tamaño y SHA-256. Devuelve la ruta. */
 export async function asegurarYunet(log?: (l: string) => void): Promise<string> {

@@ -1,5 +1,6 @@
 /** Ejecutores por tipo de trabajo. Cada uno devuelve su resultado y, si toca, el siguiente de la cadena. */
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { crearCarpetas } from "@/lib/almacen";
 import { guardarPayload, type Payload, type TipoTrabajo } from "@/lib/cola";
@@ -59,7 +60,7 @@ function telemetria(ruta: string): () => void {
     if (!activo) return;
     try {
       const r = await correr("nvidia-smi", ["--query-gpu=temperature.gpu,power.draw,memory.used,utilization.gpu", "--format=csv,noheader,nounits"], { permitirFallo: true });
-      const carga = (await fs.readFile("/proc/loadavg", "utf8")).split(" ")[0];
+      const carga = os.loadavg()[0]!.toFixed(2); // 0 en Windows
       const fh = await fs.open(ruta, "a");
       await fh.write(`${new Date().toISOString()},${r.stdout.trim().replace(/\s/g, "")},${carga}\n`);
       await fh.sync();

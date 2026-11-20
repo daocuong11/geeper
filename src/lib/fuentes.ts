@@ -12,10 +12,11 @@ import path from "node:path";
 import { escribirAtomico, existe } from "./archivos";
 import { probar } from "./media";
 import { correr, type Registro } from "./proceso";
-import { dirDatos, ESTUDIO } from "./rutas";
+import { pythonDeVenv } from "./plataforma";
+import { dirDatos, VENV_CLIPS } from "./rutas";
 
 /** Python con OpenCV, numpy y yt-dlp para clips (venv propio, ver README). */
-export const PYTHON_CLIPS = process.env.GEEPER_PYTHON_CLIPS ?? path.join(ESTUDIO, "venvs", "geeper-clips", "bin", "python");
+export const PYTHON_CLIPS = process.env.GEEPER_PYTHON_CLIPS ?? pythonDeVenv(VENV_CLIPS);
 
 export interface InfoFuente {
   /** URL de la página o ruta del archivo. */

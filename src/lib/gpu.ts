@@ -5,7 +5,10 @@
  * cierra, `read` termina y el kernel suelta el flock.
  */
 import { spawn, type ChildProcess } from "node:child_process";
-import { GPU_LOCK_BIN } from "./rutas";
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import { GPU_LOCK_BIN, GPU_LOCK_FILE } from "./rutas";
 
 export interface Candado {
   liberar(): void;
@@ -20,6 +23,8 @@ export interface OpcionesCandado {
 }
 
 export function tomarGpu(descripcion: string, op: OpcionesCandado): Promise<Candado | null> {
+  // Sin el gpu-lock del estudio (Windows, macOS, la app de escritorio): candado propio por archivo.
+  if (process.env.GEEPER_GPU_LOCK_PROPIO === "1" || !existsSync(GPU_LOCK_BIN)) return candadoArchivo(GPU_LOCK_FILE, descripcion, op);
   return new Promise((ok, mal) => {
     let hijo: ChildProcess;
     try {
@@ -80,4 +85,73 @@ export function tomarGpu(descripcion: string, op: OpcionesCandado): Promise<Cand
       } else liberar();
     });
   });
+}
+
+interface DuenoCandado {
+  pid: number;
+  quien: string;
+  desde: string;
+}
+
+/** Cada cuánto el dueño renueva el candado, y cuánto sin renovar lo da por abandonado. */
+const LATIDO_GPU_MS = 10_000;
+const VENCE_GPU_MS = 60_000;
+
+const vivo = (pid: number) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+};
+
+/**
+ * Candado por archivo, para donde no hay gpu-lock: se crea en exclusiva (`wx`), lleva el PID y un
+ * latido (la hora de modificación). Si el dueño murió o dejó de latir, se considera abandonado y se toma.
+ */
+export async function candadoArchivo(archivo: string, descripcion: string, op: OpcionesCandado): Promise<Candado | null> {
+  await fs.mkdir(path.dirname(archivo), { recursive: true });
+  const yo: DuenoCandado = { pid: process.pid, quien: `geeper:${descripcion}`, desde: new Date().toISOString() };
+  for (;;) {
+    if (op.signal?.aborted) throw new Error("Cancelado mientras esperaba la GPU");
+    try {
+      const h = await fs.open(archivo, "wx");
+      await h.writeFile(JSON.stringify(yo));
+      await h.close();
+      const latido = setInterval(() => {
+        const ahora = new Date();
+        void fs.utimes(archivo, ahora, ahora).catch(() => {});
+      }, LATIDO_GPU_MS);
+      latido.unref();
+      let suelto = false;
+      const liberar = () => {
+        if (suelto) return;
+        suelto = true;
+        clearInterval(latido);
+        void (async () => {
+          // Sólo se borra si sigue siendo nuestro.
+          const d = await fs.readFile(archivo, "utf8").then((t) => JSON.parse(t) as DuenoCandado, () => null);
+          if (d?.pid === yo.pid && d.desde === yo.desde) await fs.rm(archivo, { force: true });
+        })();
+      };
+      op.signal?.addEventListener("abort", liberar, { once: true });
+      return { liberar };
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+    }
+    const [dueno, st] = await Promise.all([
+      fs.readFile(archivo, "utf8").then((t) => JSON.parse(t) as DuenoCandado, () => null),
+      fs.stat(archivo).catch(() => null),
+    ]);
+    if (!st) continue; // se soltó entre medio
+    const abandonado = !dueno || !vivo(dueno.pid) || Date.now() - st.mtimeMs > VENCE_GPU_MS;
+    if (abandonado) {
+      await fs.rm(archivo, { force: true });
+      continue;
+    }
+    if (!op.esperar) return null;
+    op.alEsperar?.(dueno.quien);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
 }
