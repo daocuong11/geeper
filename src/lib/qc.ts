@@ -69,6 +69,11 @@ export interface Esperado {
   /** Cortes en pulso de la música (null: la música no tiene pulso estable o no hay música). */
   ritmo?: Ritmo | null;
   check?: { ok: boolean; errores: number; avisos: number; resumen: string };
+  /**
+   * Clips de material ajeno: la voz es del creador y no se puede hacer más lenta, así que pasarse de
+   * car./s sólo avisa (DECISIONES §21). El largo de línea y el número de líneas siguen bloqueando.
+   */
+  ritmoSubtitulosAviso?: boolean;
   /** Reglas propias del proyecto (p. ej. la de clips de material ajeno). */
   extras?: Regla[];
 }
@@ -197,6 +202,8 @@ export function intervalosSubtitulos(grupos: Grupo[], finSubs: number) {
 export function revisarSubtitulos(formato: Formato, grupos: Grupo[], finSubs: number, plataformas: readonly Plataforma[] = []) {
   const cpl = caracteresPorLinea(formato, { plataformas });
   const malos: string[] = [];
+  /** Sólo los que fallan por forma (largo de línea o número de líneas), no por ritmo. */
+  const malosForma: string[] = [];
   let peorLinea = 0;
   let peorLineas = 0;
   let peorCps = 0;
@@ -207,11 +214,14 @@ export function revisarSubtitulos(formato: Formato, grupos: Grupo[], finSubs: nu
     peorLinea = Math.max(peorLinea, largo);
     peorLineas = Math.max(peorLineas, ls.length);
     peorCps = Math.max(peorCps, cps);
-    if (largo > OBJETIVO.maxCaracteresLinea || ls.length > OBJETIVO.maxLineas || cps > OBJETIVO.maxCps) {
-      malos.push(`«${g.texto}» (${ls.length} líneas, ${largo} car./línea, ${cps.toFixed(1)} car./s, ${g.ini.toFixed(2)} s)`);
+    const forma = largo > OBJETIVO.maxCaracteresLinea || ls.length > OBJETIVO.maxLineas;
+    if (forma || cps > OBJETIVO.maxCps) {
+      const d = `«${g.texto}» (${ls.length} líneas, ${largo} car./línea, ${cps.toFixed(1)} car./s, ${g.ini.toFixed(2)} s)`;
+      malos.push(d);
+      if (forma) malosForma.push(d);
     }
   }
-  return { cpl, peorLinea, peorLineas, peorCps: Number(peorCps.toFixed(2)), malos, grupos: grupos.length };
+  return { cpl, peorLinea, peorLineas, peorCps: Number(peorCps.toFixed(2)), malos, malosForma, grupos: grupos.length };
 }
 
 export async function hojaDeContacto(archivo: string, momentos: { t: number; nota: string }[], dirSalida: string, log: Registro) {
@@ -335,13 +345,22 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
 
   // Subtítulos.
   const sub = revisarSubtitulos(esp.formato, esp.grupos, esp.inicioTarjeta, esp.plataformas);
+  const soloForma = esp.ritmoSubtitulosAviso === true;
   reglas.push({
-    id: "subtitulos", nombre: "Subtítulos legibles",
-    ok: sub.malos.length === 0,
+    id: "subtitulos", nombre: soloForma ? "Subtítulos legibles (forma)" : "Subtítulos legibles",
+    ok: (soloForma ? sub.malosForma : sub.malos).length === 0,
     medido: { peorCaracteresLinea: sub.peorLinea, peorLineas: sub.peorLineas, peorCps: sub.peorCps, grupos: sub.grupos, caracteresPorLinea: sub.cpl },
-    objetivo: `≤ ${OBJETIVO.maxCaracteresLinea} car./línea, ≤ ${OBJETIVO.maxLineas} líneas, ≤ ${OBJETIVO.maxCps} car./s`,
-    detalle: sub.malos.slice(0, 12).join("\n") || undefined,
+    objetivo: soloForma ? `≤ ${OBJETIVO.maxCaracteresLinea} car./línea, ≤ ${OBJETIVO.maxLineas} líneas` : `≤ ${OBJETIVO.maxCaracteresLinea} car./línea, ≤ ${OBJETIVO.maxLineas} líneas, ≤ ${OBJETIVO.maxCps} car./s`,
+    detalle: (soloForma ? sub.malosForma : sub.malos).slice(0, 12).join("\n") || undefined,
   });
+  if (soloForma) {
+    const rapidos = sub.malos.filter((m) => !sub.malosForma.includes(m));
+    reglas.push({
+      id: "subtitulos-ritmo", nombre: "Ritmo de los subtítulos (voz del creador)", ok: rapidos.length === 0, aviso: true,
+      medido: { peorCps: sub.peorCps }, objetivo: `≤ ${OBJETIVO.maxCps} car./s (aviso: la voz original no se puede frenar)`,
+      detalle: rapidos.slice(0, 12).join("\n") || undefined,
+    });
+  }
 
   // Zonas seguras (cajas del compilador).
   const fuera = esp.cajas.filter((c) => !c.dentro);

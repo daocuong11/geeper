@@ -294,6 +294,10 @@ qué no y por qué (detalle de cada pieza en HEREDADO.md).
 - **Verificado de punta a punta** (2026-11-19, base y datos aislados): clip react de 25 s de un material
   de 60 s → importar 35 s (reencuadre 6 s, whisper 15 s) → render y QC. Pasan sonoridad, pico, color,
   integridad, `hyperframes check`, alineación y la regla «clip»; la licencia avisa («revisar», sin
-  permiso). Falla subtítulos: la voz del material habla a 17,4–17,8 car./s (ver la pregunta abierta
-  abajo). También: búsqueda de momentos y creación de clip desde la API, reencuadre posterior
+  permiso). El ritmo de subtítulos daba 17,4–17,8 car./s y bloqueaba; con la decisión siguiente el
+  clip queda aprobado con ese aviso. También: búsqueda de momentos y creación de clip desde la API, reencuadre posterior
   (cubrir → react en las 3 escenas) y capturas de la UI a 1440 px y 390 px sin errores.
+- **Ritmo de subtítulos en clips: aviso** (decisión del dueño, 2026-11-19). La voz es la del creador y
+  no se puede frenar como la de Kokoro (§3): en clips, pasarse de 17 car./s es la regla de aviso
+  «subtitulos-ritmo»; el largo de línea (≤ 42) y el número de líneas (≤ 2) siguen bloqueando. Los
+  shorts propios no cambian.

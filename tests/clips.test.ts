@@ -214,3 +214,14 @@ describe("radar de tendencias y contraste del título", () => {
     expect(tintaSobre("#ffffff", ["#000000"])).toBe("#ffffff");
   });
 });
+
+describe("subtítulos en clips", () => {
+  it("separa los que fallan por ritmo de los que fallan por forma", async () => {
+    const { revisarSubtitulos } = await import("@/lib/qc");
+    const g = (texto: string, inicio: number, fin: number) => ({ texto, inicio, fin, escena: "e01", fichas: [] });
+    // 30 caracteres en 1 s: rápido pero bien formado.
+    const r = revisarSubtitulos("9:16", [g("treinta caracteres exactos ok.", 0, 1), g("bien", 5, 7)], 10);
+    expect(r.malos.length).toBe(1);
+    expect(r.malosForma.length).toBe(0);
+  });
+});
