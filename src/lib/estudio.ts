@@ -278,12 +278,13 @@ export async function revisarEstudio(): Promise<EstadoEstudio> {
   if (m.enCurso) return m.estado;
   await Promise.all(
     pasos().map(async (p) => {
-      poner(p.id, "revisando", "");
+      if (!m.enCurso) poner(p.id, "revisando", "");
       const ok = await p.comprobar().catch(() => null);
-      poner(p.id, ok ? "listo" : p.instalar ? "falta" : "aviso", ok ?? p.siFalta ?? "");
+      // Si mientras tanto alguien pulsó «Preparar», manda el estado de la preparación.
+      if (!m.enCurso) poner(p.id, ok ? "listo" : p.instalar ? "falta" : "aviso", ok ?? p.siFalta ?? "");
     }),
   );
-  m.estado.revisado = new Date().toISOString();
+  if (!m.enCurso) m.estado.revisado = new Date().toISOString();
   return m.estado;
 }
 
