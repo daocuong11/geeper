@@ -1,11 +1,13 @@
 /** Diagnóstico de solo lectura: verifica lo que Geeper necesita y dice cómo arreglar lo que falle. */
 import fs from "node:fs/promises";
+import path from "node:path";
 import { correr } from "./proceso";
 import { apiViva } from "./mpt";
-import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, PHOTOCRAFT_CLI, PHOTOCRAFT_VERSION, PYTHON_VOZ, VECTORCRAFT_CLI, VECTORCRAFT_VERSION, dirDatos } from "./rutas";
+import { ESTUDIO, FFMPEG, GPU_LOCK_BIN, GPU_LOCK_FILE, HYPERFRAMES_VERSION, MPT_API, PHOTOCRAFT_CLI, PHOTOCRAFT_VERSION, PYTHON_VOZ, RAIZ_REPO, VECTORCRAFT_CLI, VECTORCRAFT_VERSION, dirDatos } from "./rutas";
 import { versionPhotocraft } from "./photocraft";
 import { versionVectorcraft } from "./vectorcraft";
 import { existe } from "./archivos";
+import { PYTHON_CLIPS } from "./fuentes";
 import { db } from "./db";
 import { existeClave, rutaClave } from "./redes/cifrado";
 import { ErrorArchivoPrivado } from "./redes/archivo-privado";
@@ -95,6 +97,21 @@ export async function diagnosticar(): Promise<Chequeo[]> {
   c.push({
     nombre: "whisper medium (Hyperframes)", ok: whisper, detalle: whisper ? "modelo en caché" : "falta el modelo",
     arreglo: whisper ? undefined : "Se descarga solo en el primer `hyperframes transcribe --model medium` (~1,5 GB).",
+  });
+
+  // Clips de material largo (opcional): venv con OpenCV + yt-dlp y el modelo YuNet verificado.
+  const ping = await intento(PYTHON_CLIPS, ["-I", "-c", "import cv2, numpy, yt_dlp; print(yt_dlp.version.__version__)"]);
+  const yuNet = ping.codigo === 0
+    ? await correr(PYTHON_CLIPS, ["-I", path.join(RAIZ_REPO, "py", "reencuadre.py")], { entrada: '{"op":"ping"}', permitirFallo: true }).catch(() => null)
+    : null;
+  const yuOk = Boolean(yuNet && /"ok": true/.test(yuNet.stdout));
+  c.push({
+    nombre: "Clips: OpenCV, yt-dlp y YuNet", ok: ping.codigo === 0 && yuOk, aviso: true,
+    detalle: ping.codigo !== 0 ? `falta el venv ${PYTHON_CLIPS}` : yuOk ? `yt-dlp ${ping.stdout.trim()} (actualízalo cada semana), modelo YuNet verificado` : (yuNet?.stdout || "falta el modelo YuNet").slice(0, 200),
+    arreglo: ping.codigo !== 0
+      ? 'uv venv ~/dev/video-tools/venvs/geeper-clips && uv pip install --python ~/dev/video-tools/venvs/geeper-clips/bin/python "numpy>=1.26,<3" "opencv-python-headless>=4.9,<5" "yt-dlp[default]>=2026.10"'
+      : yuOk ? undefined
+      : "mkdir -p ~/.cache/geeper/modelos && curl -L -o ~/.cache/geeper/modelos/face_detection_yunet_2023mar.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
   });
 
   // ffmpeg con NVENC.

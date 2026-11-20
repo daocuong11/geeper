@@ -13,7 +13,7 @@ import { ajusteDe, posicionCara, sigueCara } from "./caras";
 import { bezier, CURVAS, cssFusion, easeDe, esMascara, filtroEfectos, mascaraTransicion, scriptEfectos, svgDefs, unirFiltro, type Efecto, type EncuadreGsap, type Grano } from "./efectos";
 import { aplicarEstilo, pista, pistasLibres, type Asset, type Clip, type Encuadre, type Proyecto, type Texto, type Transicion } from "./esquema";
 import { ANCHO_CARACTER, caracteresPorLinea, dentro, metricas, PADDING_PASTILLA, type Caja, type Metricas } from "./formatos";
-import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type Grupo } from "./linea";
+import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type EscenaEnLinea, type Grupo } from "./linea";
 import type { DatosPlantilla } from "./plantillas";
 import { lineas, lineasDePalabras } from "./subtitulos";
 import { textoSobre } from "./colores-marca";
@@ -116,6 +116,54 @@ export function cajaTexto(t: Texto, m: Metricas, altoMarca: number): Caja {
   return { x, y, w, h };
 }
 
+/** Un tramo del visual de una escena: `t` relativo al inicio de la escena, `desde` sobre el asset. */
+export interface SegmentoVisual {
+  t: number;
+  dur: number;
+  desde: number;
+}
+
+/**
+ * Qué partes del asset visual cubren la escena. Normal: corre seguido desde `rango.inicio` y, si es
+ * más corto que la escena, vuelve a empezar. Con `sincro: "voz"`: un tramo por cada tramo que suena de
+ * la voz, con el mismo desplazamiento sobre el asset (recortar palabras corta también la imagen).
+ * `entrada` es el silencio inicial que cubre la primera escena (el visual empieza antes que la voz).
+ */
+export function segmentosVisuales(es: Pick<EscenaEnLinea, "duracion" | "visual" | "voz" | "tramos">, a: Asset, velocidad: number, entrada: number): SegmentoVisual[] {
+  const v = es.visual;
+  const imagen = a.tipo === "imagen";
+  if (v.sincro === "voz" && !imagen) {
+    const out = es.tramos.map((tr) => ({ t: tr.enEscena, dur: tr.fin - tr.inicio, desde: v.rango.inicio + (tr.inicio - es.voz.rango.inicio) }));
+    const p = out[0];
+    if (p && entrada > 0) {
+      // La imagen de la entrada es la que precede a la voz en la misma grabación (si la hay).
+      const atras = Math.min(entrada, p.desde);
+      p.t -= entrada;
+      p.dur += entrada;
+      p.desde -= atras;
+    }
+    return out;
+  }
+  const out: SegmentoVisual[] = [];
+  let t = entrada > 0 ? -entrada : 0;
+  let desde = v.rango.inicio;
+  let k = 0;
+  while (t < es.duracion - 1e-3 && k < 50) {
+    const disponible = imagen || !a.duracion ? es.duracion - t : (a.duracion - desde) / velocidad;
+    if (disponible < 0.05) {
+      desde = 0;
+      k++;
+      continue;
+    }
+    const dur = Math.min(es.duracion - t, disponible);
+    out.push({ t, dur, desde });
+    t += dur;
+    desde = 0;
+    k++;
+  }
+  return out;
+}
+
 /**
  * `sustitutos`: id de asset → archivo que lo reemplaza al componer (p. ej. el clip con el look de color
  * del canal, src/lib/looks.ts). El geeper.json no cambia.
@@ -172,20 +220,12 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
     // La primera escena también cubre la entrada en silencio del principio.
     const entradaSilencio = es.indice === 0 ? es.inicio : 0;
     const largo = es.duracion + entradaSilencio;
-    let t = -entradaSilencio;
-    let desde = v.rango.inicio;
-    let k = 0;
     const propias: Pieza[] = [];
-    while (t < es.duracion - 1e-3 && k < 50) {
-      const disponible = imagen || !a.duracion ? es.duracion - t : (a.duracion - desde) / velocidad;
-      if (disponible < 0.05) {
-        desde = 0;
-        k++;
-        continue;
-      }
-      const dur = Math.min(es.duracion - t, disponible);
+    for (const [k, seg] of segmentosVisuales(es, a, velocidad, entradaSilencio).entries()) {
+      const { t, dur, desde } = seg;
       const base = `${es.escena.id}-${k}`;
-      const comun = { src: nombre, inicio: es.inicio + t, dur, desde, imagen, pista: carril, velocidad: imagen ? undefined : velocidad };
+      const sincro = v.sincro === "voz" && !imagen;
+      const comun = { src: nombre, inicio: es.inicio + t, dur, desde, imagen, pista: carril, velocidad: imagen || sincro ? undefined : velocidad };
       if (ajuste === "contener") {
         piezas.push({ ...comun, id: `b-${base}`, clase: "fondo desenfoque", estilo: "" });
         const pz = { ...comun, id: `v-${base}`, clase: "fondo contener", estilo: color };
@@ -215,9 +255,6 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
           ease: entero ? easeDe(v.movimiento.curva) : "none",
         });
       }
-      t += dur;
-      desde = 0;
-      k++;
     }
     ultimasDeEscena.push(piezas.filter((x) => Math.abs(x.inicio + x.dur - (es.inicio + es.duracion)) < 1e-3));
     const tr = v.transicion;
@@ -337,7 +374,7 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
   const ctaW = anchoTexto(p.cta ?? plantilla.cta, m.ctaFs) + 80;
   const cierreH = tituloLineas.length * m.tituloFs + 28 + m.ctaFs * 1.2 + 32;
   const cajasBase: { nombre: string; caja: Caja }[] = [
-    { nombre: "marca", caja: { x: centroX - chipW / 2, y: m.marcaTop, w: chipW, h: chipH } },
+    ...(p.marca ? [{ nombre: "marca", caja: { x: centroX - chipW / 2, y: m.marcaTop, w: chipW, h: chipH } }] : []),
     { nombre: "subtítulos", caja: m.subs },
     { nombre: "tarjeta final: título", caja: { x: centroX - tituloW / 2, y: centroY - cierreH / 2, w: tituloW, h: tituloLineas.length * m.tituloFs } },
     { nombre: "tarjeta final: CTA", caja: { x: centroX - ctaW / 2, y: centroY + cierreH / 2 - (m.ctaFs * 1.2 + 32), w: ctaW, h: m.ctaFs * 1.2 + 32 } },
@@ -348,7 +385,7 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
   for (const t of p.textos) {
     if (t.inicio >= inicioTarjeta) continue;
     const dur = Math.min(t.duracion, inicioTarjeta - t.inicio);
-    const caja = cajaTexto(t, m, chipH);
+    const caja = cajaTexto(t, m, p.marca ? chipH : 0);
     const fs = cuerpoTexto(t, m);
     cajasBase.push({ nombre: `texto «${t.texto.slice(0, 24)}»`, caja });
     const id = `t-${t.id}`;
@@ -426,10 +463,10 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
 ${videos}
 ${textosHtml.join("\n")}
       <audio id="mezcla" class="clip" src="assets/mezcla.wav" data-start="0" data-duration="${f3(total)}" data-track-index="1"></audio>
-      <div id="marca" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="2">
+${p.marca ? `      <div id="marca" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="2">
         <div class="chip">${logoHtml}<span class="txt">${e(plantilla.marca.texto)}</span></div>
       </div>
-      <div id="subtitulos" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="3" data-track-kind="captions">
+` : ""}      <div id="subtitulos" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="3" data-track-kind="captions">
 ${gruposHtml}
       </div>
       <div id="cierre" class="clip" data-start="${f3(inicioTarjeta)}" data-duration="${f3(total - inicioTarjeta)}" data-track-index="4">
@@ -457,8 +494,8 @@ ${gruposHtml}
       ANIMS.forEach((a) => {
         tl.fromTo("#" + a.id, a.desde, Object.assign({}, a.hasta, { duration: a.dur, ease: a.ease || "none", immediateRender: false }), a.t);
       });
-      tl.from("#marca .chip", { y: -30, opacity: 0, duration: 0.45, ease: "back.out(1.6)" }, 0.15);
-      // Karaoke: un grupo visible a la vez; la palabra que suena se enciende.
+${p.marca ? `      tl.from("#marca .chip", { y: -30, opacity: 0, duration: 0.45, ease: "back.out(1.6)" }, 0.15);
+` : ""}      // Karaoke: un grupo visible a la vez; la palabra que suena se enciende.
       GRUPOS.forEach((g) => {
         const ini = g.ini;
         const fin = g.fin;

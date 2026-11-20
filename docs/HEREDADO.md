@@ -57,6 +57,26 @@ hay que hacerlos. Lo reutilizable, todo MIT:
   Diseño mitad streamer / mitad juego con subtítulo en la costura (maquina-cortes-gta `estilo-metade-metade.md`).
 - **Cortar el VOD sin recodificar** al keyframe (técnica de LosslessCut) para sacar el tramo en segundos.
 
+## gtavi-claudecode (Bodila51, MIT) — revisión 2026-11-19
+
+Plugin de Claude Code en Python para sacar clips verticales de directos y videos de GTA 6 (16 skills,
+13 scripts). Decisiones en DECISIONES.md §21.
+
+| Pieza | Qué hace | En Geeper |
+|---|---|---|
+| `moments.py` | Puntaje por segundo: sonoridad, «lo más visto», chat, palabras de emoción | **Portado** a `src/lib/momentos.ts`, puntuando sin transcribir y transcribiendo sólo candidatos; bordes a frase |
+| `facecam.py` | Webcam del streamer con YuNet + bordes estáticos; seguimiento de cara suavizado | **Copiado** a `py/facecam.py` (modelo con sha256 fijo, sin descarga en ejecución) |
+| `cut.py` (layout react, `game_offset`) | Cara arriba, juego abajo, esquivando overlays fijos | **Portado** a `py/reencuadre.py`; el resto de `cut.py` no (Geeper compila, normaliza y hace QC) |
+| `cut.py` (máscara de insultos) | Enmascara insultos en los subtítulos | **Tomado** sólo para insultos racistas, homófobos y capacitistas, vía `mostrar` |
+| `check.py` + `rule-check` | Reglas de campaña y términos prohibidos | **Portado** como regla de QC «clip» (`src/lib/clips.ts`) |
+| `hook-writer` | Fórmulas de gancho y títulos de reacción | **En la skill `geeper`**, en español |
+| `learning-loop` | Una prueba por día, lecturas a 12/24/72 h, sólo números reales | **Diseño de D2** (BRECHAS.md) |
+| `trends.py` | Videos recientes por vistas por hora (yt-dlp) | No por ahora: útil para elegir fuentes; se puede correr aparte |
+| `streams.py`, `twitch.py`, `live.py` | Directos en curso (GQL de Twitch con el Client-Id de la web), chat por IRC anónimo, grabación de directos | **Descartado**: zona gris de términos y grabar directos ajenos |
+| `translate.py`, `multilang` | Traducción con Google Translate web y voz con edge-tts | **Descartado**: servicios en línea; D3 irá local |
+| `campaign-finder`, `payouts.py` | Campañas pagadas de Whop y registro de pagos | No: operación del canal, no producto. Las reglas de una campaña entran con `--campania` |
+| `questions-to-posts`, `secrets-map`, `cheat-codes`, `playbook` | Contenido y rutina de una página de GTA 6 | No: contenido. Sus reglas duras (sin leaks, sin «oficial», acreditar siempre, no prometer ingresos) sí están en la skill y el QC |
+
 ## Descartado
 
 - **Remotion:** licencia de empresa paga para algunas organizaciones; Hyperframes ya cubre lo mismo con Apache-2.0.

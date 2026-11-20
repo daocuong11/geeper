@@ -31,7 +31,12 @@ export interface EfectosV {
 }
 
 export interface ExtrasV {
-  destino: { comercial: boolean; plataformas: string[]; master: boolean };
+  /** Si el proyecto es un clip de material ajeno: de dónde salió y la descripción sugerida del post. */
+  clip?: {
+    url: string; titulo: string; canal: string | null; inicio: number; fin: number; encuadre: string; reencuadre?: string;
+    credito: string; descripcion: string; campania?: { nombre?: string } | null;
+  } | null;
+  destino: { comercial: boolean; plataformas: string[]; master: boolean; marca: boolean };
   textos: { id: string; texto: string; inicio: number; duracion: number; estilo: string; posicion: string }[];
   estilo: EstiloV;
   libres: {
@@ -448,6 +453,10 @@ export function PanelAvanzado({ extras, formato, total, editar, alinearMusica, s
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" checked={d.master} disabled={ocupado} onChange={(e) => void editar({ tipo: "cambiarDestino", master: e.target.checked })} />
           <span>Guardar también un máster de archivo (.mov, calidad alta) en cada render. Tarda más y ocupa mucho más disco.</span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" checked={d.marca} disabled={ocupado} onChange={(e) => void editar({ tipo: "cambiarDestino", marca: e.target.checked })} />
+          <span>Mostrar la marca del canal arriba durante el video (la tarjeta final la muestra siempre). Apágala si tapa una cara.</span>
         </label>
       </div>
 

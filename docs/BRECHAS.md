@@ -16,9 +16,10 @@
 | Q4 máster de archivo | **Hecho** (`entrega.master`: MOV calidad alta) |
 | Q5 hash de los pesos | **Hecho** para whisper y Kokoro locales; los modelos dentro de MPT no se ven |
 | Efectos y transiciones de EffectCraft | **Hecho** (2026-11-19): barrido, radial, iris y persianas; tinte, niveles, viñeta, grano y desenfoque; modos de fusión; Easy Ease. Ver EFFECTCRAFT.md |
-| E4 reencuadre por cara | **Hecho** (punto fijo por clip con YuNet; falta el seguimiento dinámico): ver HEREDADO.md, LightCraft |
-| D1 portada | **Hecho** (2026-11-19): portada en 3 pasos (escena, 3 títulos con IA local, diseño) con PhotoCraft, diseños propios .psd y miniatura en YouTube (docs/PHOTOCRAFT.md). Falta descripción y hashtags con IA |
-| E3, G1, G2, G4, G5, Q3, D2, D3, P1, P2 | Pendientes |
+| G5 ingesta de material largo | **Hecho** (2026-11-19): `scripts/momentos.ts` + `scripts/importar-clip.ts` y la página /clips, visual en sincro con la voz, regla de QC de clips (DECISIONES §21) |
+| E4 reencuadre por cara | **Hecho parcial**: punto fijo por clip con YuNet para todo material (HEREDADO.md, LightCraft) y reencuadre react/cara para clips 9:16 (`py/reencuadre.py`); falta el seguimiento dinámico |
+| D1 portada y ganchos | **Hecho** (2026-11-19): portada en 3 pasos con PhotoCraft, diseños propios .psd y miniatura en YouTube (docs/PHOTOCRAFT.md); rúbrica de ganchos en la skill `geeper`. Falta descripción y hashtags con IA |
+| E3, G1, G2, G4, Q3, D2, D3, P1, P2 | Pendientes |
 
 ## 0. Qué significa «el mejor» aquí
 
@@ -137,6 +138,11 @@ Hyperframes desde la plantilla (un fotograma) y proponer 3 títulos para que la 
 las APIs oficiales (YouTube Analytics es gratis; TikTok y Meta según su acceso), guardarlos por video
 y **cruzarlos con lo que hay en `geeper.json`** (gancho, duración, plantilla, voz, ritmo). Claude usa
 eso al proponer el próximo guion. Ningún editor cierra ese ciclo con el material editable.
+
+Diseño a seguir (del `learning-loop` de gtavi-claudecode): lecturas a las 12, 24 y 72 h; **una prueba
+por día** cambiando una sola variable (estilo de gancho, duración, hora, encuadre) con su nombre en
+la fila; ningún veredicto antes de 24 h; sólo números reales (nunca estimados) y pagos sólo los que la
+plataforma o la campaña muestran.
 
 **D3. Localización** (F5): traducción con un LLM local, la misma voz clonada (G2) y subtítulos
 realineados.

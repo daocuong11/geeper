@@ -112,6 +112,7 @@ export const Edicion = z.discriminatedUnion("tipo", [
     comercial: z.boolean().optional(),
     plataformas: z.array(Plataforma).optional(),
     master: z.boolean().optional(),
+    marca: z.boolean().optional(),
   }),
   // ---- Botón de la tarjeta final sólo para este video (null o vacío = el de la plantilla).
   z.object({ tipo: z.literal("cambiarCta"), cta: z.string().trim().max(60).nullable() }),
@@ -404,6 +405,7 @@ export function aplicarEdicion(original: Proyecto, ed: Edicion): Proyecto {
       if (ed.comercial !== undefined) p.comercial = ed.comercial;
       if (ed.plataformas !== undefined) p.plataformas = [...new Set(ed.plataformas)];
       if (ed.master !== undefined) p.entrega = { ...p.entrega, master: ed.master };
+      if (ed.marca !== undefined) p.marca = ed.marca;
       break;
     case "fijarMusica": {
       const m = p.pistas.find((x) => x.id === "musica")?.clips[0];
@@ -429,6 +431,8 @@ export function reemplazarVisual(original: Proyecto, escena: string, asset: Asse
   p.assets[asset.id] = asset;
   const c = pista(p, "visual").clips[indiceDe(p, escena)]!;
   c.asset = asset.id;
+  // Un archivo propio ya no es la misma grabación que la voz.
+  delete c.sincro;
   c.rango = { inicio: 0, duracion: c.rango.duracion };
   return validarProyecto(limpiarAssets(p));
 }

@@ -238,3 +238,100 @@ se saltaba y el QC fallaba porque `v<N>.mp4` no existía.
 **Arreglo:** si el resultado ya existe con otra ruta, se enlaza (o copia) a la ruta pedida y el paso
 sigue saltado. Medido: re-render de una versión sin cambios de imagen ni sonido en 6 s. Prueba en
 `tests/reanudar.test.ts`.
+
+## 21. Clips de material largo (G5 + E4), con lo útil de gtavi-claudecode
+
+Revisión del kit Bodila51/gtavi-claudecode (MIT, Python, commit dd95d39) el 2026-11-19. Qué se tomó,
+qué no y por qué (detalle de cada pieza en HEREDADO.md).
+
+- **Puntuar primero sin transcribir.** Su `moments.py` transcribe el VOD entero con faster-whisper;
+  aquí la sonoridad (dB por segundo menos su media móvil de 30 s), «lo más visto» de YouTube y el chat
+  dan los candidatos en segundos aunque el VOD dure horas, y **sólo los candidatos** se transcriben
+  (whisper `medium`) para ajustar los bordes a frases y sumar palabras de emoción en inglés y español.
+  Medido con un material de 60 s: 22 s en total, un candidato. Transcribir un VOD de 4 h entero en CPU
+  costaría ~1 h.
+- **El visual sigue a la voz (`sincro: "voz"`).** En un clip la imagen y el audio son la misma
+  grabación. Antes, el video de una escena corría seguido aunque se recortaran palabras: con stock da
+  igual, con la cara de un streamer se desincroniza la boca. El compilador emite un tramo de video por
+  cada tramo que suena, con el mismo desplazamiento sobre el asset; `velocidad` se ignora. No se guarda
+  la lista de tramos (se deriva de los recortes, como el audio), así no hay dos verdades.
+- **El reencuadre se hornea** como asset 1080×1920 con ffmpeg (paso con manifiesto). `regenerar`
+  guarda todo para rehacerlo igual sin volver a detectar: modo, caja de la cámara, bordes, seguimiento
+  de la cara, recorte, offset del juego, versión y sha256 de YuNet. Hacer la pantalla partida en el
+  compilador no compensa hoy.
+  - *react*: cara arriba (1080×730), juego abajo, corrido para no mostrar la cámara ni overlays fijos
+    (contadores, alertas). Si no hay cara estable o fuera de la cámara no hay juego, cae a «contener».
+  - *cara*: 9:16 a toda la altura siguiendo la cara (IRL o cámara a pantalla completa). Si la cara
+    está en una webcam sobre el juego, se niega y sugiere *react*.
+- **Tramo con 1 s de margen** a cada lado y un keyframe por segundo (vista en vivo, E1).
+- **La voz es la del creador:** no hay música por defecto y `voz.regenerar` se niega en un clip.
+- **Licencia «revisar»** salvo que se diga el permiso (`--permiso`, queda como «permiso del creador:
+  …»). Con `comercial: true`, el QC bloquea un clip sin permiso.
+- **Regla de QC «clip»** (bloquea): sin leaks, «jugar antes», piratería, trampas de dinero ni bots en
+  título y textos; nunca «oficial»; crédito del creador presente; duración dentro de la campaña si se
+  cargó (`--campania`). Los insultos racistas u homófobos se enmascaran en los subtítulos (vía
+  `mostrar`); el audio no se toca.
+- **Descartado:** grabar directos en vivo (`live.py`) y leer el chat de Twitch por IRC anónimo o su GQL
+  con el Client-Id de la web (zona gris de los términos; sólo VODs ya publicados o archivos propios);
+  traducir con Google Translate web y voces de edge-tts (servicios en línea: choca con «todo local»;
+  D3 irá con un LLM local y Kokoro); su `cut.py` (Geeper ya compila, normaliza y hace QC); buscadores
+  de campañas, trucos y secretos de GTA (contenido, no producto).
+- **Segunda opinión (Nemotron Ultra):** aceptado puntuar sin transcribir, guardar todos los parámetros
+  del recorte, contrato con versión y ping del puente Python, términos prohibidos en el QC y no grabar
+  directos. Descartado: guardar `mapaVoz[]` en el esquema (duplica lo que dan los recortes), marca de
+  agua obligatoria (decisión del dueño, no del producto) y portar su loudnorm (Geeper ya lo hace en
+  dos pasadas con reintento del pico).
+- **UI:** página Clips (buscar momentos como trabajo `clip.momentos`, radar de tendencias, «Hacer
+  clip»), origen del clip y crédito en el editor, y la descripción del post sale con crédito, mención y
+  hashtags de la campaña. «Seguir la cara» (trabajo `visual.reencuadrar`) sirve en cualquier proyecto
+  9:16 y cambia el video en todas las escenas que lo usan.
+- **Radar de tendencias** (de `trends.py`): YouTube por vistas por hora con yt-dlp, de a 6 pedidos en
+  paralelo, guardado una hora por consulta. Excluye directos en curso.
+- **Título legible:** el estilo `titulo` usaba la tinta de la plantilla (blanco) sobre el degradado de
+  acentos y daba 1,8:1 en GTA VI Shorts (el `hyperframes check` lo bloqueaba). Ahora el compilador elige
+  la tinta del título por contraste WCAG (≥ 4,5:1 con los dos acentos): casi negro en las dos
+  plantillas actuales.
+- **Verificado de punta a punta** (2026-11-19, base y datos aislados): clip react de 25 s de un material
+  de 60 s → importar 35 s (reencuadre 6 s, whisper 15 s) → render y QC. Pasan sonoridad, pico, color,
+  integridad, `hyperframes check`, alineación y la regla «clip»; la licencia avisa («revisar», sin
+  permiso). El ritmo de subtítulos daba 17,4–17,8 car./s y bloqueaba; con la decisión siguiente el
+  clip queda aprobado con ese aviso. También: búsqueda de momentos y creación de clip desde la API, reencuadre posterior
+  (cubrir → react en las 3 escenas) y capturas de la UI a 1440 px y 390 px sin errores.
+- **Ritmo de subtítulos en clips: aviso** (decisión del dueño, 2026-11-19). La voz es la del creador y
+  no se puede frenar como la de Kokoro (§3): en clips, pasarse de 17 car./s es la regla de aviso
+  «subtitulos-ritmo»; el largo de línea (≤ 42) y el número de líneas (≤ 2) siguen bloqueando. Los
+  shorts propios no cambian.
+
+## 22. Clips para quien no sabe nada de video (asistente de 3 pasos)
+
+Decisiones del dueño (2026-11-19): asistente guiado, ganchos sugeridos con el modelo local, permiso con
+casilla y la UX simple primero en clips (el resto de la app, después).
+
+- **Paso 1, elige tu video:** pegar un enlace o arrastrar un archivo. La subida va en flujo (el
+  cuerpo es el archivo, hasta 20 GB, sin cargarlo en memoria) a `~/geeper-data/_subidos/`. El idioma
+  se pregunta en palabras («¿En qué idioma hablan?»); la duración mínima y máxima quedan en «Más
+  opciones». El radar se ofrece como «¿No sabes qué video usar?».
+- **Paso 2, elige un momento:** cada candidato trae una vista previa liviana (480p, 10 s de aire a
+  cada lado) y una miniatura; el play reproduce sólo el momento. El puntaje se muestra como 1 a 3
+  estrellas (por tercios) y los motivos en palabras («El chat explotó»).
+- **Paso 3, ajusta y crea:** barras de inicio y fin sobre la vista previa, «Ver mi recorte», estilos
+  con dibujo, «✨ Sugerirme ideas» y permiso con casilla (campaña, autorización escrita o video propio).
+  El paso vive en la URL: recargar no saca del paso.
+- **Ganchos con Ollama local** (`gemma4:26b` del stack de MPT, vía `docker exec`, sin abrir puertos):
+  toma el candado de la GPU sin esperar (si está ocupada lo dice), descarga el modelo al terminar
+  (`--keepalive 0s`) y filtra lo que devuelve: sin comillas (serían palabras en boca del creador), sin
+  términos prohibidos, sin repetidos. Si Docker está apagado lo dice y el campo queda para escribir.
+- **Motor apagado:** la página avisa si el worker no late hace más de 60 s y cómo encenderlo.
+- **QC en palabras:** «¿Está listo para publicar?» con «Listo», «Listo, con cosas para mirar» o «Falta
+  arreglar N cosas», y por cada una qué se revisa y qué hacer (`src/lib/qc-explicado.ts`). La tabla
+  técnica queda plegada.
+- **Marca:** en react la etiqueta de arriba tapaba los ojos del streamer y abajo no cabe (quedan 20 px
+  entre los subtítulos y el borde de la banda segura; la etiqueta mide ~80). `marca: false` la quita
+  durante el video (la tarjeta final la muestra igual); los clips react nacen así y el editor la
+  enciende o apaga en «Destino».
+- **Verificado:** subida por API (y rechazo de lo que no es video), análisis con vistas previas,
+  sugerencias con Docker apagado (mensaje claro en 0,3 s), los 3 pasos a 1280 y 390 px, «Crear mi
+  clip» con clics reales, el QC en palabras y un render react sin marca aprobado. En `next dev` dentro
+  del worktree la página se recarga en bucle (también `/trabajos`, que no se tocó): las pruebas de UI
+  se hicieron con `next build` + `next start`, donde no pasa.
+

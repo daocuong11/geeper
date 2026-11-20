@@ -82,3 +82,31 @@ export async function importarTareaMpt(taskId: string, n: NuevoProyecto, rehacer
   await encolar(p.id, "proyecto.importar", { taskId, cadena });
   return p;
 }
+
+export interface NuevoClip {
+  fuenteId: string;
+  inicio: number;
+  fin: number;
+  encuadre: "cubrir" | "contener" | "react" | "cara";
+  idioma: string;
+  formato: Formato;
+  plantilla: string;
+  nombre?: string;
+  titulo?: string;
+  gancho?: string;
+  permiso?: string;
+  campania?: Record<string, unknown>;
+  /** false: sólo importar (para revisar antes de renderizar). */
+  renderizar?: boolean;
+}
+
+/** Clip de material largo (VOD, directo ya publicado, grabación): importar → render → QC. */
+export async function crearClip(c: NuevoClip, tituloFuente: string) {
+  if (!/^[a-f0-9]{12}$/.test(c.fuenteId)) throw new Error("Fuente inválida");
+  if (!(c.fin > c.inicio)) throw new Error("El tramo está vacío");
+  const tema = `Clip de «${tituloFuente}» (${Math.floor(c.inicio)}–${Math.ceil(c.fin)} s)`;
+  const p = await crearFila({ tema, nombre: c.nombre ?? c.titulo ?? c.gancho ?? tema, formato: c.formato, plantilla: c.plantilla });
+  const { renderizar = true, formato: _f, plantilla: _p, nombre: _n, ...payload } = c;
+  await encolar(p.id, "clip.importar", { ...payload, cadena: renderizar ? ["render.entregar"] : [] });
+  return p;
+}

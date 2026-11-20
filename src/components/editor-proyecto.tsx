@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Aviso, Estado, archivo, pedir, postJson, segundos, useSondeo } from "./comun";
 import { ACCEPT_IMAGEN, esVector } from "@/lib/formatos-vector";
+import { explicar, resumirQc } from "@/lib/qc-explicado";
 import { VistaEnVivo } from "./vista-en-vivo";
 import { ListaTrabajos } from "./lista-trabajos";
 import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
@@ -98,9 +99,23 @@ interface Vectorizar {
 function InformeQc({ r, slug, vectorizar }: { r: Render; slug: string; vectorizar?: Vectorizar }) {
   const inf = r.informeQc;
   if (!inf) return null;
+  const res = resumirQc(inf.reglas);
+  const color = res.estado === "listo" ? "text-emerald-300" : res.estado === "con-avisos" ? "text-amber-200" : "text-red-300";
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto">
+      <p className={`text-base font-medium ${color}`}>{res.estado === "listo" ? "✓ " : res.estado === "con-avisos" ? "! " : "✗ "}{res.titulo}</p>
+      {[...res.bloquean.map((x) => ({ ...x, bloquea: true })), ...res.avisos.map((x) => ({ ...x, bloquea: false }))].map((x) => {
+        const e = explicar(x.id);
+        return (
+          <div key={x.id} className={`rounded-lg border p-3 text-sm ${x.bloquea ? "border-red-900 bg-red-950/30" : "border-amber-900 bg-amber-950/20"}`}>
+            <p className="font-medium">{x.bloquea ? "Hay que arreglarlo: " : "Para mirar: "}{e.que}</p>
+            <p className="mt-1 text-tenue">Qué hacer: {e.hacer}</p>
+          </div>
+        );
+      })}
+      <details>
+        <summary className="cursor-pointer text-xs text-tenue">Ver el detalle técnico (todas las revisiones)</summary>
+      <div className="mt-2 overflow-x-auto">
       <table className="w-full min-w-0 table-fixed text-left text-xs">
         <thead className="text-tenue"><tr><th className="py-1 pr-2">Regla</th><th className="pr-2">Medido</th><th>Objetivo</th></tr></thead>
         <tbody>
@@ -122,6 +137,7 @@ function InformeQc({ r, slug, vectorizar }: { r: Render; slug: string; vectoriza
         </tbody>
       </table>
       </div>
+      </details>
       {inf.hojaContacto && (
         <figure>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -157,11 +173,12 @@ function lista(n: number[]): string {
   return n.length <= 1 ? String(n[0] ?? "") : `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}`;
 }
 
-function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subirClip, regenerarVoz, ocupado }: {
+function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subirClip, regenerarVoz, reencuadrar, ocupado }: {
   e: EscenaV; anterior?: EscenaV; slug: string; total: number; ocupado: boolean; formato: string; estilo: EstiloV | null;
   editar: (ed: object) => Promise<void>;
   subirClip: (escena: string, f: File) => Promise<void>;
   regenerarVoz: (escena: string) => Promise<void>;
+  reencuadrar: (escena: string, layout: string) => Promise<void>;
 }) {
   return (
     <li id={`escena-${e.id}`} className="tarjeta flex scroll-mt-4 flex-col gap-3 p-3 md:flex-row">
@@ -193,7 +210,17 @@ function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subi
             <input type="file" accept={`video/*,${ACCEPT_IMAGEN}`} className="sr-only" disabled={ocupado}
               onChange={(ev) => { const f = ev.target.files?.[0]; if (f) void subirClip(e.id, f); ev.target.value = ""; }} />
           </label>
-          <button type="button" className="boton" disabled={ocupado} onClick={() => void regenerarVoz(e.id)}>Regenerar voz de la escena</button>
+          {e.visual.tipo === "video" && (
+            <select aria-label="Seguir la cara" className="campo w-auto py-1" value="" disabled={ocupado}
+              onChange={(ev) => { const l = ev.target.value; ev.target.value = ""; if (l) void reencuadrar(e.id, l); }}>
+              <option value="">Seguir la cara (9:16)…</option>
+              <option value="react">React: cara arriba, juego abajo</option>
+              <option value="cara">Cara a toda la altura</option>
+            </select>
+          )}
+          {e.voz.source !== "archivo" && (
+            <button type="button" className="boton" disabled={ocupado} onClick={() => void regenerarVoz(e.id)}>Regenerar voz de la escena</button>
+          )}
           <button type="button" className="boton boton-peligro" disabled={ocupado || total <= 1}
             onClick={() => { if (confirm(`¿Quitar la escena ${e.indice + 1}? Se quita también lo que se oye en ella. Puedes volver atrás en el historial.`)) void editar({ tipo: "quitarEscena", escena: e.id }); }}>Quitar</button>
         </div>
@@ -250,6 +277,8 @@ export function EditorProyecto({ id }: { id: string }) {
     fd.set("archivo", f);
     return conAvisos(await pedir(`/api/proyectos/${id}/clip`, { method: "POST", body: fd }), `Clip reemplazado por «${f.name}»${esVector(f.name) ? " (convertido a SVG)" : ""}.`);
   }, `Clip reemplazado por «${f.name}».`);
+  const reencuadrar = (escena: string, layout: string) => hacer(() => postJson(`/api/proyectos/${id}/reencuadre`, { escena, layout }),
+    "Reencuadre en cola (detección de cara en CPU). Al terminar queda como versión nueva; si no encuentra una cara estable, lo dice en Trabajos.");
   const regenerarVoz = (escena: string | null) => hacer(() => postJson(`/api/proyectos/${id}/voz`, { escena }),
     "Voz en cola (Kokoro y whisper en CPU). Al terminar se realinean los subtítulos y se vuelve a renderizar.");
   const renderizar = () => hacer(() => postJson(`/api/proyectos/${id}/render`, {}), "Render en cola: sólo compila y renderiza, no genera nada con la GPU.");
@@ -293,6 +322,13 @@ export function EditorProyecto({ id }: { id: string }) {
         <div>
           <h1 className="text-xl font-semibold">{fila.nombre}</h1>
           <p className="text-sm text-tenue">{fila.tema !== fila.nombre ? `${fila.tema} · ` : ""}versión {fila.versionActual} · {escenas.length} escenas · {segundos(v.total)}{fila.lote ? ` · ${fila.lote.nombre}` : ""}</p>
+          {v.extras?.clip && (
+            <p className="text-xs text-tenue">
+              Clip de <a className="hover:underline" href={v.extras.clip.url} target="_blank" rel="noreferrer">{v.extras.clip.titulo}</a>
+              {v.extras.clip.canal ? ` (${v.extras.clip.canal})` : ""} · {Math.floor(v.extras.clip.inicio)}–{Math.ceil(v.extras.clip.fin)} s · encuadre {v.extras.clip.encuadre}
+              {v.extras.clip.reencuadre ? ` · ${v.extras.clip.reencuadre}` : ""}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Estado valor={fila.estado} />
@@ -386,7 +422,7 @@ export function EditorProyecto({ id }: { id: string }) {
                   {[0.85, 0.9, 0.95, 1, 1.05].map((x) => <option key={x} value={String(x)}>{x}</option>)}
                 </select>
               </div>
-              <button type="button" className="boton" disabled={ocupado} onClick={() => { if (confirm("¿Regenerar la voz de todo el guion? Se realinean los subtítulos y se vuelve a renderizar. No usa la GPU.")) void regenerarVoz(null); }}>
+              <button type="button" className="boton" disabled={ocupado || Boolean(v.extras?.clip)} title={v.extras?.clip ? "Es un clip: la voz es la del creador" : undefined} onClick={() => { if (confirm("¿Regenerar la voz de todo el guion? Se realinean los subtítulos y se vuelve a renderizar. No usa la GPU.")) void regenerarVoz(null); }}>
                 Regenerar voz del guion completo
               </button>
             </div>
@@ -405,7 +441,7 @@ export function EditorProyecto({ id }: { id: string }) {
       {p && <PanelPortada proyectoId={id} nombre={fila.nombre} version={fila.versionActual} vertical={fila.formato === "9:16"} />}
 
       {render?.estado === "aprobado" ? (
-        <PanelPublicar proyectoId={id} render={render} nombre={fila.nombre} tema={fila.tema} publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
+        <PanelPublicar proyectoId={id} render={render} nombre={fila.nombre} tema={v.extras?.clip?.descripcion || fila.tema} publicaciones={fila.publicaciones} alCambiar={() => void recargar()} />
       ) : fila.publicaciones.length > 0 && (
         <section className="tarjeta space-y-2 p-4">
           <h2 className="font-medium">Publicaciones de este proyecto</h2>
@@ -418,7 +454,7 @@ export function EditorProyecto({ id }: { id: string }) {
 
       {render?.informeQc && (
         <section className="tarjeta p-4">
-          <h2 className="mb-3 font-medium">Control de calidad del último render {render.informeQc.aprobado ? "(aprobado)" : "(no aprobado)"}</h2>
+          <h2 className="mb-3 font-medium">¿Está listo para publicar?</h2>
           <InformeQc r={render} slug={fila.slug} vectorizar={{ hacer: vectorizarImagen, sigue: (a) => !!v && (v.escenas.some((e) => e.visual.asset === a) || !!v.extras?.libres.some((pi) => pi.clips.some((c) => c.asset === a))), ocupado }} />
         </section>
       )}
@@ -429,7 +465,7 @@ export function EditorProyecto({ id }: { id: string }) {
           <ol className="space-y-3">
             {escenas.map((e, i) => (
               <TarjetaEscena key={e.id} e={e} anterior={escenas[i - 1]} slug={fila.slug} total={escenas.length} formato={p?.formato ?? fila.formato}
-                estilo={v.extras?.estilo ?? null} editar={editar} subirClip={subirClip} regenerarVoz={regenerarVoz} ocupado={ocupado} />
+                estilo={v.extras?.estilo ?? null} editar={editar} subirClip={subirClip} regenerarVoz={regenerarVoz} reencuadrar={reencuadrar} ocupado={ocupado} />
             ))}
           </ol>
         </section>
@@ -473,3 +509,4 @@ export function EditorProyecto({ id }: { id: string }) {
     </div>
   );
 }
+

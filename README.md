@@ -84,6 +84,23 @@ pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio con r
 pnpm tsx scripts/analizar-caras.ts <slug> [--aplicar]             # busca caras para el reencuadre (lo nuevo lo hace solo)
 ```
 
+**Clips de material largo** (VOD, video publicado o grabación propia; nunca un directo en vivo): desde la
+página **Clips** (`/clips`: un asistente de 3 pasos —elige tu video, elige un momento, ajusta y crea— pensado para
+quien no sabe de video; sugiere ganchos con el modelo local de MPT si Docker está encendido) o desde la terminal:
+
+```bash
+pnpm tsx scripts/momentos.ts <url|archivo> [--top 8] [--min 15] [--max 40] [--idioma es]   # candidatos.md
+pnpm tsx scripts/importar-clip.ts <fuente-id> <inicio> <fin> --encuadre react|cara|contener|cubrir \
+  [--titulo "…"] [--gancho "…"] [--permiso "campaña de X, 2026-11-19"] [--campania c.json] [--sin-render]
+```
+
+El clip queda como cualquier proyecto (subtítulos, recortar palabras, quitar escenas, QC); la imagen
+sigue a la voz al recortar. Sin `--permiso` la licencia queda «revisar». Las fuentes viven en
+`~/geeper-data/_fuentes/<id>/`. Necesita el venv `~/dev/video-tools/venvs/geeper-clips` y el modelo
+YuNet (`pnpm run doctor` dice cómo instalarlos). En cualquier proyecto 9:16, una escena con video
+horizontal (p. ej. un clip propio subido) se puede reencuadrar siguiendo la cara desde su tarjeta
+(«Seguir la cara»).
+
 Datos de cada proyecto en `~/geeper-data/<slug>/`: `geeper.json`, `assets/`, `renders/`
 (`v<N>-<perfil>.mp4`, su `.qc.json` y la hoja de contacto), `manifiestos/`, `logs/` y `build/` (el
 proyecto Hyperframes compilado; se abre con `npx hyperframes@0.9.27 preview build/hf-9x16`).

@@ -88,6 +88,9 @@ export async function regenerarVoz(
 ): Promise<{ version: number; asset: string }> {
   const p = structuredClone(original);
   const voz = pista(p, "voz").clips;
+  if (voz.some((c) => p.assets[c.asset]?.regenerar.origen === "clip")) {
+    throw new Error("Este proyecto es un clip: la voz es la del creador y no se regenera. Corrige subtítulos o recorta palabras.");
+  }
   const visual = pista(p, "visual").clips;
 
   if (escenaId) {

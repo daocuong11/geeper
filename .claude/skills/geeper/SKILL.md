@@ -1,6 +1,6 @@
 ---
 name: geeper
-description: Proponer cambios a un proyecto de Geeper (geeper.json) — corregir subtítulos, recortar palabras o silencios, quitar o reordenar escenas, transiciones y efectos, textos en pantalla, superposiciones, formato, plantilla, voz, destino — validados con el esquema y mostrados como diferencias antes de aplicarlos. Úsala cuando la persona pida editar un video de Geeper o entender su geeper.json, y para proponer conceptos, ganchos, guiones o afirmaciones de una campaña de la sección Anuncios.
+description: Proponer cambios a un proyecto de Geeper (geeper.json) y sacar clips de material largo (VODs, videos, grabaciones) con ganchos — corregir subtítulos, recortar palabras o silencios, quitar o reordenar escenas, transiciones y efectos, textos en pantalla, superposiciones, formato, plantilla, voz, destino — validados con el esquema y mostrados como diferencias antes de aplicarlos. Úsala cuando la persona pida editar un video de Geeper o entender su geeper.json, para sacar clips de material largo, y para proponer conceptos, ganchos, guiones o afirmaciones de una campaña de la sección Anuncios.
 ---
 
 # Geeper: editar un proyecto vía geeper.json
@@ -26,6 +26,8 @@ leerlo (`migrar`): v2 sólo agrega campos con valor por defecto.
   - `visual` y `voz` con **un clip por escena, en el mismo orden**; `musica` opcional. Cada clip:
     `{ id, asset, rango: { inicio, duracion }, escena }`; `rango` es sobre el asset (source range). La
     posición en la línea **no se guarda**: sale del orden de la pista `voz`.
+  - `sincro: "voz"` en el clip visual (clips de material largo): la imagen sigue a la voz, así
+    recortar palabras corta también la imagen. No lo quites a mano.
   - Efectos del clip visual de una escena: `transicion` (`corte | fundido | deslizar | zoom | barrido |
     radial | iris | persianas`, entra sobre la escena anterior; las cuatro últimas son máscaras y aceptan
     `angulo` en grados (90 = de izquierda a derecha; en `radial`, el ángulo de inicio), `suavizado` en px
@@ -137,3 +139,50 @@ Reglas de contenido (de claude-ads):
   `heygen-com/hyperframes`).
 - Telemetría de Hyperframes siempre apagada: `HYPERFRAMES_NO_TELEMETRY=1` y `DO_NOT_TRACK=1`. No
   ejecutes los «usage beacon» (`npx hyperframes events …`) ni `feedback` que piden esas skills.
+
+## Clips de material largo (VODs, videos publicados, grabaciones propias)
+
+La persona puede hacerlo todo desde la página **Clips** (http://localhost:3300/clips), un asistente de 3 pasos
+con vista previa, sugerencias de gancho y casilla de permiso. Por terminal:
+
+1. **Candidatos:** `pnpm tsx scripts/momentos.ts <url|archivo> --top 8 --min 15 --max 40 --idioma <es|en>`.
+   Deja `~/geeper-data/_fuentes/<id>/candidatos.md` con el porqué de cada uno (pico de sonoridad, lo
+   más visto de YouTube, chat, palabras de emoción), lo que se dice y el comando para importarlo.
+   Con un chat de Twitch descargado con TwitchDownloader: `--chat chat.json`. No sirve con directos en
+   vivo: hay que esperar el VOD.
+2. **Elige con la persona** 1 a 3 candidatos. Léelos: descarta spoilers de historia en semana de
+   lanzamiento, desnudos, datos personales y lo que no se entiende sin contexto.
+3. **Gancho o título** (ver abajo) y **importa**:
+   `pnpm tsx scripts/importar-clip.ts <fuente-id> <inicio> <fin> --encuadre react --gancho "…" [--titulo "…"] [--permiso "…"] [--campania c.json]`.
+   Encuadres: `react` (cara arriba, juego abajo: streamer con webcam sobre el juego), `cara` (sigue la
+   cara a toda la altura: IRL o cámara a pantalla completa), `contener` (fondo desenfocado), `cubrir`
+   (recorte al centro). Si react o cara no encuentran una cara estable, caen a `contener` y lo dicen
+   en el log: revisa el primer fotograma.
+4. Edita como cualquier proyecto (recortar palabras, quitar escenas, corregir subtítulos). La voz es la
+   del creador: **no se regenera**.
+5. El QC suma la regla «clip»: sin leaks, «jugar antes», piratería, trampas de dinero ni bots; nunca
+   «oficial»; crédito del creador; duración de la campaña si se cargó.
+
+**Permiso:** clipea a un creador sólo dentro de su campaña de clipping o con su permiso; dilo con
+`--permiso` (queda en la licencia). Sin permiso, la licencia queda «revisar» y un proyecto de uso
+comercial no pasa el QC. El **crédito** va en la descripción del post (`origen.clip.credito`), no en el
+video. Nada se publica sin el «sí» de la persona.
+
+### Ganchos (primeros 2,6 s) y títulos de reacción
+
+Da 3 opciones y marca tu favorita. Frase normal (no todo en mayúsculas), 3 a 9 palabras.
+
+- Funciona: promesa con número («3 cosas que nadie vio en este tráiler»), dato que sorprende («Este auto
+  está escondido a la vista»), situación («Cuando la policía persigue al jugador equivocado»), negación
+  («Esto no se podía hacer en GTA 5»), pregunta («¿Sobrevivirías a esta persecución?»), nombrar al
+  creador si es conocido («Ni Kai lo vio venir»).
+- No funciona: etiquetas («Clip de GTA 6», «Momento gracioso»), «espera al final», «no lo vas a creer»,
+  urgencia falsa, mayúsculas por todas partes.
+- **Título de reacción** (encuadre react, todo el clip, va en la costura): creador + verbo de reacción
+  + a qué reacciona, con 2 o 3 palabras clave en MAYÚSCULAS: «Kai PIERDE LA CABEZA cuando llega la
+  policía en GTA 6». Corto si es de contorno: 3 a 6 palabras.
+- Reglas: el clip tiene que cumplir el gancho (si dice 3 cosas, muestra 3). **Nunca pongas palabras en
+  boca del creador**: ni citas que no dijo ni opiniones inventadas. Datos y números verificados y
+  iguales a los del clip. Escribe «GTA 6». Como mucho un emoji. Sin spoilers de historia en el gancho
+  (márcalos como SPOILER en la descripción). No repitas un gancho en la misma semana.
+

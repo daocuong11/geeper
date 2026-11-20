@@ -121,6 +121,12 @@ export const Clip = z.object({
   color: Color.optional(),
   /** Sólo video: efectos en orden (tinte, niveles, viñeta, desenfoque, grano), después del color. */
   efectos: z.array(Efecto).max(8).optional(),
+  /**
+   * Pista visual: «voz» = el video y la voz salen de la misma grabación (un clip de un directo o un
+   * VOD). El video sigue los tramos que suenan de la voz con el mismo desplazamiento sobre el asset:
+   * recortar palabras corta también la imagen y la boca no se desincroniza. Ignora `velocidad`.
+   */
+  sincro: z.literal("voz").optional(),
   /** Pistas libres de video: opacidad de la superposición. */
   opacidad: z.number().min(0).max(1).optional(),
   /** Pistas libres de video: modo de fusión con lo de abajo. */
@@ -247,6 +253,9 @@ export const Proyecto = z
     estilo: EstiloVideo.optional(),
     /** Botón de la tarjeta final sólo para este video (variantes de anuncios). Sin él, el de la plantilla. */
     cta: z.string().trim().min(1).max(60).optional(),
+    /** La etiqueta de marca arriba durante el video (la tarjeta final la lleva siempre). En clips react
+     *  tapa la cara del streamer: ahí se oculta. */
+    marca: z.boolean().default(true),
     origen: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((p, ctx) => {
