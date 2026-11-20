@@ -63,6 +63,10 @@ const COLORES: Record<string, string> = {
   conectada: "bg-emerald-800 text-emerald-100",
   reconectar: "bg-amber-800 text-amber-100",
   desconectada: "bg-zinc-700 text-zinc-200",
+  "en-revision": "bg-amber-800 text-amber-100",
+  lista: "bg-emerald-800 text-emerald-100",
+  activa: "bg-sky-800 text-sky-100",
+  archivada: "bg-zinc-700 text-zinc-200",
 };
 
 const NOMBRES: Record<string, string> = {
@@ -70,6 +74,10 @@ const NOMBRES: Record<string, string> = {
   entregado: "Entregado",
   ensamblado: "Ensamblado",
   generando: "Generando",
+  "en-revision": "En revisión",
+  lista: "Lista para lanzar",
+  activa: "Activa",
+  archivada: "Archivada",
 };
 
 export function Estado({ valor }: { valor: string }) {

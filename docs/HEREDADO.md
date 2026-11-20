@@ -11,6 +11,7 @@ Las rutas son dentro de cada repo. Todo lo listado es local y gratis salvo que d
 | Entrega libx264 High CRF 20, GOP 2 s, tope 12 Mbps | Medición propia (halfsize da los umbrales SSIM/VMAF) | 115 MB → 31,5 MB, SSIM 0,992 (DECISIONES §13) |
 | AAC sin PNS (`-aac_pns 0`) | vincentsch/explainroo `src/ffmpeg.js:87` (MIT) | Sin chasquidos en pasajes suaves |
 | `.srt` junto a cada render | iart-ai/tiktok-video-skills (MIT) | Botón «Subtítulos (.srt)» en el proyecto |
+| Sección Anuncios: resultados pass/fail/unknown con evidencia, specs sin límites congelados, marcos de copy como preguntas, conceptos distintos, diseño de pruebas | AgriciDaniel/claude-ads `ads/references/*`, `skills/ads-{create,creative,test}` (MIT) | `/anuncios`, ver `docs/ANUNCIOS.md` |
 
 ## Para Geeper actual (orden sugerido)
 

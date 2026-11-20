@@ -21,9 +21,11 @@ async function pedir(ruta: string, init?: RequestInit): Promise<{ status: number
   return { status: r.status, json };
 }
 
-export function cuerpoVideo(tema: string, formato: Formato, mpt: DatosPlantilla["mpt"]) {
+/** `guion`: si viene, MPT lo dice tal cual (video_script) y no escribe uno con su LLM. */
+export function cuerpoVideo(tema: string, formato: Formato, mpt: DatosPlantilla["mpt"], guion?: string) {
   return {
     video_subject: tema,
+    video_script: guion?.trim() ?? "",
     video_language: mpt.video_language,
     voice_name: mpt.voice_name,
     voice_rate: mpt.voice_rate,

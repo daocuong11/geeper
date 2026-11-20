@@ -1,6 +1,6 @@
 ---
 name: geeper
-description: Proponer cambios a un proyecto de Geeper (geeper.json) — corregir subtítulos, recortar palabras o silencios, quitar o reordenar escenas, transiciones y efectos, textos en pantalla, superposiciones, formato, plantilla, voz, destino — validados con el esquema y mostrados como diferencias antes de aplicarlos. Úsala cuando la persona pida editar un video de Geeper o entender su geeper.json.
+description: Proponer cambios a un proyecto de Geeper (geeper.json) — corregir subtítulos, recortar palabras o silencios, quitar o reordenar escenas, transiciones y efectos, textos en pantalla, superposiciones, formato, plantilla, voz, destino — validados con el esquema y mostrados como diferencias antes de aplicarlos. Úsala cuando la persona pida editar un video de Geeper o entender su geeper.json, y para proponer conceptos, ganchos, guiones o afirmaciones de una campaña de la sección Anuncios.
 ---
 
 # Geeper: editar un proyecto vía geeper.json
@@ -72,6 +72,29 @@ Los subtítulos no se guardan: se calculan (grupos de hasta 4 palabras, ≤ 2 l�
    `pnpm tsx scripts/proponer.ts <slug> /tmp/propuesta.json --aplicar`
 5. Renderizar y regenerar la voz se piden desde la UI (botones «Renderizar» y «Regenerar voz»), o:
    `pnpm tsx scripts/encolar.ts <slug> render.entregar` · `pnpm tsx scripts/encolar.ts <slug> voz.regenerar '{"escena":null,"cadena":["render.entregar"]}'`.
+
+## Anuncios: proponer conceptos y guiones
+
+La sección `/anuncios` guarda campañas (brief, conceptos, revisión, prueba). Claude propone; la persona
+aprueba en la app. Detalle en `docs/ANUNCIOS.md`.
+
+1. Mira la campaña y lo pendiente: `pnpm tsx scripts/anuncio.ts listar` y
+   `pnpm tsx scripts/anuncio.ts ver <id>` (brief, conceptos y cada chequeo que falla o queda «sin saber»).
+2. Escribe `/tmp/propuesta.json`:
+   `{"brief": {...campos...}, "conceptos": [{"nombre": "...", "marco": "pas", "gancho": "...", "promesa": "...",
+   "narrativa": "...", "cta": "...", "objeciones": "...", "hipotesis": "...", "guion": "...", "principal": "youtube-shorts"}],
+   "quitar": ["c-id"]}`. Un concepto con `id` existente se edita; sin `id`, es nuevo.
+3. Valida y muestra las diferencias: `pnpm tsx scripts/anuncio.ts proponer <id> /tmp/propuesta.json`.
+   Enséñaselas a la persona y **sólo con su aprobación** repite con `--aplicar`.
+
+Reglas de contenido (de claude-ads):
+- Conceptos **materialmente distintos** (otra idea, otro gancho), no la misma frase reescrita.
+- **No inventes** cifras, testimonios, garantías, urgencia ni comparaciones. Si el guion necesita una
+  afirmación, propónla en `brief.afirmaciones` con su `prueba`: entra **sin aprobar** y la aprueba la persona.
+- El guion va tal cual a MPT: abre con el gancho, cierra con el CTA, frases cortas (≤ 17 car./s al leer).
+- Un marco (`aida`, `pas`, `bab`, `4p`, `fab`, `historia`, `ninguno`) ordena el mensaje; no promete resultados.
+- No vincules videos ni marques verificaciones manuales: eso es de la persona en la app. Generar el
+  video usa la GPU y se pide desde la UI.
 
 ## Reglas
 

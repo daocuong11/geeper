@@ -57,6 +57,9 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
 - **Proyecto** (`/proyectos/<id>`): vista previa «En vivo» (cada cambio guardado se ve al instante, sin renderizar) y «Último render», QC, escenas con miniatura, texto, tiempos y
   subtítulos editables, ajustes, historial y trabajos del proyecto.
 - **Trabajos** (`/trabajos`): avance en vivo, log, relanzar o cancelar.
+- **Anuncios** (`/anuncios`): campañas con brief, conceptos (cada uno genera su video con el guion
+  exacto), revisión pass/fail/sin saber por ubicación, diseño de prueba A/B y exportación. Geeper no
+  toca las cuentas de anuncios. Ver `docs/ANUNCIOS.md`.
 - **Plantillas** y **Sistema**: datos de cada plantilla y el diagnóstico del doctor.
 
 Desde la terminal (útil para Claude, ver `.claude/skills/geeper/SKILL.md`):
