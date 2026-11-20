@@ -136,11 +136,14 @@ export function segmentosVisuales(es: Pick<EscenaEnLinea, "duracion" | "visual" 
     const out = es.tramos.map((tr) => ({ t: tr.enEscena, dur: tr.fin - tr.inicio, desde: v.rango.inicio + (tr.inicio - es.voz.rango.inicio) }));
     const p = out[0];
     if (p && entrada > 0) {
-      // La imagen de la entrada es la que precede a la voz en la misma grabación (si la hay).
+      // La imagen de la entrada es la que precede a la voz en la misma grabación (si la hay). Si la
+      // grabación tiene menos imagen antes de la voz que la entrada, lo que falta se cubre con el
+      // comienzo de la grabación en un tramo aparte, para que la voz no se desincronice.
       const atras = Math.min(entrada, p.desde);
-      p.t -= entrada;
-      p.dur += entrada;
+      p.t -= atras;
+      p.dur += atras;
       p.desde -= atras;
+      if (entrada - atras > 1e-3) out.unshift({ t: -entrada, dur: entrada - atras, desde: 0 });
     }
     return out;
   }

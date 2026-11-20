@@ -51,6 +51,20 @@ describe("visual en sincro con la voz", () => {
     expect(s!.dur).toBeCloseTo(3 + ENTRADA);
   });
 
+  it("si la grabación tiene menos imagen antes de la voz que la entrada, la voz sigue en sincro", () => {
+    const p = clip();
+    const e0 = escenasEnLinea(p)[0]!;
+    const entrada = 1.5; // la voz empieza a 1 s del asset: falta 0,5 s de imagen previa
+    const s = segmentosVisuales(e0, p.assets.tramo!, 1, entrada);
+    expect(s[0]).toMatchObject({ desde: 0 });
+    expect(s[0]!.t).toBeCloseTo(-entrada);
+    expect(s[0]!.dur).toBeCloseTo(0.5);
+    // El tramo con voz: el cuadro que se ve en t es el de la voz en t (desde − t constante = 1).
+    expect(s[1]!.t).toBeCloseTo(-1);
+    expect(s[1]!.desde).toBeCloseTo(0);
+    expect(s[1]!.t + s[1]!.dur).toBeCloseTo(3);
+  });
+
   it("recortar palabras corta también la imagen: cada tramo sigue a su voz", () => {
     // e02 suena 4–7 s del asset; recortar «dice GTA» (5,0–5,9) deja dos tramos.
     const p = aplicarEdicion(clip(), { tipo: "recortarPalabras", escena: "e02", desde: 2, hasta: 4 });
