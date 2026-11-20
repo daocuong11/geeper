@@ -79,6 +79,23 @@ export interface Esperado {
   ritmoSubtitulosAviso?: boolean;
   /** Reglas propias del proyecto (p. ej. la de clips de material ajeno). */
   extras?: Regla[];
+  /**
+   * Proporción de fotogramas repetidos que el material ya trae (fuentes de menos fps que la salida,
+   * imágenes fijas sin movimiento): se suma al tope de duplicados. Ver `duplicadosEsperados`.
+   */
+  duplicadosEsperados?: number;
+}
+
+/**
+ * Cuántos fotogramas repetidos son de esperar antes de la tarjeta: un video de 15 fps en una salida
+ * de 30 repite 1 de cada 2 (0,5 de su tramo); una imagen fija sin movimiento repite todos. Ponderado
+ * por la duración de cada escena.
+ */
+export function duplicadosEsperados(escenas: { dur: number; fpsFuente?: number; fija?: boolean }[], fps: number): number {
+  const total = escenas.reduce((s, e) => s + e.dur, 0);
+  if (!total) return 0;
+  const repetidos = escenas.reduce((s, e) => s + e.dur * (e.fija ? 1 : e.fpsFuente && e.fpsFuente < fps ? 1 - e.fpsFuente / fps : 0), 0);
+  return Math.min(1, repetidos / total);
 }
 
 export interface Sonoridad {
@@ -373,11 +390,13 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
   });
   const dups = await duplicados(archivo, esp.inicioTarjeta, fps);
   const ratio = dups.entrada ? 1 - dups.salida / dups.entrada : 0;
+  const esperadoDup = esp.duplicadosEsperados ?? 0;
+  const topeDup = Math.min(1, OBJETIVO.maxDuplicados + esperadoDup);
   const cong = (await congelados(archivo, esp.inicioTarjeta)).filter((c) => c.dur >= OBJETIVO.maxCongelado);
   reglas.push({
-    id: "duplicados", nombre: "Fotogramas duplicados (antes de la tarjeta final)", ok: ratio <= OBJETIVO.maxDuplicados && cong.length === 0,
-    medido: { proporcion: Number(ratio.toFixed(3)), congelados: cong },
-    objetivo: `≤ ${OBJETIVO.maxDuplicados * 100} % y sin congelados de ≥ ${OBJETIVO.maxCongelado} s`,
+    id: "duplicados", nombre: "Fotogramas duplicados (antes de la tarjeta final)", ok: ratio <= topeDup && cong.length === 0,
+    medido: { proporcion: Number(ratio.toFixed(3)), congelados: cong, ...(esperadoDup ? { delMaterial: Number(esperadoDup.toFixed(3)) } : {}) },
+    objetivo: `≤ ${Math.round(topeDup * 100)} %${esperadoDup ? ` (${OBJETIVO.maxDuplicados * 100} % + lo que ya repite el material)` : ""} y sin congelados de ≥ ${OBJETIVO.maxCongelado} s`,
   });
 
   // Subtítulos.

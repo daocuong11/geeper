@@ -57,8 +57,8 @@ function guia(p: Proyecto, slug: string, carpeta: string, windows: boolean): str
  * Arma el .zip. `distro` es la distribución de WSL (`WSL_DISTRO_NAME`): con ella, las rutas del .otio son
  * las de Windows; sin ella (fuera de WSL) quedan las de Linux.
  */
-export function paqueteEditor(p: Proyecto, slug: string, dirProyecto: string, distro = process.env.WSL_DISTRO_NAME): Uint8Array {
-  const base = aOtio(p, path.resolve(dirProyecto));
+export function paqueteEditor(p: Proyecto, slug: string, dirProyecto: string, distro = process.env.WSL_DISTRO_NAME, sustitutos: Record<string, string> = {}): Uint8Array {
+  const base = aOtio(p, path.resolve(dirProyecto), sustitutos);
   const otio = distro ? rutasParaWindows(base, distro) : base;
   return zipSync({
     [`${slug}.otio`]: strToU8(JSON.stringify(otio, null, 2)),

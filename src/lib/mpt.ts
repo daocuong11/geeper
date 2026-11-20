@@ -11,7 +11,14 @@ export interface EstadoMpt {
 }
 
 async function pedir(ruta: string, init?: RequestInit): Promise<{ status: number; json: unknown }> {
-  const r = await fetch(`${MPT_API}/api/v1${ruta}`, { ...init, signal: AbortSignal.timeout(30_000) });
+  let r: Response;
+  try {
+    r = await fetch(`${MPT_API}/api/v1${ruta}`, { ...init, signal: AbortSignal.timeout(30_000) });
+  } catch (e) {
+    // «fetch failed» no le dice nada a nadie: casi siempre es que Docker o MPT están apagados.
+    const tiempo = e instanceof Error && e.name === "TimeoutError";
+    throw new Error(tiempo ? "MPT tardó demasiado en responder: revisa que Docker Desktop esté abierto y MPT funcionando." : "MPT no responde: abre Docker Desktop, espera a que arranque MPT y vuelve a intentar.");
+  }
   let json: unknown = null;
   try {
     json = await r.json();

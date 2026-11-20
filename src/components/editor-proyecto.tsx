@@ -211,9 +211,9 @@ function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subi
               onChange={(ev) => { const f = ev.target.files?.[0]; if (f) void subirClip(e.id, f); ev.target.value = ""; }} />
           </label>
           {e.visual.tipo === "video" && (
-            <select aria-label="Seguir la cara" className="campo w-auto py-1" value="" disabled={ocupado}
+            <select aria-label="Pantalla dividida para clips de directos" className="campo w-auto py-1" value="" disabled={ocupado}
               onChange={(ev) => { const l = ev.target.value; ev.target.value = ""; if (l) void reencuadrar(e.id, l); }}>
-              <option value="">Seguir la cara (9:16)…</option>
+              <option value="">Pantalla dividida (directos)…</option>
               <option value="react">React: cara arriba, juego abajo</option>
               <option value="cara">Cara a toda la altura</option>
             </select>

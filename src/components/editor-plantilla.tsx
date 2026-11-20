@@ -122,9 +122,10 @@ function Legibilidad({ d, cambiar }: { d: DatosPlantilla; cambiar: (f: (x: Datos
       nota: letrasBoton !== c.tinta ? `letras en ${letrasBoton === "#ffffff" ? "blanco" : "negro"} automáticamente` : undefined,
       consejo: "cambia el color principal" },
     (() => {
-      const f = opacidadHasta(c.fondoCierre, [c.acento1, c.acento2], 3);
+      // Primero lo cómodo (4,5:1); si no se puede, lo mínimo (3:1). Sin botón si ya no cambia nada.
+      const f = opacidadHasta(c.fondoCierre, [c.acento1, c.acento2], 4.5) ?? opacidadHasta(c.fondoCierre, [c.acento1, c.acento2], 3);
       return { que: "Título final", k: Math.min(contrastePeor(c.acento1, c.fondoCierre) ?? 21, contrastePeor(c.acento2, c.fondoCierre) ?? 21),
-        arreglo: f ? { texto: "Oscurecer el fondo del cierre", aplicar: () => cambiar((x) => { x.colores.fondoCierre = f; }) } : null,
+        arreglo: f && f !== c.fondoCierre ? { texto: "Oscurecer el fondo del cierre", aplicar: () => cambiar((x) => { x.colores.fondoCierre = f; }) } : null,
         consejo: "usa colores de marca más claros" };
     })(),
   ];

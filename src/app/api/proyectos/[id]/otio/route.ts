@@ -2,6 +2,7 @@ import { leerProyecto } from "@/lib/almacen";
 import { db } from "@/lib/db";
 import { manejar } from "@/lib/http";
 import { aOtio } from "@/lib/otio";
+import { pngsParaOtio } from "@/lib/otio-svg";
 import { dirProyecto } from "@/lib/rutas";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const fila = await db.proyecto.findUniqueOrThrow({ where: { id } });
     const p = await leerProyecto(fila.slug);
     if (!p) throw new Error("El proyecto todavía no tiene geeper.json");
-    return new Response(JSON.stringify(aOtio(p, dirProyecto(fila.slug)), null, 2), {
+    return new Response(JSON.stringify(aOtio(p, dirProyecto(fila.slug), await pngsParaOtio(p, dirProyecto(fila.slug))), null, 2), {
       headers: {
         "content-type": "application/json; charset=utf-8",
         "content-disposition": `attachment; filename="${fila.slug}.otio"`,

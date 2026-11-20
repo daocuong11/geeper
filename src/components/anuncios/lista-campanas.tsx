@@ -101,7 +101,7 @@ export function ListaCampanas() {
 
 function Rejilla({ campanas }: { campanas: CampanaV[] }) {
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {campanas.map((c) => (
         <li key={c.id}>
           <Link href={`/anuncios/${c.id}`} className="tarjeta flex h-full flex-col gap-3 p-4 transition-colors hover:border-cyan-800">

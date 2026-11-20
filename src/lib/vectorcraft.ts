@@ -69,8 +69,11 @@ export async function aSvg(entrada: Buffer, nombre: string): Promise<{ svg: Buff
   return enTemporal(entrada, ext, (dentro, fuera) => ["convert", dentro, fuera, "--outline-text"]);
 }
 
-/** Imagen plana (logo, ícono) → SVG con Image Trace. Una foto da miles de trazos: no sirve para eso. */
-export async function vectorizar(entrada: Buffer, nombre: string, preset = "Default"): Promise<{ svg: Buffer; avisos: string[] }> {
+/**
+ * Imagen plana (logo, ícono) → SVG con Image Trace. Una foto da miles de trazos: no sirve para eso.
+ * «Flat Logo» conserva los colores planos del logo («Default» de VectorCraft es blanco y negro).
+ */
+export async function vectorizar(entrada: Buffer, nombre: string, preset = "Flat Logo"): Promise<{ svg: Buffer; avisos: string[] }> {
   const ext = path.extname(nombre).toLowerCase();
   if (![".png", ".jpg", ".jpeg", ".webp"].includes(ext)) throw new Error("Sólo se vectoriza una imagen PNG, JPG o WebP");
   await exigirInstalado();

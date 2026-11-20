@@ -1,6 +1,7 @@
 import { leerProyecto } from "@/lib/almacen";
 import { db } from "@/lib/db";
 import { manejar } from "@/lib/http";
+import { pngsParaOtio } from "@/lib/otio-svg";
 import { paqueteEditor } from "@/lib/paquete-editor";
 import { dirProyecto } from "@/lib/rutas";
 
@@ -13,7 +14,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const fila = await db.proyecto.findUniqueOrThrow({ where: { id } });
     const p = await leerProyecto(fila.slug);
     if (!p) throw new Error("El proyecto todavía no tiene geeper.json");
-    const zip = paqueteEditor(p, fila.slug, dirProyecto(fila.slug));
+    const zip = paqueteEditor(p, fila.slug, dirProyecto(fila.slug), undefined, await pngsParaOtio(p, dirProyecto(fila.slug)));
     return new Response(Buffer.from(zip), {
       headers: {
         "content-type": "application/zip",

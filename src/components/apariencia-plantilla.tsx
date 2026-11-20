@@ -107,10 +107,11 @@ export function AparienciaPlantilla({ slug, alCambiar }: { slug: string; alCambi
         {d.color.look !== "ninguno" && (
           <label className="flex flex-wrap items-center gap-3 text-sm">
             Cuánto se nota: <strong className="tabular-nums">{pct} %</strong>
-            <input type="range" min={10} max={100} step={10} value={pct} disabled={ocupado} className="w-48"
+            {/* Sin `disabled` mientras guarda: con el teclado perdería el foco en cada paso. Guarda al soltar. */}
+            <input type="range" min={10} max={100} step={10} value={pct} aria-busy={ocupado} className="w-48"
               onChange={(e) => setIntensidad(Number(e.target.value) / 100)}
               onPointerUp={(e) => void guardar({ color: { intensidad: Number((e.target as HTMLInputElement).value) / 100 } }, "Intensidad guardada.")}
-              onKeyUp={(e) => void guardar({ color: { intensidad: Number((e.target as HTMLInputElement).value) / 100 } }, "Intensidad guardada.")} />
+              onKeyUp={(e) => { if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(e.key)) void guardar({ color: { intensidad: Number((e.target as HTMLInputElement).value) / 100 } }, "Intensidad guardada."); }} />
           </label>
         )}
         <label className="flex items-start gap-2 text-sm">

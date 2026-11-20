@@ -71,6 +71,18 @@ describe.skipIf(!instalado)("VectorCraft real", () => {
     expect(trazos).toBeLessThan(200);
   });
 
+  it("vectorizar conserva los colores del logo (no lo pasa a blanco y negro)", async () => {
+    const { vectorizar } = await import("@/lib/vectorcraft");
+    // Logo de dos colores planos sobre blanco.
+    fs.writeFileSync(path.join(dir, "color.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect width="200" height="120" fill="#ffffff"/><rect x="10" y="10" width="80" height="100" fill="#1d3888"/><rect x="110" y="10" width="80" height="100" fill="#f59d09"/></svg>');
+    execFileSync(VECTORCRAFT_CLI, ["--safe-mode", "convert", path.join(dir, "color.svg"), path.join(dir, "color.png")]);
+    const texto = (await vectorizar(fs.readFileSync(path.join(dir, "color.png")), "color.png")).svg.toString("utf8").toLowerCase();
+    const colores = new Set(texto.match(/#[0-9a-f]{6}/g) ?? []);
+    const cerca = (hex: string) => [...colores].some((c) => [1, 3, 5].every((i) => Math.abs(parseInt(c.slice(i, i + 2), 16) - parseInt(hex.slice(i, i + 2), 16)) <= 24));
+    expect(cerca("#1d3888")).toBe(true);
+    expect(cerca("#f59d09")).toBe(true);
+  });
+
   it("un archivo roto da un mensaje en palabras, no un volcado", async () => {
     const { aSvg } = await import("@/lib/vectorcraft");
     await expect(aSvg(Buffer.from("esto no es un PDF"), "roto.pdf")).rejects.toThrow(/No se pudo convertir el archivo.*exportarlo como SVG o PNG/);

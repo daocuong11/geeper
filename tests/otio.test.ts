@@ -66,3 +66,15 @@ describe("exportar a OpenTimelineIO", () => {
     expect(t).toContain("file:///datos/mi%20proyecto/");
   });
 });
+
+describe("SVG en el .otio", () => {
+  it("un sustituto reemplaza la ruta del asset (FilmCraft no lee SVG)", async () => {
+    const { aOtio } = await import("@/lib/otio");
+    const { proyectoDePrueba } = await import("./fixtures");
+    const p = proyectoDePrueba();
+    const id = Object.keys(p.assets).find((k) => p.assets[k]!.tipo !== "audio")!;
+    const texto = JSON.stringify(aOtio(p, "/datos/proyecto", { [id]: "/datos/proyecto/exportes/svg/logo.png" }));
+    expect(texto).toContain("file:///datos/proyecto/exportes/svg/logo.png");
+    expect(texto).not.toContain(`file:///datos/proyecto/${p.assets[id]!.ruta}"`);
+  });
+});

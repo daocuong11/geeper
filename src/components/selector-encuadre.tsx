@@ -41,6 +41,7 @@ export function SelectorEncuadre({ escena, numero, src, encuadre, ocupado, elegi
 
   return (
     <div className="space-y-2">
+      <p className="text-xs font-medium">¿Qué se ve?</p>
       <div className="relative inline-block overflow-hidden rounded bg-black">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={src} alt={`Escena ${numero}`} className="block h-40 w-auto md:h-44" />
@@ -58,7 +59,7 @@ export function SelectorEncuadre({ escena, numero, src, encuadre, ocupado, elegi
         )}
         {opcion && <span className="absolute bottom-1 left-1 rounded bg-black/75 px-1.5 py-0.5 text-xs">Vista previa</span>}
       </div>
-      <p className="max-w-xs text-xs text-tenue" id={ayudaId} aria-live="polite">
+      <p className="min-h-[3lh] max-w-xs text-xs text-tenue" id={ayudaId} aria-live="polite">
         {opcion ? opcion.ayuda : descripcion(encuadre, v)}
         {encuadre.cara && !opcion ? " El círculo marca la cara que encontró Geeper." : ""}
       </p>

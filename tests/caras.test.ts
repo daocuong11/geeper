@@ -123,6 +123,11 @@ describe("selector «¿Qué se ve?» y análisis automático", () => {
       const como = sinSeguirCaras(r.p, r.escenas);
       expect(escenasQueCambian(p, como, 1080, 1920)).toEqual([]);
       expect(compilar(como, plantilla, "/tmp/m.wav", "/tmp/p").html).toMatch(/id="v-e02-0" class="clip fondo contener"/);
+      // Y el selector marca lo que se ve («Todo»), no «Automático».
+      const e02 = pista(como, "visual").clips.find((c) => c.escena === "e02")!;
+      const sel = encuadreDe(e02, como.assets[e02.asset]!, 1080, 1920);
+      expect(sel.elegida).not.toBe("auto");
+      expect(sel.opciones.find((o) => o.id === sel.elegida)!.visible).toEqual(sel.actual);
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }

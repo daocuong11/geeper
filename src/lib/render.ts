@@ -21,7 +21,7 @@ import { paso, type Contexto } from "./pasos";
 import { obtenerPlantilla } from "./plantillas";
 import { correr } from "./proceso";
 import { cortesDe, medirRitmo, type Ritmo } from "./pulsos";
-import { asegurarPicoReal, correrQc, ENTREGA, normalizarAudio, TOPES_PICO, type InformeQc } from "./qc";
+import { asegurarPicoReal, correrQc, duplicadosEsperados, ENTREGA, normalizarAudio, TOPES_PICO, type InformeQc } from "./qc";
 import { HYPERFRAMES_VERSION, dirProyecto } from "./rutas";
 import { HF } from "./voz";
 import { origenClip, reglaClip } from "./clips";
@@ -113,7 +113,7 @@ export async function renderEntregar(
   // 2. Compilar a Hyperframes (siempre: es barato y determinista).
   await ctx.etapa("Compilando a Hyperframes", 0.1);
   // El look de color del canal y la mejora automática se hornean en copias de los clips (src/lib/looks.ts).
-  if (conColor(plantilla.datos.color)) await ctx.etapa("Aplicando el color del canal", 0.08);
+  if (conColor(plantilla.datos.color)) await ctx.etapa("Aplicando el color del canal", 0.12);
   const sustitutos = await prepararColor(p, dir, plantilla.datos.color, ctx.log);
   const comp = compilar(p, plantilla.datos, rutaMezcla, dir, sustitutos);
   const dirBuild = path.join(dir, "build", `hf-${p.formato.replace(":", "x")}`);
@@ -236,6 +236,7 @@ export async function renderEntregar(
       check,
       extras: [reglaClip(p, comp.inicioTarjeta)].filter((r) => r !== null),
       ritmoSubtitulosAviso: origenClip(p) !== null,
+      duplicadosEsperados: await repetidosDelMaterial(p, dir),
     },
     path.join(dir, "renders", `${base}-hoja`),
     ctx.log,
@@ -271,4 +272,26 @@ export async function renderEntregar(
   await db.proyecto.update({ where: { id: proyectoId }, data: { estado: informe.aprobado ? "entregado" : "qc" } });
   ctx.log(`Render ${informe.aprobado ? "APROBADO" : "RECHAZADO por QC"}: ${final} (${segundos.toFixed(1)} s)`);
   return { renderId: render.id, ruta: final, aprobado: informe.aprobado, gpu, segundos };
+}
+
+/** Fotogramas repetidos que ya trae el material (fuentes de pocos fps, imágenes fijas): ver `duplicadosEsperados`. */
+async function repetidosDelMaterial(p: Proyecto, dir: string): Promise<number> {
+  const fpsDe = new Map<string, number | undefined>();
+  const escenas = [];
+  for (const e of escenasEnLinea(p)) {
+    const a = p.assets[e.visual.asset];
+    if (!a) continue;
+    if (a.tipo === "imagen") {
+      escenas.push({ dur: e.duracion, fija: !e.visual.movimiento });
+      continue;
+    }
+    if (!fpsDe.has(a.id)) {
+      const info = await probar(path.join(dir, a.ruta)).catch(() => null);
+      const prom = info?.video?.avg_frame_rate?.split("/").map(Number);
+      const avg = prom && prom[1] ? prom[0]! / prom[1] : undefined;
+      fpsDe.set(a.id, [info?.fps, avg].filter((x): x is number => !!x && Number.isFinite(x)).reduce<number | undefined>((m, x) => (m === undefined ? x : Math.min(m, x)), undefined));
+    }
+    escenas.push({ dur: e.duracion, fpsFuente: fpsDe.get(a.id) });
+  }
+  return duplicadosEsperados(escenas, p.fps);
 }

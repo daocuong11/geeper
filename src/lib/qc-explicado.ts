@@ -19,6 +19,7 @@ const MAPA: Record<string, Explicacion> = {
   fps: { que: "Que el video tenga la fluidez correcta.", hacer: "Vuelve a renderizar; si sigue, avisa.", tecnico: true },
   duracion: { que: "Que imagen y sonido duren lo mismo.", hacer: "Vuelve a renderizar; si sigue, avisa.", tecnico: true },
   fotogramas: { que: "Que no falten ni sobren cuadros.", hacer: "Vuelve a renderizar; si sigue, avisa.", tecnico: true },
+  ampliacion: { que: "Que ninguna imagen se vea borrosa por estar estirada.", hacer: "Cámbiala por una más grande o por un SVG; si es un logo, abre el detalle y usa «Vectorizar»." },
   duplicados: { que: "Que la imagen no se quede congelada.", hacer: "Mira la escena donde se congela: cambia su clip o quítala." },
   subtitulos: { que: "Que los subtítulos se puedan leer: líneas cortas y no más de dos.", hacer: "Abre las escenas marcadas y acorta el texto que se muestra (no cambia lo que se oye)." },
   "subtitulos-ritmo": { que: "Que los subtítulos no pasen demasiado rápido.", hacer: "Es un aviso: la persona habla rápido. Si quieres, recorta palabras de relleno." },

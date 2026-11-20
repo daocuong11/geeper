@@ -46,11 +46,12 @@ const hueco = (duracion: number, rate: number): J => ({
   OTIO_SCHEMA: "Gap.1", name: "", source_range: tr(0, duracion, rate), effects: [], markers: [], enabled: true, metadata: {},
 });
 
-function referencia(a: Asset, dirProyecto: string, rate: number): J {
-  const abs = path.resolve(dirProyecto, a.ruta);
+function referencia(a: Asset, dirProyecto: string, rate: number, sustituto?: string): J {
+  // `sustituto`: el mismo medio en un formato que el editor lee (un SVG pasado a PNG, ver otio-svg.ts).
+  const abs = sustituto ?? path.resolve(dirProyecto, a.ruta);
   return {
     OTIO_SCHEMA: "ExternalReference.1",
-    name: path.basename(a.ruta),
+    name: path.basename(abs),
     target_url: `file://${abs.split("/").map(encodeURIComponent).join("/")}`,
     available_range: a.duracion ? tr(0, a.duracion, rate) : null,
     available_image_bounds: null,
@@ -58,7 +59,7 @@ function referencia(a: Asset, dirProyecto: string, rate: number): J {
   };
 }
 
-function clip(nombre: string, a: Asset, dir: string, inicio: number, duracion: number, rate: number, extra: { markers?: J[]; metadata?: J } = {}): J {
+function clip(nombre: string, a: Asset, dir: string, inicio: number, duracion: number, rate: number, extra: { markers?: J[]; metadata?: J; sustituto?: string } = {}): J {
   return {
     OTIO_SCHEMA: "Clip.2",
     name: nombre,
@@ -66,7 +67,7 @@ function clip(nombre: string, a: Asset, dir: string, inicio: number, duracion: n
     effects: [],
     markers: extra.markers ?? [],
     enabled: true,
-    media_references: { DEFAULT_MEDIA: referencia(a, dir, rate) },
+    media_references: { DEFAULT_MEDIA: referencia(a, dir, rate, extra.sustituto) },
     active_media_reference_key: "DEFAULT_MEDIA",
     metadata: extra.metadata ?? {},
   };
@@ -76,7 +77,8 @@ const pistaOtio = (nombre: string, kind: "Video" | "Audio", children: J[]): J =>
   OTIO_SCHEMA: "Track.1", name: nombre, kind, source_range: null, children, effects: [], markers: [], enabled: true, metadata: {},
 });
 
-export function aOtio(original: Proyecto, dirProyecto: string): J {
+/** `sustitutos`: id de asset → archivo que lo reemplaza en el .otio (los SVG, que FilmCraft no lee, como PNG). */
+export function aOtio(original: Proyecto, dirProyecto: string, sustitutos: Record<string, string> = {}): J {
   const p = aplicarEstilo(original);
   const rate = p.fps;
   const activo = (id: string): Asset => {
@@ -124,6 +126,7 @@ export function aOtio(original: Proyecto, dirProyecto: string): J {
       }
       const dur = Math.min(largo - t, disponible);
       const c = clip(k === 0 ? n : `${n} (vuelta ${k + 1})`, a, dirProyecto, desde, a.tipo === "imagen" ? dur : dur * velocidad, rate, {
+        sustituto: sustitutos[a.id],
         markers: k === 0 ? [{
           OTIO_SCHEMA: "Marker.2", name: nota, color: "CYAN", comment: e.escena.texto,
           marked_range: tr(desde, 0, rate), metadata: { geeper: { escena: e.escena.id } },
@@ -164,6 +167,7 @@ export function aOtio(original: Proyecto, dirProyecto: string): J {
       const a = activo(c.asset);
       const enLinea = c.rango.duracion / (c.velocidad ?? 1);
       hijos.push(clip(c.id, a, dirProyecto, c.rango.inicio, c.rango.duracion, rate, {
+        sustituto: sustitutos[a.id],
         metadata: {
           geeper: {
             volumen: c.volumen ?? null, opacidad: c.opacidad ?? null, transicion: c.transicion ?? null, movimiento: c.movimiento ?? null,

@@ -289,10 +289,16 @@ export function encuadreDe(c: Clip, a: Asset, W: number, H: number) {
     if (o.id !== "auto" && opciones.some((x) => x.id !== "auto" && igual(x.visible, visible))) continue;
     opciones.push({ id: o.id, etiqueta: o.etiqueta, ayuda: o.ayuda, ajuste: o.ajuste ?? null, ancla: o.ancla ?? null, visible });
   }
-  const elegida = OPCIONES_ENCUADRE.find((o) => o.ajuste === c.ajuste && o.ancla === c.ancla)?.id ?? (c.ajuste === undefined ? "auto" : c.ancla === undefined ? "centro" : "auto");
+  let elegida = OPCIONES_ENCUADRE.find((o) => o.ajuste === c.ajuste && o.ancla === c.ancla)?.id ?? (c.ajuste === undefined ? "auto" : c.ancla === undefined ? "centro" : "auto");
+  const actual = visibleDe(c, a, W, H);
+  // Sin ajuste pero con ancla (p. ej. tras «Dejar como estaba»): no es «Automático» aunque ninguna
+  // opción calce exacto; se marca la que da el mismo recorte que se ve.
+  if (elegida === "auto" && c.ajuste === undefined && c.ancla !== undefined) {
+    elegida = (opciones.find((o) => o.id !== "auto" && igual(o.visible, actual))?.id as typeof elegida | undefined) ?? elegida;
+  }
   return {
     elegida: opciones.some((o) => o.id === elegida) ? elegida : "auto",
-    actual: visibleDe(c, a, W, H),
+    actual,
     cara: a.foco ? { x: a.foco.x, y: a.foco.y } : null,
     siguiendoCara: sigueCara(c, a) && ajusteDe(c, a, W, H) === "cubrir",
     opciones,

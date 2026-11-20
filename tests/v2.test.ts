@@ -270,3 +270,13 @@ describe("música al ritmo", () => {
     expect(planMezcla(p, "/d", 20, true).filtro).toContain("atrim=start=1.2500:duration=20.0000");
   });
 });
+
+describe("QC: duplicados que ya trae el material", () => {
+  it("un clip de 15 fps en salida de 30 espera la mitad repetida; imágenes fijas, todo", async () => {
+    const { duplicadosEsperados } = await import("@/lib/qc");
+    expect(duplicadosEsperados([{ dur: 10, fpsFuente: 15 }], 30)).toBeCloseTo(0.5);
+    expect(duplicadosEsperados([{ dur: 10, fpsFuente: 30 }, { dur: 10, fpsFuente: 60 }], 30)).toBe(0);
+    expect(duplicadosEsperados([{ dur: 2, fija: true }, { dur: 18, fpsFuente: 30 }], 30)).toBeCloseTo(0.1);
+    expect(duplicadosEsperados([], 30)).toBe(0);
+  });
+});

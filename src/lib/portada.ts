@@ -7,6 +7,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { escribirAtomico, existe, sha256Texto } from "./archivos";
+import { textoSobre } from "./colores-marca";
 import { db } from "./db";
 import type { Formato, Proyecto } from "./esquema";
 import { escenasEnLinea } from "./linea";
@@ -74,6 +75,8 @@ export function pasosPlantillaBase(
       ? { box: [m, m, ancho - 2 * m, marca * 2], text: d.marca.texto || "MARCA", name: "@marca", font: d.tipografia.texto, weight: 700, size: marca, color, align: "center" }
       : { x: m, y: m + marca, text: d.marca.texto || "MARCA", name: "@marca", font: d.tipografia.texto, weight: 700, size: marca, color },
   });
+  // La marca va sobre la sombra oscura (sobre la foto): si el acento no se lee ahí, casi blanco o negro.
+  const marcaLegible = textoSobre(["#333333"], d.colores.acento1);
   const nuevo = { width: ancho, height: alto, background: "#0b0b12", name: `portada-${estilo}` };
   // Sombra suave arriba para que la marca se lea sobre cielos claros.
   const sombraArriba: Paso = { cmd: "layer.newFillLayer.gradient", params: { from: "#000000", to: "#000000", angle: 90, transparency: [[vertical ? 0.86 : 0.78, 0], [1, 60]] } };
@@ -87,7 +90,7 @@ export function pasosPlantillaBase(
         // Oscurece toda la imagen por igual.
         { cmd: "layer.newFillLayer.gradient", params: { from: "#000000", to: "#000000", angle: 90, transparency: [[0, 55], [1, 55]] } },
         { cmd: "type.create", params: { box: [m, Math.round((alto - cajaAlto) / 2), ancho - 2 * m, cajaAlto], text: "TÍTULO", name: "@titulo", ...fuente, color: d.colores.tinta, align: "center" } },
-        marcaTexto(d.colores.acento1, "center"),
+        marcaTexto(marcaLegible, "center"),
       ],
     };
   }
@@ -118,7 +121,7 @@ export function pasosPlantillaBase(
       { cmd: "layer.newFillLayer.gradient", params: { from: "#000000", to: "#000000", angle: 90, transparency: [[0, 92], [vertical ? 0.5 : 0.4, 70], [vertical ? 0.78 : 0.7, 0]] } },
       sombraArriba,
       { cmd: "type.create", params: { box: [m, cajaY, ancho - 2 * m, cajaAlto], text: "TÍTULO", name: "@titulo", ...fuente, color: d.colores.tinta, align: "left" } },
-      marcaTexto(d.colores.acento1, "left"),
+      marcaTexto(marcaLegible, "left"),
     ],
   };
 }
