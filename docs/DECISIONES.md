@@ -281,7 +281,19 @@ qué no y por qué (detalle de cada pieza en HEREDADO.md).
   directos. Descartado: guardar `mapaVoz[]` en el esquema (duplica lo que dan los recortes), marca de
   agua obligatoria (decisión del dueño, no del producto) y portar su loudnorm (Geeper ya lo hace en
   dos pasadas con reintento del pico).
-- **Sin verificar de punta a punta todavía:** el importador con base de datos, worker y render (la
-  prueba con una base aislada quedó pendiente de permiso). Sí verificado: tests de sincro, puntaje,
-  bordes, chat y reglas; `momentos.ts` sobre un material real de 60 s; detección y render del react
-  (cámara con confianza 1,0, juego corrido para esquivar la cámara y un contador fijo).
+- **UI:** página Clips (buscar momentos como trabajo `clip.momentos`, radar de tendencias, «Hacer
+  clip»), origen del clip y crédito en el editor, y la descripción del post sale con crédito, mención y
+  hashtags de la campaña. «Seguir la cara» (trabajo `visual.reencuadrar`) sirve en cualquier proyecto
+  9:16 y cambia el video en todas las escenas que lo usan.
+- **Radar de tendencias** (de `trends.py`): YouTube por vistas por hora con yt-dlp, de a 6 pedidos en
+  paralelo, guardado una hora por consulta. Excluye directos en curso.
+- **Título legible:** el estilo `titulo` usaba la tinta de la plantilla (blanco) sobre el degradado de
+  acentos y daba 1,8:1 en GTA VI Shorts (el `hyperframes check` lo bloqueaba). Ahora el compilador elige
+  la tinta del título por contraste WCAG (≥ 4,5:1 con los dos acentos): casi negro en las dos
+  plantillas actuales.
+- **Verificado de punta a punta** (2026-11-19, base y datos aislados): clip react de 25 s de un material
+  de 60 s → importar 35 s (reencuadre 6 s, whisper 15 s) → render y QC. Pasan sonoridad, pico, color,
+  integridad, `hyperframes check`, alineación y la regla «clip»; la licencia avisa («revisar», sin
+  permiso). Falla subtítulos: la voz del material habla a 17,4–17,8 car./s (ver la pregunta abierta
+  abajo). También: búsqueda de momentos y creación de clip desde la API, reencuadre posterior
+  (cubrir → react en las 3 escenas) y capturas de la UI a 1440 px y 390 px sin errores.

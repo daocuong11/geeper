@@ -17,13 +17,12 @@ import { escribirAtomico } from "./archivos";
 import { mascaraInsultos, type Campania, type OrigenClip } from "./clips";
 import { detectarSilencios, puntuarPalabras, resumirConfianza } from "./confianza";
 import { SCHEMA_VERSION, validarProyecto, type Asset, type Escena, type Palabra, type Proyecto, type Texto } from "./esquema";
-import { credito, leerFuente, PYTHON_CLIPS } from "./fuentes";
+import { credito, leerFuente } from "./fuentes";
 import { ffmpeg, huellaFfmpeg, probar } from "./media";
 import { etiquetaPesos, huellaPesos } from "./modelos";
 import { paso, type Contexto } from "./pasos";
 import type { DatosPlantilla } from "./plantillas";
-import { correr } from "./proceso";
-import { RAIZ_REPO } from "./rutas";
+import { detectar, hornear } from "./reencuadre";
 import { segmentar } from "./segmentar";
 import { MODELO_WHISPER, transcribir } from "./voz";
 
@@ -54,21 +53,6 @@ export interface DatosClip {
   /** Si hay permiso o campaña: texto que lo dice. Sin esto, la licencia queda «revisar». */
   permiso?: string;
   campania?: Campania;
-}
-
-interface Reencuadre {
-  ok: boolean;
-  filtro?: string;
-  params?: Record<string, unknown>;
-  resumen?: string;
-  motivo?: string;
-}
-
-async function reencuadrar(video: string, layout: "react" | "cara"): Promise<Reencuadre> {
-  const r = await correr(PYTHON_CLIPS, ["-I", path.join(RAIZ_REPO, "py", "reencuadre.py")], {
-    entrada: JSON.stringify({ op: "reencuadre", video, layout }),
-  });
-  return JSON.parse(r.stdout) as Reencuadre;
 }
 
 /** Palabras del tramo (tiempo del asset de voz) con su confianza; paso con manifiesto. */
@@ -123,13 +107,10 @@ export async function importarClip(ctx: Contexto, d: DatosClip): Promise<{ versi
   let paramsReencuadre: Record<string, unknown> | null = null;
   let resumen: string | undefined;
   if ((d.encuadre === "react" || d.encuadre === "cara") && d.formato === "9:16") {
-    const r = await reencuadrar(rutaTramo, d.encuadre);
+    const r = await detectar(rutaTramo, d.encuadre);
     if (r.ok && r.filtro) {
       const salida = path.join(ctx.dir, "assets", `tramo-${d.encuadre}.mp4`);
-      await paso(ctx, "clip.reencuadre", { archivos: [rutaTramo], params: { filtro: r.filtro }, motor: `reencuadre-v1+${ff}` }, [salida], async ([tmp]) => {
-        await ffmpeg(["-i", rutaTramo, "-filter_complex", r.filtro!, "-map", "[v]", "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-g", "30", "-pix_fmt", "yuv420p", "-an", tmp!], ctx.log);
-        return {};
-      });
+      await hornear(ctx, rutaTramo, r.filtro, salida);
       visual = salida;
       paramsReencuadre = r.params ?? null;
       resumen = r.resumen;
@@ -206,7 +187,8 @@ export async function importarClip(ctx: Contexto, d: DatosClip): Promise<{ versi
   const total = largo;
   const textos: Texto[] = [];
   if (d.titulo) textos.push({ id: "titulo", texto: d.titulo, inicio: 0, duracion: Math.min(60, total), estilo: "titulo", posicion: encuadre === "react" ? "centro" : "arriba" });
-  if (d.gancho) textos.push({ id: "gancho", texto: d.gancho, inicio: 0, duracion: Math.min(2.6, total), estilo: "titulo", posicion: "arriba" });
+  // En react la mitad de arriba es la cara: el gancho va abajo, sobre el juego.
+  if (d.gancho) textos.push({ id: "gancho", texto: d.gancho, inicio: 0, duracion: Math.min(2.6, total), estilo: "titulo", posicion: encuadre === "react" ? "abajo" : "arriba" });
 
   const origen: OrigenClip = {
     fuente: fuente.id,

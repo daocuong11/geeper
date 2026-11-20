@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { Formato } from "@/lib/esquema";
 import { tomarGpu } from "@/lib/gpu";
 import { importarMpt } from "@/lib/importador";
+import { buscarMomentos } from "@/lib/buscar-momentos";
 import { Campania } from "@/lib/clips";
 import { ENCUADRES, importarClip, type EncuadreClip } from "@/lib/importador-clip";
 import { apiViva, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/lib/mpt";
@@ -14,6 +15,7 @@ import type { Contexto } from "@/lib/pasos";
 import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
 import { regenerarVoz } from "@/lib/regenerar";
+import { reencuadrarEscena } from "@/lib/reencuadre";
 import { renderEntregar, versionDeProyecto } from "@/lib/render";
 import { publicarSubir } from "@/lib/redes/publicar";
 import { dirProyecto } from "@/lib/rutas";
@@ -146,6 +148,22 @@ async function proyectoImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+async function clipMomentos(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const pl = t.payload;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
+  await h.etapa("Trayendo la fuente y midiendo el sonido", 0.1);
+  const r = await buscarMomentos(
+    {
+      src: String(pl.src ?? ""),
+      top: n(pl.top), min: n(pl.min), max: n(pl.max), maxMinutos: n(pl.maxMinutos),
+      idioma: typeof pl.idioma === "string" ? pl.idioma : undefined,
+    },
+    h.log,
+    h.signal,
+  );
+  return { resultado: { fuente: r.fuente, candidatos: r.candidatos.length } };
+}
+
 async function clipImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const proyecto = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
   const pl = t.payload;
@@ -171,6 +189,15 @@ async function clipImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
     campania: pl.campania ? Campania.parse(pl.campania) : undefined,
   });
   await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "ensamblado" } });
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function visualReencuadrar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const escena = String(t.payload.escena ?? "");
+  const layout = t.payload.layout === "cara" ? "cara" : "react";
+  await h.etapa(`Buscando la cara (${layout}, CPU)`, 0.1);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await reencuadrarEscena(h, t.proyectoId!, p, escena, layout);
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
@@ -205,7 +232,9 @@ async function publicarSubirEj(t: Trabajo, h: Herramientas): Promise<Salida> {
 export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Promise<Salida>> = {
   "mpt.generar": mptGenerar,
   "proyecto.importar": proyectoImportar,
+  "clip.momentos": clipMomentos,
   "clip.importar": clipImportar,
+  "visual.reencuadrar": visualReencuadrar,
   "voz.regenerar": vozRegenerar,
   "render.entregar": renderEntregarEj,
   "publicar.subir": publicarSubirEj,

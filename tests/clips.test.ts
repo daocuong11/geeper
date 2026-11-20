@@ -187,3 +187,30 @@ describe("reglas de clips", () => {
     expect(usoComercial("permiso del creador: campaña de Kai en Whop")).toBe("si");
   });
 });
+
+describe("radar de tendencias y contraste del título", () => {
+  it("ordena por vistas por hora, descarta en vivo, viejos y sin fecha", async () => {
+    const { ordenar } = await import("@/lib/tendencias");
+    const ahora = 1_000_000;
+    const r = ordenar([
+      { webpage_url: "a", title: "A", view_count: 1000, timestamp: ahora - 10 * 3600 },
+      { webpage_url: "b", title: "B", view_count: 900, timestamp: ahora - 3600, heatmap: [{}] },
+      { webpage_url: "c", title: "en vivo", view_count: 9e6, timestamp: ahora - 3600, is_live: true },
+      { webpage_url: "d", title: "viejo", view_count: 9e6, timestamp: ahora - 48 * 3600 },
+      { webpage_url: "e", title: "sin fecha", view_count: 9e6 },
+    ], ahora, 24);
+    expect(r.map((x) => x.url)).toEqual(["b", "a"]);
+    expect(r[0]!.vistasPorHora).toBe(900);
+    expect(r[0]!.loMasVisto).toBe(true);
+  });
+
+  it("el título usa una tinta legible sobre el degradado de la plantilla", async () => {
+    const { contraste, tintaSobre } = await import("@/lib/compilador");
+    for (const pl of PLANTILLAS_INICIALES) {
+      const c = pl.datos.colores;
+      const t = tintaSobre(c.tinta, [c.acento1, c.acento2]);
+      expect(Math.min(contraste(t, c.acento1)!, contraste(t, c.acento2)!)).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(tintaSobre("#ffffff", ["#000000"])).toBe("#ffffff");
+  });
+});

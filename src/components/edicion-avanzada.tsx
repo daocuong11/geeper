@@ -23,6 +23,11 @@ export interface EfectosV {
 }
 
 export interface ExtrasV {
+  /** Si el proyecto es un clip de material ajeno: de dónde salió y la descripción sugerida del post. */
+  clip?: {
+    url: string; titulo: string; canal: string | null; inicio: number; fin: number; encuadre: string; reencuadre?: string;
+    credito: string; descripcion: string; campania?: { nombre?: string } | null;
+  } | null;
   destino: { comercial: boolean; plataformas: string[]; master: boolean };
   textos: { id: string; texto: string; inicio: number; duracion: number; estilo: string; posicion: string }[];
   libres: { id: string; tipo: "video" | "audio"; clips: { id: string; asset: string; ruta: string; inicio: number; duracion: number }[] }[];

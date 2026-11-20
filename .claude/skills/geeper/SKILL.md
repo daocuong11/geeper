@@ -91,6 +91,8 @@ Los subtítulos no se guardan: se calculan (grupos de hasta 4 palabras, ≤ 2 l�
 
 ## Clips de material largo (VODs, videos publicados, grabaciones propias)
 
+La persona puede hacerlo todo desde la página **Clips** (http://localhost:3300/clips); por terminal:
+
 1. **Candidatos:** `pnpm tsx scripts/momentos.ts <url|archivo> --top 8 --min 15 --max 40 --idioma <es|en>`.
    Deja `~/geeper-data/_fuentes/<id>/candidatos.md` con el porqué de cada uno (pico de sonoridad, lo
    más visto de YouTube, chat, palabras de emoción), lo que se dice y el comando para importarlo.

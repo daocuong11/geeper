@@ -1,4 +1,5 @@
 /** Datos que la UI muestra de un proyecto (derivados de geeper.json + la base). */
+import { descripcionClip, origenClip } from "./clips";
 import { db } from "./db";
 import { resumirConfianza, UMBRAL_DUDOSA } from "./confianza";
 import { pistasLibres, validarProyecto, type Proyecto } from "./esquema";
@@ -93,6 +94,10 @@ export async function vistaProyecto(id: string) {
           ? { inicio: p.pistas.find((x) => x.id === "musica")!.clips[0]?.rango.inicio ?? 0, pulsos: p.marcadores.filter((m) => m.tipo === "pulso").length }
           : null,
         confianza: resumirConfianza(Object.values(p.escenas).map((e) => ({ id: e.id, palabras: e.palabras }))),
+        clip: (() => {
+          const o = origenClip(p);
+          return o ? { ...o, descripcion: descripcionClip(o) } : null;
+        })(),
       }
     : null;
   return { fila, p, escenas, total, extras };

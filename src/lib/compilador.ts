@@ -118,6 +118,42 @@ export function cajaTexto(t: Texto, m: Metricas, altoMarca: number): Caja {
   return { x, y, w, h };
 }
 
+/** Luminancia relativa WCAG de un color #rgb, #rrggbb o rgb()/rgba() (null si no se entiende). */
+export function luminancia(color: string): number | null {
+  let rgb: number[] | null = null;
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (hex) {
+    const h = hex[1]!.length === 3 ? [...hex[1]!].map((x) => x + x).join("") : hex[1]!;
+    rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  } else {
+    const m = /^rgba?\(([^)]+)\)$/i.exec(color.trim());
+    if (m) rgb = m[1]!.split(",").slice(0, 3).map((x) => Number(x.trim()));
+  }
+  if (!rgb || rgb.some((x) => !Number.isFinite(x))) return null;
+  const [r, g, b] = rgb.map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+}
+
+export function contraste(a: string, b: string): number | null {
+  const la = luminancia(a);
+  const lb = luminancia(b);
+  if (la === null || lb === null) return null;
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+/**
+ * Color de letra legible sobre todos los fondos dados (WCAG AA texto normal, 4,5:1): la tinta de la
+ * plantilla si alcanza; si no, casi negro o blanco, el que dé más contraste con el peor fondo.
+ */
+export function tintaSobre(tinta: string, fondos: string[]): string {
+  const peor = (c: string) => Math.min(...fondos.map((f) => contraste(c, f) ?? 21));
+  if (peor(tinta) >= 4.5) return tinta;
+  return peor("#111111") >= peor("#ffffff") ? "#111111" : "#ffffff";
+}
+
 /** Un tramo del visual de una escena: `t` relativo al inicio de la escena, `desde` sobre el asset. */
 export interface SegmentoVisual {
   t: number;
@@ -368,6 +404,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
         --acento2: ${c.acento2};
         --fondo-pastilla: ${c.fondoPastilla};
         --fondo-cierre: ${c.fondoCierre};
+        --tinta-titulo: ${tintaSobre(c.tinta, [c.acento1, c.acento2])};
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: ${W}px; height: ${H}px; overflow: hidden; background: #000; }
@@ -386,7 +423,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
                     background: linear-gradient(90deg, var(--acento1), var(--acento2));
                     -webkit-background-clip: text; background-clip: text; color: transparent; }
       .texto { position: absolute; z-index: 35; text-align: center; line-height: 1.15; padding: 16px 24px; border-radius: 18px; opacity: 0; }
-      .texto-titulo { font-family: ${fuenteTitulos}; text-transform: uppercase; color: var(--tinta);
+      .texto-titulo { font-family: ${fuenteTitulos}; text-transform: uppercase; color: var(--tinta-titulo);
                       background: linear-gradient(90deg, var(--acento1), var(--acento2)); }
       .texto-rotulo { font-family: ${fuenteTitulos}; color: var(--tinta); background: var(--fondo-pastilla); }
       .texto-cita { font-family: ${fuenteTexto}; font-weight: ${t.pesoTexto}; font-style: italic; color: var(--tinta);

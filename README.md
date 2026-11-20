@@ -69,7 +69,8 @@ pnpm tsx scripts/revisar-subtitulos.ts <slug>                       # QC de subt
 pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio para FilmCraft, Resolve o Premiere
 ```
 
-**Clips de material largo** (VOD, video publicado o grabación propia; nunca un directo en vivo):
+**Clips de material largo** (VOD, video publicado o grabación propia; nunca un directo en vivo): desde la
+página **Clips** (`/clips`: buscar momentos, radar de tendencias y «Hacer clip») o desde la terminal:
 
 ```bash
 pnpm tsx scripts/momentos.ts <url|archivo> [--top 8] [--min 15] [--max 40] [--idioma es]   # candidatos.md
@@ -80,7 +81,9 @@ pnpm tsx scripts/importar-clip.ts <fuente-id> <inicio> <fin> --encuadre react|ca
 El clip queda como cualquier proyecto (subtítulos, recortar palabras, quitar escenas, QC); la imagen
 sigue a la voz al recortar. Sin `--permiso` la licencia queda «revisar». Las fuentes viven en
 `~/geeper-data/_fuentes/<id>/`. Necesita el venv `~/dev/video-tools/venvs/geeper-clips` y el modelo
-YuNet (`pnpm run doctor` dice cómo instalarlos).
+YuNet (`pnpm run doctor` dice cómo instalarlos). En cualquier proyecto 9:16, una escena con video
+horizontal (p. ej. un clip propio subido) se puede reencuadrar siguiendo la cara desde su tarjeta
+(«Seguir la cara»).
 
 Datos de cada proyecto en `~/geeper-data/<slug>/`: `geeper.json`, `assets/`, `renders/`
 (`v<N>-<perfil>.mp4`, su `.qc.json` y la hoja de contacto), `manifiestos/`, `logs/` y `build/` (el
