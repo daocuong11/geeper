@@ -69,6 +69,9 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   las imágenes hechas con IA y diseño de portada (3 listos o un .psd propio).
 - **Plantillas**: editor visual (marca, logo, colores con su legibilidad y arreglo de un toque, letra, cierre,
   música) con vista previa; colores sacados del logo; «Duplicar» para probar sin tocar los proyectos.
+- **Media**: las apps Craft de storytold (PhotoCraft, FilmCraft, VectorCraft, EffectCraft, LightCraft, DesignCraft,
+  PdfCraft, SoundCraft…) con su interfaz original, en su versión web oficial: «Instalar» (release fijada, SHA256) y
+  «Abrir» a pantalla completa. Se instalan en `~/dev/video-tools/<app>-web/` (`src/lib/craft-web.ts`).
 - **Sistema**: el diagnóstico del doctor.
 - **Buscar acción** (Ctrl+K o ⌘K, o el botón de la barra): escribe lo que quieres hacer («quitar silencios»,
   «16:9», «renderizar») y Enter.

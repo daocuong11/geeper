@@ -76,6 +76,7 @@ const IR_A: { titulo: string; ruta: string; palabras: string }[] = [
   { titulo: "Trabajos", ruta: "/trabajos", palabras: "cola avance log progreso" },
   { titulo: "Anuncios", ruta: "/anuncios", palabras: "campañas ads publicidad" },
   { titulo: "Plantillas", ruta: "/plantillas", palabras: "estilo diseño canal" },
+  { titulo: "Media (apps Craft)", ruta: "/media", palabras: "photocraft filmcraft vectorcraft effectcraft lightcraft designcraft pdfcraft soundcraft photoshop premiere illustrator after effects editar foto video" },
   { titulo: "Cuentas conectadas", ruta: "/cuentas", palabras: "redes youtube tiktok instagram facebook conectar vpn" },
   { titulo: "Sistema", ruta: "/sistema", palabras: "diagnostico doctor problemas estado" },
 ];
