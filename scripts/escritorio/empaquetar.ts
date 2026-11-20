@@ -208,7 +208,9 @@ async function main() {
     return;
   }
   // 6. Instalador.
-  correr("pnpm", ["exec", "electron-builder", "--config", path.join(REPO, "escritorio", "electron-builder.yml"), "--projectDir", APP, "--publish", "never"], {
+  correr("pnpm", ["exec", "electron-builder", "--config", path.join(REPO, "escritorio", "electron-builder.yml"), "--projectDir", APP, "--publish", "never",
+    // La app no trae electron en su node_modules (lo pone electron-builder): se le dice la versión.
+    `-c.electronVersion=${ELECTRON}`], {
     env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" },
   });
   console.log(`Instalador en ${path.join(REPO, "dist-escritorio")}`);
