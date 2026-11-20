@@ -211,6 +211,9 @@ export const Proyecto = z
     /** Dónde se va a publicar: ajusta la banda segura a lo que tapa cada interfaz. */
     plataformas: z.array(Plataforma).default([]),
     entrega: z.object({ master: z.boolean().default(false) }).default({ master: false }),
+    /** La etiqueta de marca arriba durante el video (la tarjeta final la lleva siempre). En clips react
+     *  tapa la cara del streamer: ahí se oculta. */
+    marca: z.boolean().default(true),
     origen: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((p, ctx) => {

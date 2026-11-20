@@ -88,6 +88,7 @@ export const Edicion = z.discriminatedUnion("tipo", [
     comercial: z.boolean().optional(),
     plataformas: z.array(Plataforma).optional(),
     master: z.boolean().optional(),
+    marca: z.boolean().optional(),
   }),
   // ---- Música: desde qué segundo suena y sus pulsos (ver pulsos.ts).
   z.object({ tipo: z.literal("fijarMusica"), inicio: z.number().min(0), pulsos: z.array(z.number().min(0)).optional() }),
@@ -342,6 +343,7 @@ export function aplicarEdicion(original: Proyecto, ed: Edicion): Proyecto {
       if (ed.comercial !== undefined) p.comercial = ed.comercial;
       if (ed.plataformas !== undefined) p.plataformas = [...new Set(ed.plataformas)];
       if (ed.master !== undefined) p.entrega = { ...p.entrega, master: ed.master };
+      if (ed.marca !== undefined) p.marca = ed.marca;
       break;
     case "fijarMusica": {
       const m = p.pistas.find((x) => x.id === "musica")?.clips[0];

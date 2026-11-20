@@ -22,6 +22,8 @@ function resumen(p: Proyecto) {
     "formato/plantilla": `${p.formato} · ${p.plantilla}`,
     voz: `${p.voz.voz} a ${p.voz.velocidad}`,
     mostrar: p.mostrar.map((m) => `${m.de}=${m.a}`).join(", ") || "—",
+    destino: `uso comercial ${p.comercial ? "sí" : "no"} · plataformas ${p.plataformas.join(", ") || "—"} · máster ${p.entrega.master ? "sí" : "no"} · marca arriba ${p.marca ? "sí" : "no"}`,
+    textos: p.textos.map((t) => `${t.id} ${t.inicio.toFixed(1)}+${t.duracion.toFixed(1)} s ${t.estilo}/${t.posicion}: ${t.texto}`),
     escenas: escenasEnLinea(p).map((e) => `${e.escena.id} ${e.duracion.toFixed(2)} s [${p.assets[e.visual.asset]!.ruta}] ${e.escena.texto.slice(0, 50)}`),
     subtitulos: todosLosGrupos(p).map((g) => `${g.inicio.toFixed(2)} ${g.texto}`),
   };

@@ -43,6 +43,11 @@ export interface Candidato {
   texto?: string;
   /** Palabras de emoción encontradas al transcribir. */
   emocion?: number;
+  /**
+   * Vista previa liviana (480p) con aire a cada lado, para verlo y ajustar el tramo en la web. Rutas
+   * relativas a la carpeta de datos; `desde`/`hasta` son los segundos de la fuente que cubre el video.
+   */
+  vista?: { video: string; poster: string; desde: number; hasta: number };
 }
 
 export interface OpcionesMomentos {

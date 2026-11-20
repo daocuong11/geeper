@@ -225,3 +225,54 @@ describe("subtítulos en clips", () => {
     expect(r.malosForma.length).toBe(0);
   });
 });
+
+describe("sugerencias de ganchos y QC explicado", () => {
+  it("filtra citas, términos prohibidos, repetidos y largos", async () => {
+    const { limpiarSugerencias } = await import("@/lib/ganchos");
+    const s = limpiarSugerencias('blabla {"ganchos": ["Nadie vio esto venir", "Dijo «me voy» y se fue", "GTA 6 leak exclusivo", "nadie vio esto venir", "Cuando la policía llega tarde"], "titulo": "Kai PIERDE LA CABEZA"} fin');
+    expect(s.ganchos).toEqual(["Nadie vio esto venir", "Cuando la policía llega tarde"]);
+    expect(s.titulo).toBe("Kai PIERDE LA CABEZA");
+    expect(limpiarSugerencias("sin json")).toEqual({ ganchos: [], titulo: null });
+    expect(limpiarSugerencias('{"ganchos": ["El tráiler oficial"], "titulo": "\\"cita\\""}')).toEqual({ ganchos: [], titulo: null });
+  });
+
+  it("el prompt lleva las reglas duras", async () => {
+    const { promptGanchos } = await import("@/lib/ganchos");
+    const p = promptGanchos({ texto: "no puede ser", canal: "Kai", idioma: "es", react: true });
+    expect(p).toMatch(/NUNCA pongas palabras en boca/);
+    expect(p).toMatch(/MAYÚSCULAS/);
+  });
+
+  it("resume el QC en listo / con avisos / falta, y explica cada regla", async () => {
+    const { resumirQc, explicar } = await import("@/lib/qc-explicado");
+    const ok = { id: "sonoridad", nombre: "x", ok: true };
+    expect(resumirQc([ok]).estado).toBe("listo");
+    expect(resumirQc([ok, { id: "licencias", nombre: "l", ok: false, aviso: true }]).estado).toBe("con-avisos");
+    const r = resumirQc([{ id: "subtitulos", nombre: "s", ok: false }, { id: "clip", nombre: "c", ok: false }]);
+    expect(r.estado).toBe("falta");
+    expect(r.titulo).toBe("Falta arreglar 2 cosas antes de publicar");
+    expect(explicar("subtitulos").hacer).toMatch(/acorta/);
+    expect(explicar("desconocida").tecnico).toBe(true);
+  });
+});
+
+describe("marca en clips react", () => {
+  it("sin marca no hay chip, ni su caja, ni su animación; los textos de arriba suben", () => {
+    const p = clip();
+    p.textos = [{ id: "t1", texto: "Hola", inicio: 0, duracion: 2, estilo: "rotulo", posicion: "arriba" }];
+    const con = compilar(validarProyecto(p), plantilla, "/tmp/m.wav", "/tmp/p");
+    const sin = compilar(validarProyecto({ ...p, marca: false }), plantilla, "/tmp/m.wav", "/tmp/p");
+    expect(con.html).toContain('id="marca"');
+    expect(sin.html).not.toContain('id="marca"');
+    expect(sin.html).not.toContain(`tl.from("#marca .chip"`);
+    expect(sin.cajas.some((c) => c.nombre === "marca")).toBe(false);
+    const y = (c: typeof con) => c.cajas.find((x) => x.nombre.startsWith("texto"))!.caja.y;
+    expect(y(sin)).toBeLessThan(y(con));
+  });
+
+  it("cambiarDestino enciende y apaga la marca", () => {
+    const p = aplicarEdicion(clip(), { tipo: "cambiarDestino", marca: false });
+    expect(p.marca).toBe(false);
+    expect(aplicarEdicion(p, { tipo: "cambiarDestino", marca: true }).marca).toBe(true);
+  });
+});

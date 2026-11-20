@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Aviso, Estado, archivo, pedir, postJson, segundos, useSondeo } from "./comun";
+import { explicar, resumirQc } from "@/lib/qc-explicado";
 import { VistaEnVivo } from "./vista-en-vivo";
 import { ListaTrabajos } from "./lista-trabajos";
 import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
@@ -71,9 +72,23 @@ function medido(v: unknown): string {
 function InformeQc({ r, slug }: { r: Render; slug: string }) {
   const inf = r.informeQc;
   if (!inf) return null;
+  const res = resumirQc(inf.reglas);
+  const color = res.estado === "listo" ? "text-emerald-300" : res.estado === "con-avisos" ? "text-amber-200" : "text-red-300";
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto">
+      <p className={`text-base font-medium ${color}`}>{res.estado === "listo" ? "✓ " : res.estado === "con-avisos" ? "! " : "✗ "}{res.titulo}</p>
+      {[...res.bloquean.map((x) => ({ ...x, bloquea: true })), ...res.avisos.map((x) => ({ ...x, bloquea: false }))].map((x) => {
+        const e = explicar(x.id);
+        return (
+          <div key={x.id} className={`rounded-lg border p-3 text-sm ${x.bloquea ? "border-red-900 bg-red-950/30" : "border-amber-900 bg-amber-950/20"}`}>
+            <p className="font-medium">{x.bloquea ? "Hay que arreglarlo: " : "Para mirar: "}{e.que}</p>
+            <p className="mt-1 text-tenue">Qué hacer: {e.hacer}</p>
+          </div>
+        );
+      })}
+      <details>
+        <summary className="cursor-pointer text-xs text-tenue">Ver el detalle técnico (todas las revisiones)</summary>
+      <div className="mt-2 overflow-x-auto">
       <table className="w-full min-w-0 table-fixed text-left text-xs">
         <thead className="text-tenue"><tr><th className="py-1 pr-2">Regla</th><th className="pr-2">Medido</th><th>Objetivo</th></tr></thead>
         <tbody>
@@ -88,6 +103,7 @@ function InformeQc({ r, slug }: { r: Render; slug: string }) {
         </tbody>
       </table>
       </div>
+      </details>
       {inf.hojaContacto && (
         <figure>
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -352,7 +368,7 @@ export function EditorProyecto({ id }: { id: string }) {
 
       {render?.informeQc && (
         <section className="tarjeta p-4">
-          <h2 className="mb-3 font-medium">Control de calidad del último render {render.informeQc.aprobado ? "(aprobado)" : "(no aprobado)"}</h2>
+          <h2 className="mb-3 font-medium">¿Está listo para publicar?</h2>
           <InformeQc r={render} slug={fila.slug} />
         </section>
       )}

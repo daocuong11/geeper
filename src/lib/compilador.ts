@@ -361,7 +361,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
   const ctaW = anchoTexto(plantilla.cta, m.ctaFs) + 80;
   const cierreH = tituloLineas.length * m.tituloFs + 28 + m.ctaFs * 1.2 + 32;
   const cajasBase: { nombre: string; caja: Caja }[] = [
-    { nombre: "marca", caja: { x: centroX - chipW / 2, y: m.marcaTop, w: chipW, h: chipH } },
+    ...(p.marca ? [{ nombre: "marca", caja: { x: centroX - chipW / 2, y: m.marcaTop, w: chipW, h: chipH } }] : []),
     { nombre: "subtítulos", caja: m.subs },
     { nombre: "tarjeta final: título", caja: { x: centroX - tituloW / 2, y: centroY - cierreH / 2, w: tituloW, h: tituloLineas.length * m.tituloFs } },
     { nombre: "tarjeta final: CTA", caja: { x: centroX - ctaW / 2, y: centroY + cierreH / 2 - (m.ctaFs * 1.2 + 32), w: ctaW, h: m.ctaFs * 1.2 + 32 } },
@@ -372,7 +372,7 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
   for (const t of p.textos) {
     if (t.inicio >= inicioTarjeta) continue;
     const dur = Math.min(t.duracion, inicioTarjeta - t.inicio);
-    const caja = cajaTexto(t, m, chipH);
+    const caja = cajaTexto(t, m, p.marca ? chipH : 0);
     const fs = cuerpoTexto(t, m);
     cajasBase.push({ nombre: `texto «${t.texto.slice(0, 24)}»`, caja });
     const id = `t-${t.id}`;
@@ -447,10 +447,10 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
 ${videos}
 ${textosHtml.join("\n")}
       <audio id="mezcla" class="clip" src="assets/mezcla.wav" data-start="0" data-duration="${f3(total)}" data-track-index="1"></audio>
-      <div id="marca" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="2">
+${p.marca ? `      <div id="marca" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="2">
         <div class="chip">${logoHtml}<span class="txt">${e(plantilla.marca.texto)}</span></div>
       </div>
-      <div id="subtitulos" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="3" data-track-kind="captions">
+` : ""}      <div id="subtitulos" class="clip" data-start="0" data-duration="${f3(inicioTarjeta)}" data-track-index="3" data-track-kind="captions">
 ${gruposHtml}
       </div>
       <div id="cierre" class="clip" data-start="${f3(inicioTarjeta)}" data-duration="${f3(total - inicioTarjeta)}" data-track-index="4">
@@ -476,8 +476,8 @@ ${gruposHtml}
       ANIMS.forEach((a) => {
         tl.fromTo("#" + a.id, a.desde, Object.assign({}, a.hasta, { duration: a.dur, ease: a.ease || "none", immediateRender: false }), a.t);
       });
-      tl.from("#marca .chip", { y: -30, opacity: 0, duration: 0.45, ease: "back.out(1.6)" }, 0.15);
-      // Karaoke: un grupo visible a la vez; la palabra que suena se enciende.
+${p.marca ? `      tl.from("#marca .chip", { y: -30, opacity: 0, duration: 0.45, ease: "back.out(1.6)" }, 0.15);
+` : ""}      // Karaoke: un grupo visible a la vez; la palabra que suena se enciende.
       GRUPOS.forEach((g) => {
         const ini = g.ini;
         const fin = g.fin;

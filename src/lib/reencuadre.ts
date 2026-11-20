@@ -73,6 +73,7 @@ export async function reencuadrarEscena(ctx: Contexto, proyectoId: string, origi
     delete c.ancla;
     n++;
   }
+  if (layout === "react") p.marca = false;
   const clipOrigen = p.origen.clip as Record<string, unknown> | undefined;
   if (clipOrigen) p.origen.clip = { ...clipOrigen, encuadre: layout, reencuadre: det.resumen };
   const final = validarProyecto(p);

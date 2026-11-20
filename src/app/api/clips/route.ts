@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Campania } from "@/lib/clips";
+import { ultimoLatidoWorker } from "@/lib/cola";
 import { db } from "@/lib/db";
 import { Formato } from "@/lib/esquema";
 import { leerFuente } from "@/lib/fuentes";
@@ -16,9 +17,11 @@ export async function GET() {
     where: { tipo: "clip.momentos" },
     orderBy: { creado: "desc" },
     take: 10,
-    select: { id: true, estado: true, etapa: true, progreso: true, error: true, payload: true, creado: true },
+    select: { id: true, estado: true, etapa: true, progreso: true, error: true, payload: true, resultado: true, creado: true },
   });
-  return json({ fuentes: await listarFuentes(), trabajos });
+  const latido = await ultimoLatidoWorker();
+  const workerVivo = !!latido && Date.now() - latido.getTime() < 60_000;
+  return json({ fuentes: await listarFuentes(), trabajos, workerVivo });
 }
 
 const Pedido = z.object({

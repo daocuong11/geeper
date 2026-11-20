@@ -70,7 +70,8 @@ pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio para 
 ```
 
 **Clips de material largo** (VOD, video publicado o grabación propia; nunca un directo en vivo): desde la
-página **Clips** (`/clips`: buscar momentos, radar de tendencias y «Hacer clip») o desde la terminal:
+página **Clips** (`/clips`: un asistente de 3 pasos —elige tu video, elige un momento, ajusta y crea— pensado para
+quien no sabe de video; sugiere ganchos con el modelo local de MPT si Docker está encendido) o desde la terminal:
 
 ```bash
 pnpm tsx scripts/momentos.ts <url|archivo> [--top 8] [--min 15] [--max 40] [--idioma es]   # candidatos.md

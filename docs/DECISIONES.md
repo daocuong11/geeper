@@ -301,3 +301,37 @@ qué no y por qué (detalle de cada pieza en HEREDADO.md).
   no se puede frenar como la de Kokoro (§3): en clips, pasarse de 17 car./s es la regla de aviso
   «subtitulos-ritmo»; el largo de línea (≤ 42) y el número de líneas (≤ 2) siguen bloqueando. Los
   shorts propios no cambian.
+
+## 22. Clips para quien no sabe nada de video (asistente de 3 pasos)
+
+Decisiones del dueño (2026-11-19): asistente guiado, ganchos sugeridos con el modelo local, permiso con
+casilla y la UX simple primero en clips (el resto de la app, después).
+
+- **Paso 1, elige tu video:** pegar un enlace o arrastrar un archivo. La subida va en flujo (el
+  cuerpo es el archivo, hasta 20 GB, sin cargarlo en memoria) a `~/geeper-data/_subidos/`. El idioma
+  se pregunta en palabras («¿En qué idioma hablan?»); la duración mínima y máxima quedan en «Más
+  opciones». El radar se ofrece como «¿No sabes qué video usar?».
+- **Paso 2, elige un momento:** cada candidato trae una vista previa liviana (480p, 10 s de aire a
+  cada lado) y una miniatura; el play reproduce sólo el momento. El puntaje se muestra como 1 a 3
+  estrellas (por tercios) y los motivos en palabras («El chat explotó»).
+- **Paso 3, ajusta y crea:** barras de inicio y fin sobre la vista previa, «Ver mi recorte», estilos
+  con dibujo, «✨ Sugerirme ideas» y permiso con casilla (campaña, autorización escrita o video propio).
+  El paso vive en la URL: recargar no saca del paso.
+- **Ganchos con Ollama local** (`gemma4:26b` del stack de MPT, vía `docker exec`, sin abrir puertos):
+  toma el candado de la GPU sin esperar (si está ocupada lo dice), descarga el modelo al terminar
+  (`--keepalive 0s`) y filtra lo que devuelve: sin comillas (serían palabras en boca del creador), sin
+  términos prohibidos, sin repetidos. Si Docker está apagado lo dice y el campo queda para escribir.
+- **Motor apagado:** la página avisa si el worker no late hace más de 60 s y cómo encenderlo.
+- **QC en palabras:** «¿Está listo para publicar?» con «Listo», «Listo, con cosas para mirar» o «Falta
+  arreglar N cosas», y por cada una qué se revisa y qué hacer (`src/lib/qc-explicado.ts`). La tabla
+  técnica queda plegada.
+- **Marca:** en react la etiqueta de arriba tapaba los ojos del streamer y abajo no cabe (quedan 20 px
+  entre los subtítulos y el borde de la banda segura; la etiqueta mide ~80). `marca: false` la quita
+  durante el video (la tarjeta final la muestra igual); los clips react nacen así y el editor la
+  enciende o apaga en «Destino».
+- **Verificado:** subida por API (y rechazo de lo que no es video), análisis con vistas previas,
+  sugerencias con Docker apagado (mensaje claro en 0,3 s), los 3 pasos a 1280 y 390 px, «Crear mi
+  clip» con clics reales, el QC en palabras y un render react sin marca aprobado. En `next dev` dentro
+  del worktree la página se recarga en bucle (también `/trabajos`, que no se tocó): las pruebas de UI
+  se hicieron con `next build` + `next start`, donde no pasa.
+

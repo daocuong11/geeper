@@ -83,7 +83,7 @@ export async function vistaProyecto(id: string) {
   }
   const extras = p
     ? {
-        destino: { comercial: p.comercial, plataformas: p.plataformas, master: p.entrega.master },
+        destino: { comercial: p.comercial, plataformas: p.plataformas, master: p.entrega.master, marca: p.marca },
         textos: p.textos,
         libres: pistasLibres(p).map((pi) => ({
           id: pi.id,

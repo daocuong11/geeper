@@ -69,7 +69,7 @@ export async function traerFuente(src: string, o: { maxMinutos?: number; log?: R
     if (!(await existe(video))) throw new Error(`No existe el archivo ${video}`);
     const info: InfoFuente = {
       url: video,
-      titulo: path.parse(video).name,
+      titulo: path.parse(video).name.replace(/^[a-f0-9]{8}-/, ""),
       canal: null,
       plataforma: "archivo",
       id: null,

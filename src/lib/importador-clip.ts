@@ -223,6 +223,8 @@ export async function importarClip(ctx: Contexto, d: DatosClip): Promise<{ versi
     escenas,
     marcadores: tramos.slice(1).map((t, i) => ({ id: `m${i + 1}`, tiempo: t.inicio, nombre: `Corte ${i + 1}`, tipo: "corte" as const })),
     origen: { clip: origen },
+    // En react la etiqueta de arriba taparía la cara: la marca queda en la tarjeta final.
+    marca: encuadre !== "react",
   });
   await escribirAtomico(path.join(ctx.dir, "assets", "origen-clip.json"), JSON.stringify(origen, null, 1));
   const version = await guardarProyecto(d.proyectoId, proyecto, `Clip de ${fuente.info.canal ?? fuente.info.titulo} (${d.inicio.toFixed(0)}–${d.fin.toFixed(0)} s)`);

@@ -7,6 +7,7 @@ import path from "node:path";
 import { escribirAtomico, existe } from "./archivos";
 import type { Palabra } from "./esquema";
 import { dirFuentes, traerFuente, type InfoFuente } from "./fuentes";
+import { dirDatos } from "./rutas";
 import { ffmpeg } from "./media";
 import {
   ajustarBordes, chatTwitch, chatYoutube, contarEmocion, dbPorSegundo, elegirVentanas, OPCIONES_MOMENTOS, puntajeFinal, puntuar,
@@ -32,6 +33,9 @@ export interface ResultadoMomentos {
   candidatos: Candidato[];
   creado: string;
 }
+
+/** Aire alrededor de cada momento en la vista previa (s). */
+export const AIRE = 10;
 
 const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 
@@ -69,6 +73,27 @@ export async function buscarMomentos(pe: PedidoMomentos, log: Registro = () => {
       log(`  ${c.n}. ${mmss(c.inicio)}–${mmss(c.fin)} transcrito`);
     }
   }
+  // Vistas previas: 10 s de aire a cada lado para poder correr los bordes desde la web.
+  const dirVistas = path.join(f.dir, "candidatos");
+  await fs.mkdir(dirVistas, { recursive: true });
+  for (const c of cands) {
+    signal?.throwIfAborted();
+    const desde = Math.max(0, c.inicio - AIRE);
+    const hasta = Math.min(n, c.fin + AIRE);
+    const base = `vista-${c.inicio.toFixed(1)}-${c.fin.toFixed(1)}`;
+    const video = path.join(dirVistas, `${base}.mp4`);
+    const poster = path.join(dirVistas, `${base}.jpg`);
+    if (!(await existe(video))) {
+      await ffmpeg(["-ss", desde.toFixed(2), "-t", (hasta - desde).toFixed(2), "-i", f.video, "-vf", "scale=-2:480", "-c:v", "libx264", "-preset", "veryfast",
+        "-crf", "28", "-g", "30", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", video]);
+    }
+    if (!(await existe(poster))) {
+      await ffmpeg(["-ss", Math.min(Math.max(c.pico, c.inicio), c.fin - 0.1).toFixed(2), "-i", f.video, "-frames:v", "1", "-vf", "scale=-2:360", "-q:v", "4", poster]);
+    }
+    c.vista = { video: path.relative(dirDatos(), video), poster: path.relative(dirDatos(), poster), desde, hasta };
+  }
+  log(`Vistas previas listas (${cands.length}).`);
+
   const r: ResultadoMomentos = {
     fuente: f.id, info: f.info, opciones: o, idioma,
     candidatos: [...cands].sort((a, b) => b.puntaje - a.puntaje),
