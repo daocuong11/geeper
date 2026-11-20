@@ -7,7 +7,8 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { crearInstalador } from "./instalar-craft";
+import { apuntar, crearInstalador } from "./instalar-craft";
+import { compararVersiones } from "./novedades";
 import { ESTUDIO } from "./rutas";
 
 export type GrupoCraft = "Imagen y diseño" | "Video y sonido" | "Documentos" | "3D y técnico";
@@ -83,25 +84,54 @@ type Instalador = ReturnType<typeof crearInstalador>;
 const g = globalThis as unknown as { __instaladoresWeb?: Map<string, Instalador> };
 const instaladores = (g.__instaladoresWeb ??= new Map());
 
-export function instaladorWeb(a: AppCraft): Instalador {
-  let i = instaladores.get(a.app);
+const VERSION = /^\d+\.\d+\.\d+$/;
+
+/** Instalador de la versión web `version` (por defecto, la del catálogo). Uno por app y versión. */
+export function instaladorWeb(a: AppCraft, version = a.version): Instalador {
+  if (!VERSION.test(version)) throw new Error("Versión inválida");
+  const clave = `${a.app}@${version}`;
+  let i = instaladores.get(clave);
   if (!i) {
     i = crearInstalador({
       app: a.app,
-      version: a.version,
-      archivo: `${a.app}-web-${a.version}.zip`,
+      version,
+      archivo: `${a.app}-web-${version}.zip`,
       carpeta: `${a.app}-web`,
       extraer: "zip",
-      raiz: `${a.app}-web-${a.version}`,
+      raiz: `${a.app}-web-${version}`,
       preparar: prepararWeb,
       verificar: async () => {
         const v = await versionWeb(a.app);
         return v ? `${a.nombre} ${v}` : null;
       },
     });
-    instaladores.set(a.app, i);
+    instaladores.set(clave, i);
   }
   return i;
+}
+
+/** La instalación en curso (o la última) de cualquier versión de la app. */
+export function instalacionWeb(a: AppCraft) {
+  const propias = [...instaladores.entries()].filter(([k]) => k.startsWith(`${a.app}@`)).map(([, i]) => i.estado());
+  return propias.find((e) => ["descargando", "verificando", "descomprimiendo"].includes(e.fase)) ?? propias.find((e) => e.fase === "error") ?? propias.at(-1) ?? null;
+}
+
+/** Versiones web que quedaron en disco (la actual y las anteriores, para volver atrás), de la más nueva a la más vieja. */
+export async function versionesWeb(app: string): Promise<string[]> {
+  const base = path.join(ESTUDIO, `${app}-web`);
+  const nombres = await fs.readdir(base).catch(() => [] as string[]);
+  const listas: string[] = [];
+  for (const v of nombres.filter((n) => VERSION.test(n))) {
+    if (await fs.access(path.join(base, v, `${app}-web-${v}`, "index.html")).then(() => true, () => false)) listas.push(v);
+  }
+  return listas.sort((x, y) => compararVersiones(y, x));
+}
+
+/** Vuelve a una versión web ya instalada (sin descargar nada). */
+export async function usarVersionWeb(app: string, version: string): Promise<void> {
+  if (!(await versionesWeb(app)).includes(version)) throw new Error(`La versión ${version} no está instalada`);
+  const base = path.join(ESTUDIO, `${app}-web`);
+  await apuntar(base, path.join(base, "actual"), path.join(base, version, `${app}-web-${version}`));
 }
 
 const MIME: Record<string, string> = {

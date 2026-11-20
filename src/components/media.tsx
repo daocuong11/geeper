@@ -9,7 +9,15 @@ interface EstadoInstalacion {
   progreso: number;
   detalle: string;
 }
-type FilaApp = AppCraft & { release: string; instalada: string | null; instalacion: EstadoInstalacion | null };
+interface Lanzamiento { version: string; fecha: string; url: string; notas: string }
+type FilaApp = AppCraft & { release: string; instalada: string | null; versiones: string[]; ultima: Lanzamiento | null; instalacion: EstadoInstalacion | null };
+
+/** «0.25.0» > «0.24.1». */
+const masNueva = (a: string, b: string) => {
+  const [x, y] = [a, b].map((v) => v.split(".").map(Number));
+  for (let i = 0; i < 3; i++) if ((x![i] ?? 0) !== (y![i] ?? 0)) return (x![i] ?? 0) > (y![i] ?? 0);
+  return false;
+};
 
 const GRUPOS: GrupoCraft[] = ["Imagen y diseño", "Video y sonido", "Documentos", "3D y técnico"];
 const instalando = (e: EstadoInstalacion | null) => !!e && ["descargando", "verificando", "descomprimiendo"].includes(e.fase);
@@ -19,10 +27,10 @@ export function Media() {
   const { datos, error } = useSondeo<FilaApp[]>("/api/media", 2000);
   const [msg, setMsg] = useState<string | null>(null);
 
-  async function instalar(a: FilaApp) {
+  async function enviar(a: FilaApp, cuerpo: { version?: string; usar?: string } = {}) {
     setMsg(null);
     try {
-      await pedir(`/api/media/${a.app}`, { method: "POST" });
+      await pedir(`/api/media/${a.app}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(cuerpo) });
     } catch (e) {
       setMsg(e instanceof Error ? e.message : String(e));
     }
@@ -45,7 +53,7 @@ export function Media() {
       {datos && GRUPOS.map((g) => (
         <section key={g} aria-labelledby={`grupo-${g}`}>
           <h2 id={`grupo-${g}`} className="mb-2 font-medium">{g}</h2>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {datos.filter((a) => a.grupo === g).map((a) => (
               <li key={a.app} className="tarjeta flex flex-col gap-2 p-4">
                 <div className="flex items-baseline justify-between gap-2">
@@ -66,18 +74,35 @@ export function Media() {
                       <p className="text-xs text-tenue" role="status">{a.instalacion!.detalle}</p>
                     </>
                   ) : a.instalada ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link href={`/media/${a.app}`} className="boton boton-primario">Abrir {a.nombre}</Link>
-                      <a href={`/craft/${a.app}/index.html`} target="_blank" rel="noreferrer" className="text-xs text-tenue underline">en otra pestaña</a>
-                      <span className="ml-auto text-xs text-tenue">{a.instalada}</span>
-                    </div>
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link href={`/media/${a.app}`} className="boton boton-primario">Abrir {a.nombre}</Link>
+                        <a href={`/craft/${a.app}/index.html`} target="_blank" rel="noreferrer" className="text-xs text-tenue underline">en otra pestaña</a>
+                        <span className="ml-auto text-xs text-tenue">{a.instalada}</span>
+                      </div>
+                      {a.ultima && masNueva(a.ultima.version, a.instalada) && (
+                        <div className="flex flex-wrap items-center gap-2 rounded border border-sky-800 bg-sky-950/40 px-2 py-1.5 text-xs">
+                          <span>Hay una versión nueva: <strong>{a.ultima.version}</strong> ({a.ultima.fecha})</span>
+                          <a href={a.ultima.url} target="_blank" rel="noreferrer" className="underline">qué cambió</a>
+                          <button type="button" className="boton ml-auto py-0.5 text-xs" onClick={() => void enviar(a, { version: a.ultima!.version })}>Actualizar</button>
+                        </div>
+                      )}
+                      {a.versiones.filter((v) => v !== a.instalada).length > 0 && (
+                        <p className="text-xs text-tenue">
+                          ¿Algo no anda?{" "}
+                          {a.versiones.filter((v) => v !== a.instalada).slice(0, 2).map((v) => (
+                            <button key={v} type="button" className="mr-2 underline" onClick={() => void enviar(a, { usar: v })}>Volver a la {v}</button>
+                          ))}
+                        </p>
+                      )}
+                    </>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" className="boton" onClick={() => void instalar(a)}>Instalar ({a.version})</button>
+                      <button type="button" className="boton" onClick={() => void enviar(a)}>Instalar ({a.version})</button>
                       <span className="text-xs text-tenue">entre 15 y 100 MB</span>
                     </div>
                   )}
-                  {a.instalacion?.fase === "error" && <p className="text-xs text-red-300" role="alert">No se instaló: {a.instalacion.detalle}</p>}
+                  {a.instalacion?.fase === "error" && <p className="text-xs text-red-300" role="alert">{a.instalada ? "No se actualizó" : "No se instaló"}: {a.instalacion.detalle}</p>}
                 </div>
               </li>
             ))}

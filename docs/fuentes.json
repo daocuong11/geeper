@@ -1,0 +1,386 @@
+{
+  "$comentario": "Repos de los que Geeper tomó código, ideas o binarios, y hasta dónde se revisaron. Lo lee src/lib/novedades.ts; lo actualiza `pnpm tsx scripts/novedades.ts --marcar <id>` después de revisar (skill /novedades). `tipo`: release (versiones publicadas), commits (sin releases: se miran los commits) o npm. `como`: binario (Geeper corre su CLI), web (app de Media), codigo (se portó código o ideas: hay que revisarlo a mano), servicio (corre aparte, p. ej. en Docker).",
+  "fuentes": [
+    {
+      "id": "photocraft",
+      "repo": "storytold/photocraft",
+      "tipo": "release",
+      "como": [
+        "binario",
+        "web"
+      ],
+      "version": "0.23.1",
+      "revisado": "2026-11-19",
+      "que": "CLI de portadas (composición por capas, PSD con @titulo/@imagen/@marca) y looks de color en LUT; app en Media.",
+      "archivos": [
+        "src/lib/photocraft.ts",
+        "src/lib/portada.ts",
+        "src/lib/looks.ts",
+        "src/lib/apariencia.ts",
+        "src/lib/instalar-photocraft.ts",
+        "src/lib/rutas.ts"
+      ],
+      "docs": "docs/PHOTOCRAFT.md",
+      "pruebas": [
+        "tests/photocraft.test.ts",
+        "tests/portadas-color.test.ts"
+      ]
+    },
+    {
+      "id": "vectorcraft",
+      "repo": "storytold/vectorcraft",
+      "tipo": "release",
+      "como": [
+        "binario",
+        "web",
+        "codigo"
+      ],
+      "version": "0.24.1",
+      "commit": "54f58ff",
+      "revisado": "2026-11-19",
+      "que": "CLI para convertir .ai/.pdf/.eps a SVG y vectorizar logos; revisión de SVG seguros y regla de nitidez (Production Preflight).",
+      "archivos": [
+        "src/lib/vectorcraft.ts",
+        "src/lib/svg.ts",
+        "src/lib/nitidez.ts",
+        "src/lib/formatos-vector.ts",
+        "src/lib/otio-svg.ts",
+        "src/lib/rutas.ts"
+      ],
+      "docs": "docs/HEREDADO.md#vectorcraft-0241",
+      "pruebas": [
+        "tests/vectorcraft.test.ts",
+        "tests/svg.test.ts"
+      ]
+    },
+    {
+      "id": "filmcraft",
+      "repo": "storytold/filmcraft",
+      "tipo": "release",
+      "como": [
+        "web",
+        "codigo"
+      ],
+      "version": "0.20.1",
+      "commit": "ae0a71d",
+      "revisado": "2026-11-19",
+      "que": "Formato .otio que lee FilmCraft (settings, gain_db, Cross Dissolve) y el paquete «Terminar en otro editor»; app en Media.",
+      "archivos": [
+        "src/lib/otio.ts",
+        "src/lib/paquete-editor.ts",
+        "src/lib/que-no-llega.ts",
+        "src/lib/otio-svg.ts"
+      ],
+      "docs": "docs/HEREDADO.md#filmcraft-0201",
+      "pruebas": [
+        "tests/otio.test.ts",
+        "tests/paquete-editor.test.ts"
+      ]
+    },
+    {
+      "id": "effectcraft",
+      "repo": "storytold/effectcraft",
+      "tipo": "release",
+      "como": [
+        "web",
+        "codigo"
+      ],
+      "version": "0.24.1",
+      "revisado": "2026-11-19",
+      "que": "Fórmulas portadas a TypeScript: transiciones con máscara, tinte/niveles/viñeta/desenfoque/grano, modos de fusión, Easy Ease; app en Media.",
+      "archivos": [
+        "src/lib/efectos.ts",
+        "src/lib/efectos-calculo.ts",
+        "src/lib/efectos-esquema.ts",
+        "src/lib/mezcla-auto.ts"
+      ],
+      "docs": "docs/EFFECTCRAFT.md",
+      "pruebas": [
+        "tests/efectos.test.ts"
+      ]
+    },
+    {
+      "id": "lightcraft",
+      "repo": "storytold/lightcraft",
+      "tipo": "release",
+      "como": [
+        "web",
+        "codigo"
+      ],
+      "version": "0.21.1",
+      "commit": "976f52a",
+      "revisado": "2026-11-19",
+      "que": "Reencuadre automático por cara (idea y parámetros); app en Media.",
+      "archivos": [
+        "src/lib/caras.ts",
+        "py/caras.py",
+        "src/components/selector-encuadre.tsx"
+      ],
+      "docs": "docs/HEREDADO.md#lightcraft-0211",
+      "pruebas": [
+        "tests/caras.test.ts"
+      ]
+    },
+    {
+      "id": "designcraft",
+      "repo": "storytold/designcraft",
+      "tipo": "release",
+      "como": [
+        "web",
+        "codigo"
+      ],
+      "version": "0.20.1",
+      "commit": "a354990",
+      "revisado": "2026-11-19",
+      "que": "Líneas equilibradas, colores de marca con legibilidad WCAG, variantes en tabla, pasos encadenados; app en Media.",
+      "archivos": [
+        "src/lib/subtitulos.ts",
+        "src/lib/colores-marca.ts",
+        "src/lib/paleta.ts",
+        "src/lib/anuncios/tabla.ts",
+        "src/lib/encadenar.ts"
+      ],
+      "docs": "docs/HEREDADO.md#designcraft-0210",
+      "pruebas": [
+        "tests/subtitulos.test.ts",
+        "tests/colores-marca.test.ts",
+        "tests/tabla-variantes.test.ts",
+        "tests/encadenar.test.ts"
+      ]
+    },
+    {
+      "id": "pdfcraft",
+      "repo": "storytold/pdfcraft",
+      "tipo": "release",
+      "como": [
+        "web",
+        "codigo"
+      ],
+      "version": "0.21.1",
+      "commit": "6de8335",
+      "revisado": "2026-11-19",
+      "que": "Lectura segura de secretos, revisión guiada de palabras dudosas, paleta Ctrl+K; app en Media.",
+      "archivos": [
+        "src/lib/redes/archivo-privado.ts",
+        "src/lib/redes/privados.ts",
+        "src/components/paleta.tsx",
+        "src/components/edicion-avanzada.tsx"
+      ],
+      "docs": "docs/HEREDADO.md#pdfcraft-0211",
+      "pruebas": [
+        "tests/paleta.test.ts",
+        "tests/redes-nucleo.test.ts"
+      ]
+    },
+    {
+      "id": "craft-libs",
+      "repo": "storytold/craft-libs",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "revisado": "2026-11-18",
+      "que": "Librerías comunes de las apps Craft (códecs, interchange): referencia para formatos y efectos.",
+      "archivos": [
+        "src/lib/otio.ts",
+        "src/lib/efectos.ts"
+      ],
+      "docs": "docs/HEREDADO.md"
+    },
+    {
+      "id": "soundcraft",
+      "repo": "storytold/soundcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.20.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "figcraft",
+      "repo": "storytold/figcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.18.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "deckcraft",
+      "repo": "storytold/deckcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.18.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "wordcraft",
+      "repo": "storytold/wordcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.18.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "gridcraft",
+      "repo": "storytold/gridcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.19.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "cadcraft",
+      "repo": "storytold/cadcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.20.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "materialcraft",
+      "repo": "storytold/materialcraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.4.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "texturecraft",
+      "repo": "storytold/texturecraft",
+      "tipo": "release",
+      "como": [
+        "web"
+      ],
+      "version": "0.6.1",
+      "revisado": "2026-11-19",
+      "que": "App en Media."
+    },
+    {
+      "id": "anicraft",
+      "repo": "storytold/anicraft",
+      "tipo": "release",
+      "como": [],
+      "version": "0.2.1",
+      "revisado": "2026-11-19",
+      "que": "Sólo escritorio: en Media se enlaza su instalador. Si publica versión web, se puede sumar."
+    },
+    {
+      "id": "hyperframes",
+      "repo": "heygen-com/hyperframes",
+      "tipo": "npm",
+      "paquete": "hyperframes",
+      "como": [
+        "binario"
+      ],
+      "version": "0.9.27",
+      "revisado": "2026-11-19",
+      "que": "Motor de render (HTML → video), `check` y `snapshot`. Fijado en HYPERFRAMES_VERSION.",
+      "archivos": [
+        "src/lib/rutas.ts",
+        "src/lib/compilador.ts",
+        "src/lib/render.ts",
+        "src/lib/qc.ts"
+      ],
+      "docs": "README.md",
+      "pruebas": [
+        "tests/v2.test.ts"
+      ]
+    },
+    {
+      "id": "moneyprinterturbo",
+      "repo": "harry0703/MoneyPrinterTurbo",
+      "tipo": "release",
+      "como": [
+        "servicio"
+      ],
+      "revisado": "2026-11-19",
+      "que": "Genera guion, voz y clips (corre en Docker). Geeper usa su API HTTP.",
+      "archivos": [
+        "src/lib/mpt.ts",
+        "src/lib/importador.ts",
+        "worker/ejecutores.ts"
+      ],
+      "docs": "docs/HEREDADO.md"
+    },
+    {
+      "id": "claude-ads",
+      "repo": "AgriciDaniel/claude-ads",
+      "tipo": "release",
+      "como": [
+        "codigo"
+      ],
+      "version": "2.1.0",
+      "revisado": "2026-11-19",
+      "que": "Base de la sección Anuncios: chequeos, catálogo de formatos y flujo de campaña.",
+      "archivos": [
+        "src/lib/anuncios/catalogo.ts",
+        "src/lib/anuncios/revision.ts",
+        "src/lib/anuncios/muestra.ts",
+        "src/lib/anuncios/marca.ts"
+      ],
+      "docs": "docs/ANUNCIOS.md",
+      "pruebas": [
+        "tests/anuncios.test.ts"
+      ]
+    },
+    {
+      "id": "gtavi-claudecode",
+      "repo": "Bodila51/gtavi-claudecode",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "commit": "dd95d39",
+      "revisado": "2026-11-19",
+      "que": "Clips de material largo: momentos por sonoridad, reencuadre react, radar de tendencias.",
+      "archivos": [
+        "scripts/momentos.ts",
+        "scripts/importar-clip.ts",
+        "src/lib/reencuadre.ts",
+        "py/facecam.py",
+        "py/reencuadre.py"
+      ],
+      "docs": "docs/DECISIONES.md",
+      "pruebas": [
+        "tests/clips.test.ts"
+      ]
+    },
+    {
+      "id": "opencv-zoo",
+      "repo": "opencv/opencv_zoo",
+      "tipo": "commits",
+      "ruta": "models/face_detection_yunet",
+      "como": [
+        "codigo"
+      ],
+      "commit": "25f423d",
+      "revisado": "2026-11-19",
+      "que": "Modelo YuNet de detección de caras (fijado a un commit con SHA-256).",
+      "archivos": [
+        "src/lib/caras.ts",
+        "src/lib/reencuadre.ts"
+      ],
+      "docs": "docs/HEREDADO.md#lightcraft-0211"
+    }
+  ]
+}

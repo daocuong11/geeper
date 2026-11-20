@@ -73,6 +73,11 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   PdfCraft, SoundCraft…) con su interfaz original, en su versión web oficial: «Instalar» (release fijada, SHA256) y
   «Abrir» a pantalla completa. Se instalan en `~/dev/video-tools/<app>-web/` (`src/lib/craft-web.ts`).
 - **Sistema**: el diagnóstico del doctor.
+  Abajo, «Novedades de los repos integrados»: Geeper mira una vez al día si los repos de los que salió
+  (`docs/fuentes.json`: apps Craft, Hyperframes, MoneyPrinterTurbo, claude-ads, gtavi-claudecode, YuNet)
+  publicaron versiones o cambios. Las apps de Media se actualizan con un clic (con «Volver a la …»); lo
+  demás lo revisa Claude con la skill `/novedades` (`scripts/novedades.ts`: informe, `--probar` un CLI nuevo
+  al lado del actual, `--marcar` revisado).
 - **Buscar acción** (Ctrl+K o ⌘K, o el botón de la barra): escribe lo que quieres hacer («quitar silencios»,
   «16:9», «renderizar») y Enter.
 

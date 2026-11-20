@@ -9,6 +9,7 @@
 import { createHash } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -34,6 +35,48 @@ export interface AppCraft {
   preparar?: (dir: string) => Promise<void>;
 }
 
+/**
+ * Descarga con reintentos: GitHub a veces tarda en conectar con su servidor de archivos (Node corta con
+ * «fetch failed») o corta a mitad («terminated»). Tres intentos con pausa creciente y, si no, curl, que
+ * espera más. Un error de HTTP no se reintenta.
+ */
+export async function bajar(url: string, intentos = 3, espera = 2000): Promise<Response> {
+  for (let i = 1; ; i++) {
+    try {
+      // Se baja entero aquí para que un corte a mitad de la descarga también se reintente.
+      const r = await fetch(url);
+      if (!r.ok) return r;
+      const datos = Buffer.from(await r.arrayBuffer());
+      return new Response(datos, { status: r.status, headers: { "content-length": String(datos.length) } });
+    } catch (e) {
+      if (i < intentos) {
+        await new Promise((r) => setTimeout(r, espera * i));
+        continue;
+      }
+      // El fetch de Node corta a los 10 s de intentar conectar; curl espera más. El archivo se sigue
+      // verificando con su SHA256 después, igual que por fetch.
+      const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "geeper-bajar-"));
+      try {
+        const destino = path.join(tmp, "archivo");
+        const r = await correr("curl", ["-fsSL", "--retry", "3", "--connect-timeout", "90", "--max-time", "1800", "-o", destino, url], { permitirFallo: true, timeout: 1_900_000 });
+        if (r.codigo !== 0) throw new Error(`No se pudo conectar con GitHub (${e instanceof Error ? e.message : String(e)}). Revisa la conexión y vuelve a intentar.`);
+        const datos = await fs.readFile(destino);
+        return new Response(datos, { headers: { "content-length": String(datos.length) } });
+      } finally {
+        await fs.rm(tmp, { recursive: true, force: true });
+      }
+    }
+  }
+}
+
+/** Cambia el enlace `actual` de forma atómica (un enlace temporal y rename). */
+export async function apuntar(dir: string, actual: string, destino: string): Promise<void> {
+  const enlaceTmp = path.join(dir, `.actual-${process.pid}`);
+  await fs.rm(enlaceTmp, { force: true });
+  await fs.symlink(destino, enlaceTmp);
+  await fs.rename(enlaceTmp, actual);
+}
+
 export function crearInstalador(c: AppCraft) {
   const base = `https://github.com/storytold/${c.app}/releases/download/v${c.version}`;
   const tarball = c.archivo ?? `${c.app}-${c.version}-linux-x86_64.tar.gz`;
@@ -49,12 +92,12 @@ export function crearInstalador(c: AppCraft) {
     const tmp = await fs.mkdtemp(path.join(dir, ".instalando-"));
     try {
       estado = { fase: "descargando", progreso: 0, detalle: "Buscando la versión verificada…" };
-      const rs = await fetch(`${base}/SHA256SUMS.txt`);
+      const rs = await bajar(`${base}/SHA256SUMS.txt`);
       if (!rs.ok) throw new Error(`GitHub respondió ${rs.status} al pedir las sumas de verificación`);
       const esperada = sumaEsperada(await rs.text(), tarball);
       if (!esperada) throw new Error("La release no publica la suma de ese archivo");
 
-      const r = await fetch(`${base}/${tarball}`);
+      const r = await bajar(`${base}/${tarball}`);
       if (!r.ok || !r.body) throw new Error(`GitHub respondió ${r.status} al descargar`);
       const total = Number(r.headers.get("content-length")) || 0;
       const hash = createHash("sha256");
@@ -81,13 +124,16 @@ export function crearInstalador(c: AppCraft) {
       await c.preparar?.(path.join(extraido, raiz));
       await fs.rm(destino, { recursive: true, force: true });
       await fs.rename(extraido, destino);
-      const enlaceTmp = path.join(dir, `.actual-${process.pid}`);
-      await fs.rm(enlaceTmp, { force: true });
-      await fs.symlink(path.join(destino, raiz), enlaceTmp);
-      await fs.rename(enlaceTmp, path.join(dir, "actual"));
+      const actual = path.join(dir, "actual");
+      const anterior = await fs.readlink(actual).catch(() => null);
+      await apuntar(dir, actual, path.join(destino, raiz));
 
-      const v = await c.verificar();
-      if (!v?.includes(c.version)) throw new Error("Se instaló pero no arranca.");
+      const v = await c.verificar().catch(() => null);
+      if (!v?.includes(c.version)) {
+        // La versión nueva no arranca: se vuelve a la que había (si había una) y se avisa.
+        if (anterior && anterior !== path.join(destino, raiz)) await apuntar(dir, actual, anterior);
+        throw new Error(anterior ? "La versión nueva no pasó la verificación: se dejó la anterior." : "Se instaló pero no arranca.");
+      }
       estado = { fase: "lista", progreso: 1, detalle: `Instalada: ${v}` };
     } finally {
       await fs.rm(tmp, { recursive: true, force: true });

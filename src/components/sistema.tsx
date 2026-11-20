@@ -3,6 +3,7 @@ import { AvisoPrivados } from "./aviso-privados";
 import { Aviso, useSondeo } from "./comun";
 import { InstalarPhotocraft } from "./instalar-photocraft";
 import { InstalarHerramienta } from "./instalar-herramienta";
+import { Novedades } from "./novedades";
 
 interface Chequeo { nombre: string; ok: boolean; aviso?: boolean; detalle: string; arreglo?: string }
 
@@ -28,6 +29,9 @@ export function Sistema() {
           </li>
         ))}
       </ul>
+      <div className="pt-4">
+        <Novedades />
+      </div>
     </section>
   );
 }
