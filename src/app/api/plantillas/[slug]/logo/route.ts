@@ -16,13 +16,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     const { slug } = await ctx.params;
     await db.plantilla.findUniqueOrThrow({ where: { slug } });
     const form = await req.formData();
-    const { abs } = await guardarImagenSubida(form.get("archivo"), path.join(dirDatos(), "plantillas", slug), "logo");
+    const { abs, avisos } = await guardarImagenSubida(form.get("archivo"), path.join(dirDatos(), "plantillas", slug), "logo");
     let paleta = null;
     try {
       paleta = await paletaDeArchivo(abs);
     } catch {
       paleta = null; // El logo sirve aunque no se puedan sacar colores.
     }
-    return json({ logo: abs, ruta: path.relative(dirDatos(), abs), paleta }, 201);
+    return json({ logo: abs, ruta: path.relative(dirDatos(), abs), paleta, avisos }, 201);
   });
 }

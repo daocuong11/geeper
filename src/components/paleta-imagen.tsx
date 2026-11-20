@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import type { ColorPaleta, Roles } from "@/lib/colores-marca";
+import { ACCEPT_IMAGEN } from "@/lib/formatos-vector";
 import { Aviso } from "./comun";
 
 export interface Paleta {
@@ -34,10 +35,10 @@ export function SubirImagen({ etiqueta, alElegir, ocupado, compacto = false }: {
       }}
       className={compacto ? "" : `rounded-lg border border-dashed p-3 text-center text-sm ${encima ? "border-cyan-500 bg-cyan-950/30" : "border-borde"}`}
     >
-      <input ref={input} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" className="hidden"
+      <input ref={input} type="file" accept={ACCEPT_IMAGEN} className="hidden"
         onChange={(e) => { const f = e.target.files?.[0]; if (f) alElegir(f); e.target.value = ""; }} />
       <button type="button" className="boton" disabled={ocupado} onClick={() => input.current?.click()}>{ocupado ? "Leyendo…" : etiqueta}</button>
-      {!compacto && <p className="mt-1 text-xs text-tenue">o arrástrala aquí · PNG, JPG, WebP o SVG</p>}
+      {!compacto && <p className="mt-1 text-xs text-tenue">o arrástrala aquí · PNG, JPG, WebP, SVG o un logo .ai, .pdf o .eps</p>}
     </div>
   );
 }

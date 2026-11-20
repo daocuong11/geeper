@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { aHex, ajustarHasta, aTexto, contrastePeor, leerColor, legibilidad, opacidadHasta, textoSobre, type Roles } from "@/lib/colores-marca";
+import { esVector } from "@/lib/formatos-vector";
 import type { DatosPlantilla } from "@/lib/plantillas";
 import { Campo } from "./anuncios/ui";
 import { Aviso, archivo, pedir } from "./comun";
@@ -222,10 +223,11 @@ export function EditorPlantilla({ fila, alGuardar, alCerrar }: { fila: FilaPlant
     setSubiendo(true);
     setMsg(null);
     try {
-      const r = await subirParaPaleta<{ logo: string; ruta: string; paleta: Paleta | null }>(`/api/plantillas/${fila.slug}/logo`, f);
+      const r = await subirParaPaleta<{ logo: string; ruta: string; paleta: Paleta | null; avisos?: string[] }>(`/api/plantillas/${fila.slug}/logo`, f);
       cambiar((x) => { x.marca.logo = r.logo; });
       setLogoRuta(r.ruta);
       setPaletaLogo(r.paleta);
+      if (esVector(f.name)) setMsg({ tipo: "ok", t: ["Logo convertido a SVG. Guarda para usarlo.", ...(r.avisos ?? []).map((a) => `Ojo: ${a}`)].join(" ") });
     } catch (e) {
       setMsg({ tipo: "error", t: e instanceof Error ? e.message : String(e) });
     } finally {
