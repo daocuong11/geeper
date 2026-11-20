@@ -367,6 +367,8 @@ export function reemplazarVisual(original: Proyecto, escena: string, asset: Asse
   p.assets[asset.id] = asset;
   const c = pista(p, "visual").clips[indiceDe(p, escena)]!;
   c.asset = asset.id;
+  // Un archivo propio ya no es la misma grabación que la voz.
+  delete c.sincro;
   c.rango = { inicio: 0, duracion: c.rango.duracion };
   return validarProyecto(limpiarAssets(p));
 }

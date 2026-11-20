@@ -18,6 +18,7 @@ export const LATIDO_MS = 15_000;
 export const TIPOS = {
   "mpt.generar": { motor: "mpt", usaGpu: true, nombre: "Generar con MPT" },
   "proyecto.importar": { motor: "voz", usaGpu: false, nombre: "Importar y alinear" },
+  "clip.importar": { motor: "voz", usaGpu: false, nombre: "Importar clip de material largo" },
   "voz.regenerar": { motor: "voz", usaGpu: false, nombre: "Regenerar voz" },
   "render.entregar": { motor: "render", usaGpu: true, nombre: "Render y QC" },
   "publicar.subir": { motor: "red", usaGpu: false, nombre: "Publicar en red" },

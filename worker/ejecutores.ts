@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { Formato } from "@/lib/esquema";
 import { tomarGpu } from "@/lib/gpu";
 import { importarMpt } from "@/lib/importador";
+import { Campania } from "@/lib/clips";
+import { ENCUADRES, importarClip, type EncuadreClip } from "@/lib/importador-clip";
 import { apiViva, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/lib/mpt";
 import type { Contexto } from "@/lib/pasos";
 import { obtenerPlantilla } from "@/lib/plantillas";
@@ -144,6 +146,34 @@ async function proyectoImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+async function clipImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const proyecto = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
+  const pl = t.payload;
+  const encuadre = String(pl.encuadre ?? "cubrir");
+  if (!(ENCUADRES as readonly string[]).includes(encuadre)) throw new Error(`Encuadre desconocido: ${encuadre}`);
+  const texto = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : undefined);
+  await h.etapa("Cortando el tramo, reencuadrando y transcribiendo (CPU)", 0.1);
+  const r = await importarClip(h, {
+    proyectoId: proyecto.id,
+    slug: proyecto.slug,
+    nombre: proyecto.nombre,
+    tema: proyecto.tema,
+    formato: Formato.parse(proyecto.formato),
+    plantilla: await obtenerPlantilla(proyecto.plantilla),
+    fuenteId: String(pl.fuenteId ?? ""),
+    inicio: Number(pl.inicio),
+    fin: Number(pl.fin),
+    encuadre: encuadre as EncuadreClip,
+    idioma: texto(pl.idioma) ?? "es",
+    titulo: texto(pl.titulo),
+    gancho: texto(pl.gancho),
+    permiso: texto(pl.permiso),
+    campania: pl.campania ? Campania.parse(pl.campania) : undefined,
+  });
+  await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "ensamblado" } });
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
 async function vozRegenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const escena = typeof t.payload.escena === "string" ? t.payload.escena : null;
   await h.etapa(escena ? `Voz nueva para ${escena} (Kokoro + whisper, CPU)` : "Voz nueva del guion completo (Kokoro + whisper, CPU)", 0.1);
@@ -175,6 +205,7 @@ async function publicarSubirEj(t: Trabajo, h: Herramientas): Promise<Salida> {
 export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Promise<Salida>> = {
   "mpt.generar": mptGenerar,
   "proyecto.importar": proyectoImportar,
+  "clip.importar": clipImportar,
   "voz.regenerar": vozRegenerar,
   "render.entregar": renderEntregarEj,
   "publicar.subir": publicarSubirEj,

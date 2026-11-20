@@ -22,6 +22,7 @@ import { cortesDe, medirRitmo, type Ritmo } from "./pulsos";
 import { asegurarPicoReal, correrQc, ENTREGA, normalizarAudio, TOPES_PICO, type InformeQc } from "./qc";
 import { HYPERFRAMES_VERSION, dirProyecto } from "./rutas";
 import { HF } from "./voz";
+import { reglaClip } from "./clips";
 
 const ENV_HF = { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" };
 
@@ -227,6 +228,7 @@ export async function renderEntregar(
       confianza: resumirConfianza(escenasEnLinea(p).map((e) => ({ id: e.escena.id, palabras: e.escena.palabras }))),
       ritmo: ritmoDe(p),
       check,
+      extras: [reglaClip(p, comp.inicioTarjeta)].filter((r) => r !== null),
     },
     path.join(dir, "renders", `${base}-hoja`),
     ctx.log,

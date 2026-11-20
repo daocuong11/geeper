@@ -11,7 +11,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { pista, pistasLibres, type Asset, type Clip, type Encuadre, type Proyecto, type Texto } from "./esquema";
 import { ANCHO_CARACTER, dentro, metricas, PADDING_PASTILLA, type Caja, type Metricas } from "./formatos";
-import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type Grupo } from "./linea";
+import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type EscenaEnLinea, type Grupo } from "./linea";
 import type { DatosPlantilla } from "./plantillas";
 import { lineas } from "./subtitulos";
 
@@ -118,6 +118,54 @@ export function cajaTexto(t: Texto, m: Metricas, altoMarca: number): Caja {
   return { x, y, w, h };
 }
 
+/** Un tramo del visual de una escena: `t` relativo al inicio de la escena, `desde` sobre el asset. */
+export interface SegmentoVisual {
+  t: number;
+  dur: number;
+  desde: number;
+}
+
+/**
+ * Qué partes del asset visual cubren la escena. Normal: corre seguido desde `rango.inicio` y, si es
+ * más corto que la escena, vuelve a empezar. Con `sincro: "voz"`: un tramo por cada tramo que suena de
+ * la voz, con el mismo desplazamiento sobre el asset (recortar palabras corta también la imagen).
+ * `entrada` es el silencio inicial que cubre la primera escena (el visual empieza antes que la voz).
+ */
+export function segmentosVisuales(es: Pick<EscenaEnLinea, "duracion" | "visual" | "voz" | "tramos">, a: Asset, velocidad: number, entrada: number): SegmentoVisual[] {
+  const v = es.visual;
+  const imagen = a.tipo === "imagen";
+  if (v.sincro === "voz" && !imagen) {
+    const out = es.tramos.map((tr) => ({ t: tr.enEscena, dur: tr.fin - tr.inicio, desde: v.rango.inicio + (tr.inicio - es.voz.rango.inicio) }));
+    const p = out[0];
+    if (p && entrada > 0) {
+      // La imagen de la entrada es la que precede a la voz en la misma grabación (si la hay).
+      const atras = Math.min(entrada, p.desde);
+      p.t -= entrada;
+      p.dur += entrada;
+      p.desde -= atras;
+    }
+    return out;
+  }
+  const out: SegmentoVisual[] = [];
+  let t = entrada > 0 ? -entrada : 0;
+  let desde = v.rango.inicio;
+  let k = 0;
+  while (t < es.duracion - 1e-3 && k < 50) {
+    const disponible = imagen || !a.duracion ? es.duracion - t : (a.duracion - desde) / velocidad;
+    if (disponible < 0.05) {
+      desde = 0;
+      k++;
+      continue;
+    }
+    const dur = Math.min(es.duracion - t, disponible);
+    out.push({ t, dur, desde });
+    t += dur;
+    desde = 0;
+    k++;
+  }
+  return out;
+}
+
 export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: string, dirProyecto: string): Compilado {
   const m = metricas(p.formato, opcionesDe(p));
   const { W, H } = m;
@@ -152,20 +200,12 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
     // La primera escena también cubre la entrada en silencio del principio.
     const entradaSilencio = es.indice === 0 ? es.inicio : 0;
     const largo = es.duracion + entradaSilencio;
-    let t = -entradaSilencio;
-    let desde = v.rango.inicio;
-    let k = 0;
     const propias: Pieza[] = [];
-    while (t < es.duracion - 1e-3 && k < 50) {
-      const disponible = imagen || !a.duracion ? es.duracion - t : (a.duracion - desde) / velocidad;
-      if (disponible < 0.05) {
-        desde = 0;
-        k++;
-        continue;
-      }
-      const dur = Math.min(es.duracion - t, disponible);
+    for (const [k, seg] of segmentosVisuales(es, a, velocidad, entradaSilencio).entries()) {
+      const { t, dur, desde } = seg;
       const base = `${es.escena.id}-${k}`;
-      const comun = { src: nombre, inicio: es.inicio + t, dur, desde, imagen, pista: carril, velocidad: imagen ? undefined : velocidad };
+      const sincro = v.sincro === "voz" && !imagen;
+      const comun = { src: nombre, inicio: es.inicio + t, dur, desde, imagen, pista: carril, velocidad: imagen || sincro ? undefined : velocidad };
       if (ajuste === "contener") {
         piezas.push({ ...comun, id: `b-${base}`, clase: "fondo desenfoque", estilo: "" });
         const pz = { ...comun, id: `v-${base}`, clase: "fondo contener", estilo: color };
@@ -185,9 +225,6 @@ export function compilar(p: Proyecto, plantilla: DatosPlantilla, rutaMezcla: str
         const d1 = { ...ENCUADRE_BASE, ...v.movimiento.hasta };
         anims.push({ id: `v-${base}`, t: es.inicio + t, dur, desde: mezclarEncuadre(d0, d1, k0), hasta: mezclarEncuadre(d0, d1, k1), ease: "none" });
       }
-      t += dur;
-      desde = 0;
-      k++;
     }
     ultimasDeEscena.push(piezas.filter((x) => Math.abs(x.inicio + x.dur - (es.inicio + es.duracion)) < 1e-3));
     const tr = v.transicion;

@@ -238,3 +238,50 @@ se saltaba y el QC fallaba porque `v<N>.mp4` no existía.
 **Arreglo:** si el resultado ya existe con otra ruta, se enlaza (o copia) a la ruta pedida y el paso
 sigue saltado. Medido: re-render de una versión sin cambios de imagen ni sonido en 6 s. Prueba en
 `tests/reanudar.test.ts`.
+
+## 21. Clips de material largo (G5 + E4), con lo útil de gtavi-claudecode
+
+Revisión del kit Bodila51/gtavi-claudecode (MIT, Python, commit dd95d39) el 2026-11-19. Qué se tomó,
+qué no y por qué (detalle de cada pieza en HEREDADO.md).
+
+- **Puntuar primero sin transcribir.** Su `moments.py` transcribe el VOD entero con faster-whisper;
+  aquí la sonoridad (dB por segundo menos su media móvil de 30 s), «lo más visto» de YouTube y el chat
+  dan los candidatos en segundos aunque el VOD dure horas, y **sólo los candidatos** se transcriben
+  (whisper `medium`) para ajustar los bordes a frases y sumar palabras de emoción en inglés y español.
+  Medido con un material de 60 s: 22 s en total, un candidato. Transcribir un VOD de 4 h entero en CPU
+  costaría ~1 h.
+- **El visual sigue a la voz (`sincro: "voz"`).** En un clip la imagen y el audio son la misma
+  grabación. Antes, el video de una escena corría seguido aunque se recortaran palabras: con stock da
+  igual, con la cara de un streamer se desincroniza la boca. El compilador emite un tramo de video por
+  cada tramo que suena, con el mismo desplazamiento sobre el asset; `velocidad` se ignora. No se guarda
+  la lista de tramos (se deriva de los recortes, como el audio), así no hay dos verdades.
+- **El reencuadre se hornea** como asset 1080×1920 con ffmpeg (paso con manifiesto). `regenerar`
+  guarda todo para rehacerlo igual sin volver a detectar: modo, caja de la cámara, bordes, seguimiento
+  de la cara, recorte, offset del juego, versión y sha256 de YuNet. Hacer la pantalla partida en el
+  compilador no compensa hoy.
+  - *react*: cara arriba (1080×730), juego abajo, corrido para no mostrar la cámara ni overlays fijos
+    (contadores, alertas). Si no hay cara estable o fuera de la cámara no hay juego, cae a «contener».
+  - *cara*: 9:16 a toda la altura siguiendo la cara (IRL o cámara a pantalla completa). Si la cara
+    está en una webcam sobre el juego, se niega y sugiere *react*.
+- **Tramo con 1 s de margen** a cada lado y un keyframe por segundo (vista en vivo, E1).
+- **La voz es la del creador:** no hay música por defecto y `voz.regenerar` se niega en un clip.
+- **Licencia «revisar»** salvo que se diga el permiso (`--permiso`, queda como «permiso del creador:
+  …»). Con `comercial: true`, el QC bloquea un clip sin permiso.
+- **Regla de QC «clip»** (bloquea): sin leaks, «jugar antes», piratería, trampas de dinero ni bots en
+  título y textos; nunca «oficial»; crédito del creador presente; duración dentro de la campaña si se
+  cargó (`--campania`). Los insultos racistas u homófobos se enmascaran en los subtítulos (vía
+  `mostrar`); el audio no se toca.
+- **Descartado:** grabar directos en vivo (`live.py`) y leer el chat de Twitch por IRC anónimo o su GQL
+  con el Client-Id de la web (zona gris de los términos; sólo VODs ya publicados o archivos propios);
+  traducir con Google Translate web y voces de edge-tts (servicios en línea: choca con «todo local»;
+  D3 irá con un LLM local y Kokoro); su `cut.py` (Geeper ya compila, normaliza y hace QC); buscadores
+  de campañas, trucos y secretos de GTA (contenido, no producto).
+- **Segunda opinión (Nemotron Ultra):** aceptado puntuar sin transcribir, guardar todos los parámetros
+  del recorte, contrato con versión y ping del puente Python, términos prohibidos en el QC y no grabar
+  directos. Descartado: guardar `mapaVoz[]` en el esquema (duplica lo que dan los recortes), marca de
+  agua obligatoria (decisión del dueño, no del producto) y portar su loudnorm (Geeper ya lo hace en
+  dos pasadas con reintento del pico).
+- **Sin verificar de punta a punta todavía:** el importador con base de datos, worker y render (la
+  prueba con una base aislada quedó pendiente de permiso). Sí verificado: tests de sincro, puntaje,
+  bordes, chat y reglas; `momentos.ts` sobre un material real de 60 s; detección y render del react
+  (cámara con confianza 1,0, juego corrido para esquivar la cámara y un contador fijo).

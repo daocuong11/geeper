@@ -97,6 +97,12 @@ export const Clip = z.object({
   velocidad: z.number().min(0.1).max(10).optional(),
   /** Sólo video: ajuste de color. */
   color: Color.optional(),
+  /**
+   * Pista visual: «voz» = el video y la voz salen de la misma grabación (un clip de un directo o un
+   * VOD). El video sigue los tramos que suenan de la voz con el mismo desplazamiento sobre el asset:
+   * recortar palabras corta también la imagen y la boca no se desincroniza. Ignora `velocidad`.
+   */
+  sincro: z.literal("voz").optional(),
   /** Pistas libres de video: opacidad de la superposición. */
   opacidad: z.number().min(0).max(1).optional(),
   /** Sólo audio: ganancia lineal. */

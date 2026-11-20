@@ -15,7 +15,10 @@
 | Q2 pico real y zonas por plataforma | **Hecho**. Siguen pendientes el contraste WCAG y la decisión de 17 car./s |
 | Q4 máster de archivo | **Hecho** (`entrega.master`: MOV calidad alta) |
 | Q5 hash de los pesos | **Hecho** para whisper y Kokoro locales; los modelos dentro de MPT no se ven |
-| E3, E4, G1, G2, G4, G5, Q3, D1–D3, P1, P2 | Pendientes |
+| G5 ingesta de material largo | **Hecho sin UI** (2026-11-19): `scripts/momentos.ts` + `scripts/importar-clip.ts`, visual en sincro con la voz, regla de QC de clips (DECISIONES §21) |
+| E4 reencuadre siguiendo la cara | **Parcial**: en clips 9:16 (react y cara, con YuNet); falta para material de MPT o archivos subidos |
+| D1 ganchos | **Parcial**: rúbrica de ganchos y títulos de reacción en la skill `geeper` |
+| E3, G1, G2, G4, Q3, D1 (portada), D2, D3, P1, P2 | Pendientes |
 
 ## 0. Qué significa «el mejor» aquí
 
@@ -134,6 +137,11 @@ Hyperframes desde la plantilla (un fotograma) y proponer 3 títulos para que la 
 las APIs oficiales (YouTube Analytics es gratis; TikTok y Meta según su acceso), guardarlos por video
 y **cruzarlos con lo que hay en `geeper.json`** (gancho, duración, plantilla, voz, ritmo). Claude usa
 eso al proponer el próximo guion. Ningún editor cierra ese ciclo con el material editable.
+
+Diseño a seguir (del `learning-loop` de gtavi-claudecode): lecturas a las 12, 24 y 72 h; **una prueba
+por día** cambiando una sola variable (estilo de gancho, duración, hora, encuadre) con su nombre en
+la fila; ningún veredicto antes de 24 h; sólo números reales (nunca estimados) y pagos sólo los que la
+plataforma o la campaña muestran.
 
 **D3. Localización** (F5): traducción con un LLM local, la misma voz clonada (G2) y subtítulos
 realineados.

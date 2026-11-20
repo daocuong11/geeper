@@ -69,6 +69,8 @@ export interface Esperado {
   /** Cortes en pulso de la música (null: la música no tiene pulso estable o no hay música). */
   ritmo?: Ritmo | null;
   check?: { ok: boolean; errores: number; avisos: number; resumen: string };
+  /** Reglas propias del proyecto (p. ej. la de clips de material ajeno). */
+  extras?: Regla[];
 }
 
 export interface Sonoridad {
@@ -362,6 +364,7 @@ export async function correrQc(archivo: string, esp: Esperado, dirHoja: string, 
   if (alineacion) reglas.push(alineacion);
   const ritmo = reglaRitmo(esp.ritmo);
   if (ritmo) reglas.push(ritmo);
+  reglas.push(...(esp.extras ?? []));
 
   const hoja = await hojaDeContacto(archivo, esp.momentos, dirHoja, log);
   return {

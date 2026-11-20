@@ -18,7 +18,7 @@ export function usoComercial(licencia: string): UsoComercial {
   const l = licencia.toLowerCase();
   if (/desconocid|revisar|unknown|\?/.test(l)) return "desconocido";
   if (/\bnc\b|-nc\b|non-?commercial|no comercial|no-comercial|sólo editorial|solo editorial|editorial only|research only|sólo investigación|cpml/.test(l)) return "no";
-  if (/apache|\bmit\b|cc0|public domain|dominio público|\bbsd\b|openrail|\bcc-by\b|cc by|propia|biblioteca de audio de youtube|youtube audio library|pixabay|pexels/.test(l)) return "si";
+  if (/apache|\bmit\b|cc0|public domain|dominio público|\bbsd\b|openrail|\bcc-by\b|cc by|propia|permiso del creador|biblioteca de audio de youtube|youtube audio library|pixabay|pexels/.test(l)) return "si";
   return "desconocido";
 }
 
