@@ -165,6 +165,20 @@ async function main() {
     "better-sqlite3": versionDe(path.join(adaptador, "..", "..", "better-sqlite3")),
     hyperframes: process.env.GEEPER_HYPERFRAMES_VERSION ?? "0.9.27",
   };
+  // Turbopack pide algunos paquetes con un nombre con hash (p. ej. @prisma/client-ad5a…), que en el build
+  // son enlaces en .next-escritorio/node_modules. electron-builder descarta todo node_modules que no esté
+  // en la raíz de la app, así que se declaran como alias de npm (`npm:@prisma/client@7.10.1`): npm los
+  // instala en escritorio-app/node_modules, y el servidor los encuentra subiendo carpetas.
+  const dirAlias = path.join(standalone, ".next-escritorio", "node_modules");
+  const aliasDe = (dir: string): string[] =>
+    !fs.existsSync(dir) ? [] : fs.readdirSync(dir).flatMap((n) => (n.startsWith("@") ? fs.readdirSync(path.join(dir, n)).map((m) => `${n}/${m}`) : [n]));
+  for (const nombreAlias of aliasDe(path.join(dist, "standalone", ".next-escritorio", "node_modules"))) {
+    const destino = fs.realpathSync(path.join(dist, "standalone", ".next-escritorio", "node_modules", nombreAlias));
+    const pkg = JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8")) as { name: string; version: string };
+    deps[nombreAlias] = `npm:${pkg.name}@${pkg.version}`;
+    console.log(`alias ${nombreAlias} → ${deps[nombreAlias]}`);
+  }
+  fs.rmSync(dirAlias, { recursive: true, force: true });
   fs.writeFileSync(path.join(APP, "package.json"), JSON.stringify({
     name: "geeper", productName: "Geeper", version: raiz.version, private: true, main: "main.cjs",
     description: "Estudio de video local de Dimerso", author: "Dimerso", dependencies: deps,
@@ -174,21 +188,13 @@ async function main() {
   correr("pnpm", ["exec", "electron-rebuild", "--version", ELECTRON, "--module-dir", APP, "--only", "better-sqlite3", "--force"]);
 
   // El servidor resuelve sus paquetes subiendo hasta escritorio-app/node_modules: su propio node_modules
-  // (con enlaces absolutos de pnpm) sobra. Turbopack deja alias con hash (p. ej.
-  // .next-escritorio/node_modules/@prisma/client-c381…) como enlaces: se cambian por copias reales.
+  // (con enlaces absolutos de pnpm) sobra. Y no puede quedar ningún node_modules fuera de la raíz: el
+  // instalador no lo llevaría (así se perdió @prisma/client-… en la primera prueba en Windows).
   fs.rmSync(path.join(standalone, "node_modules"), { recursive: true, force: true });
-  const alias = path.join(standalone, ".next-escritorio", "node_modules");
-  if (fs.existsSync(alias)) {
-    for (const e of fs.readdirSync(alias, { recursive: true, withFileTypes: true })) {
-      if (!e.isSymbolicLink()) continue;
-      const enlace = path.join(e.parentPath, e.name);
-      const destino = fs.readlinkSync(enlace);
-      const nombre = JSON.parse(fs.readFileSync(path.join(destino, "package.json"), "utf8")).name as string;
-      fs.rmSync(enlace);
-      copiar(path.join(APP, "node_modules", nombre), enlace);
-      console.log(`alias ${path.relative(standalone, enlace)} → copia de ${nombre}`);
-    }
-  }
+  const anidados = fs
+    .readdirSync(APP, { recursive: true, withFileTypes: true })
+    .filter((e) => e.isDirectory() && e.name === "node_modules" && !path.join(e.parentPath, e.name).startsWith(path.join(APP, "node_modules")));
+  if (anidados.length) throw new Error(`Hay node_modules fuera de la raíz de la app (el instalador no los lleva): ${anidados.map((e) => e.parentPath).join(", ")}`);
   const quedan = fs.readdirSync(APP, { recursive: true, withFileTypes: true }).filter((e) => e.isSymbolicLink() && !e.parentPath.includes(`${path.sep}node_modules${path.sep}.bin`));
   if (quedan.length) throw new Error(`Quedaron enlaces simbólicos en la app (no viajan en el instalador): ${quedan.slice(0, 5).map((e) => path.join(e.parentPath, e.name)).join(", ")}`);
 
@@ -210,7 +216,9 @@ async function main() {
   // 6. Instalador.
   correr("pnpm", ["exec", "electron-builder", "--config", path.join(REPO, "escritorio", "electron-builder.yml"), "--projectDir", APP, "--publish", "never",
     // La app no trae electron en su node_modules (lo pone electron-builder): se le dice la versión.
-    `-c.electronVersion=${ELECTRON}`], {
+    `-c.electronVersion=${ELECTRON}`,
+    // Para probar en una red lenta: usar el Electron ya instalado en vez de bajarlo otra vez.
+    ...(process.env.GEEPER_ELECTRON_DIST ? [`-c.electronDist=${process.env.GEEPER_ELECTRON_DIST}`] : [])], {
     env: { CSC_IDENTITY_AUTO_DISCOVERY: "false" },
   });
   console.log(`Instalador en ${path.join(REPO, "dist-escritorio")}`);
