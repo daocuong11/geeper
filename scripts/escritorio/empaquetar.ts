@@ -8,7 +8,7 @@
  *
  * Pasos: next build (standalone) → bundles con esbuild (carcasa, worker, preparar-db) → carpeta
  * escritorio-app/ con node_modules plano (npm) → better-sqlite3 recompilado para Electron → esquema.sql,
- * py/, docs/fuentes.json → ffmpeg de este sistema verificado con SHA-256 → electron-builder.
+ * py/, docs/fuentes.json → ffmpeg, uv y whisper de este sistema verificados (SHA-256 o commit) → electron-builder.
  */
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -49,31 +49,78 @@ async function bajarVerificado(url: string, sha256: string): Promise<Buffer> {
   }
 }
 
-/** ffmpeg y ffprobe de este sistema en escritorio-app/recursos/ffmpeg/ (escritorio/recursos.json). */
-async function ffmpeg() {
-  const manifiesto = JSON.parse(fs.readFileSync(path.join(REPO, "escritorio", "recursos.json"), "utf8")).ffmpeg as Record<string, {
-    archivos?: { url: string; sha256: string; sacar: Record<string, string> }[];
-    copiarDe?: string[];
-  }>;
-  const m = manifiesto[plataforma];
-  if (!m) throw new Error(`No hay ffmpeg fijado para ${plataforma} en escritorio/recursos.json`);
-  const destino = path.join(APP, "recursos", "ffmpeg");
-  fs.mkdirSync(destino, { recursive: true });
-  for (const de of m.copiarDe ?? []) {
-    const abs = de.replace(/^~/, os.homedir());
-    fs.copyFileSync(abs, path.join(destino, path.basename(abs)));
-  }
-  for (const a of m.archivos ?? []) {
-    console.log(`Bajando ${a.url}`);
-    const zip = unzipSync(new Uint8Array(await bajarVerificado(a.url, a.sha256)));
-    for (const [dentro, nombre] of Object.entries(a.sacar)) {
-      const contenido = zip[dentro];
-      if (!contenido) throw new Error(`${a.url} no trae ${dentro}`);
-      fs.writeFileSync(path.join(destino, nombre), contenido);
+interface Archivo { url: string; sha256: string; sacar: Record<string, string> }
+interface Compilar { repo: string; tag: string; commit: string; cmake: string[]; objetivo: string; sacar: Record<string, string> }
+interface Recurso { version: string; archivos?: Archivo[]; copiarDe?: string[]; compilar?: Compilar }
+
+/** Contenido de un .zip o .tar.gz como {ruta: bytes}. El .tar.gz se abre con el `tar` del sistema (macOS y Windows lo traen). */
+function abrir(url: string, datos: Buffer): Record<string, Uint8Array> {
+  if (url.endsWith(".zip")) return unzipSync(new Uint8Array(datos));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "geeper-recurso-"));
+  try {
+    fs.writeFileSync(path.join(tmp, "a.tar.gz"), datos);
+    fs.mkdirSync(path.join(tmp, "x"));
+    execFileSync("tar", ["-xzf", path.join(tmp, "a.tar.gz"), "-C", path.join(tmp, "x")]);
+    const salida: Record<string, Uint8Array> = {};
+    for (const e of fs.readdirSync(path.join(tmp, "x"), { recursive: true, withFileTypes: true })) {
+      if (!e.isFile()) continue;
+      const abs = path.join(e.parentPath, e.name);
+      salida[path.relative(path.join(tmp, "x"), abs).split(path.sep).join("/")] = fs.readFileSync(abs);
     }
+    return salida;
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
   }
-  if (!win) for (const f of fs.readdirSync(destino)) fs.chmodSync(path.join(destino, f), 0o755);
-  console.log(`ffmpeg: ${fs.readdirSync(destino).join(", ")}`);
+}
+
+/** Compila un programa desde un tag fijado, comprobando que el tag apunte al commit esperado. */
+function compilar(c: Compilar, destino: string) {
+  const fuente = fs.mkdtempSync(path.join(os.tmpdir(), "geeper-compilar-"));
+  try {
+    correr("git", ["clone", "--depth", "1", "--branch", c.tag, c.repo, fuente]);
+    const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: fuente, encoding: "utf8" }).trim();
+    if (commit !== c.commit) throw new Error(`${c.repo} ${c.tag} apunta a ${commit}, se esperaba ${c.commit}. No se empaqueta.`);
+    correr("cmake", ["-B", "build", ...c.cmake], { cwd: fuente });
+    correr("cmake", ["--build", "build", "--config", "Release", "--target", c.objetivo, "-j"], { cwd: fuente });
+    for (const [dentro, nombre] of Object.entries(c.sacar)) fs.copyFileSync(path.join(fuente, dentro), path.join(destino, nombre));
+  } finally {
+    fs.rmSync(fuente, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Programas de este sistema en escritorio-app/recursos/<programa>/ (escritorio/recursos.json): ffmpeg y
+ * ffprobe, uv (crea los Python del estudio sin que haga falta instalar Python) y whisper-cli.
+ */
+async function recursos() {
+  const manifiesto = JSON.parse(fs.readFileSync(path.join(REPO, "escritorio", "recursos.json"), "utf8")) as Record<string, Record<string, Recurso> | string>;
+  for (const [programa, porSistema] of Object.entries(manifiesto)) {
+    if (typeof porSistema === "string") continue; // $comentario
+    const m = porSistema[plataforma];
+    if (!m) throw new Error(`No hay ${programa} fijado para ${plataforma} en escritorio/recursos.json`);
+    if (!m.archivos && !m.copiarDe && !m.compilar) {
+      console.log(`${programa}: ${m.version}`);
+      continue;
+    }
+    const destino = path.join(APP, "recursos", programa);
+    fs.mkdirSync(destino, { recursive: true });
+    for (const de of m.copiarDe ?? []) {
+      const abs = de.replace(/^~/, os.homedir());
+      fs.copyFileSync(abs, path.join(destino, path.basename(abs)));
+    }
+    for (const a of m.archivos ?? []) {
+      console.log(`Bajando ${a.url}`);
+      const contenido = abrir(a.url, await bajarVerificado(a.url, a.sha256));
+      for (const [dentro, nombre] of Object.entries(a.sacar)) {
+        const bytes = contenido[dentro];
+        if (!bytes) throw new Error(`${a.url} no trae ${dentro}`);
+        fs.writeFileSync(path.join(destino, nombre), bytes);
+      }
+    }
+    if (m.compilar) compilar(m.compilar, destino);
+    if (!win) for (const f of fs.readdirSync(destino)) fs.chmodSync(path.join(destino, f), 0o755);
+    console.log(`${programa} ${m.version}: ${fs.readdirSync(destino).join(", ")}`);
+  }
 }
 
 /** Bundles de la carcasa (CJS, la carga Electron) y de los procesos hijos (ESM, los corre su Node). */
@@ -153,8 +200,8 @@ async function main() {
   fs.mkdirSync(path.join(APP, "docs"), { recursive: true });
   fs.copyFileSync(path.join(REPO, "docs", "fuentes.json"), path.join(APP, "docs", "fuentes.json"));
 
-  // 5. ffmpeg de este sistema.
-  await ffmpeg();
+  // 5. Programas de este sistema (ffmpeg, uv, whisper).
+  await recursos();
 
   if (sinInstalador) {
     console.log(`Lista: ${APP}\nProbar: pnpm exec electron ${APP}`);

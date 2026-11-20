@@ -10,6 +10,8 @@
  *   node_modules/          dependencias de los hijos (better-sqlite3 para Electron, hyperframes…)
  *   py/, docs/fuentes.json lo que lee el código en tiempo de ejecución
  *   recursos/ffmpeg/       ffmpeg y ffprobe de este sistema (verificados en el empaquetado)
+ *   recursos/uv/           uv: crea los Python del estudio («Preparar el estudio», src/lib/estudio.ts)
+ *   recursos/whisper/      whisper-cli (Windows: binario oficial; macOS: compilado en el empaquetado)
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";

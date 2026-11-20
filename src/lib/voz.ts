@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { correrHf } from "./hyperframes";
-import { PYTHON_SISTEMA } from "./plataforma";
+import { ESCRITORIO, PYTHON_SISTEMA } from "./plataforma";
 import { correr, type Registro } from "./proceso";
 import { PYTHON_VOZ, RAIZ_REPO } from "./rutas";
 import type { Palabra } from "./esquema";
@@ -51,12 +51,15 @@ export async function transcribir(audio: string, idioma: string, log: Registro):
   }
 }
 
+/** La alineación es sólo biblioteca estándar: en la app corre con el Python de la voz (lo crea «Preparar el estudio»). */
+const PYTHON_ALINEAR = ESCRITORIO ? PYTHON_VOZ : PYTHON_SISTEMA;
+
 async function python(accion: string, datos: unknown): Promise<unknown> {
-  const r = await correr(PYTHON_SISTEMA, [path.join(RAIZ_REPO, "py", "geeper_py.py"), accion], { entrada: JSON.stringify(datos) });
+  const r = await correr(PYTHON_ALINEAR, [path.join(RAIZ_REPO, "py", "geeper_py.py"), accion], { entrada: JSON.stringify(datos) });
   return JSON.parse(r.stdout);
 }
 
-/** Alinea el texto del guion con los tiempos de whisper (alinear() de mpt_acabado.py). */
+/** Alinea el texto del guion con los tiempos de whisper (alinear() de mpt_acabado.py, copiado en py/alineacion.py). */
 export async function alinear(guion: string, palabrasW: PalabraW[], durVoz: number): Promise<Palabra[]> {
   const filtradas = palabrasW.filter((w) => w.start < durVoz - 0.05);
   const res = (await python("alinear", { guion, palabras: filtradas })) as PalabraW[];

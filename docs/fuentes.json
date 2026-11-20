@@ -381,6 +381,45 @@
         "src/lib/reencuadre.ts"
       ],
       "docs": "docs/HEREDADO.md#lightcraft-0211"
+    },
+    {
+      "id": "whisper-cpp",
+      "repo": "ggml-org/whisper.cpp",
+      "tipo": "release",
+      "como": [
+        "binario"
+      ],
+      "version": "1.9.5",
+      "revisado": "2026-11-20",
+      "que": "whisper-cli de la app de escritorio (transcribir): binario oficial en Windows, compilado desde el tag en macOS. Fijado en escritorio/recursos.json.",
+      "archivos": [
+        "escritorio/recursos.json",
+        "src/lib/rutas.ts",
+        "src/lib/estudio.ts"
+      ],
+      "docs": "docs/ESCRITORIO.md",
+      "pruebas": [
+        "tests/estudio.test.ts"
+      ]
+    },
+    {
+      "id": "uv",
+      "repo": "astral-sh/uv",
+      "tipo": "release",
+      "como": [
+        "binario"
+      ],
+      "version": "0.13.9",
+      "revisado": "2026-11-20",
+      "que": "Crea los Python de la app de escritorio («Preparar el estudio»). Fijado en escritorio/recursos.json.",
+      "archivos": [
+        "escritorio/recursos.json",
+        "src/lib/estudio.ts"
+      ],
+      "docs": "docs/ESCRITORIO.md",
+      "pruebas": [
+        "tests/estudio.test.ts"
+      ]
     }
   ]
 }

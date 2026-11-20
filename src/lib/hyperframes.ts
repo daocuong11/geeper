@@ -2,12 +2,11 @@
  * Cómo se ejecuta Hyperframes. En desarrollo, `npx hyperframes@<versión fijada>` (lo de siempre). En la
  * app de escritorio viene empaquetado: la carcasa pasa su CLI en GEEPER_HYPERFRAMES_CLI y se corre con el
  * Node de Electron (ELECTRON_RUN_AS_NODE ya está puesto en el servidor y el worker), apuntando al ffmpeg,
- * al Python de la voz y a una caché dentro de la carpeta de herramientas.
+ * al Python de la voz, al whisper-cli incluido y a una caché dentro de la carpeta de herramientas.
  */
-import path from "node:path";
 import { ESCRITORIO } from "./plataforma";
 import { correr, type OpcionesCorrer, type Resultado } from "./proceso";
-import { ESTUDIO, FFMPEG, HYPERFRAMES_VERSION, PYTHON_VOZ } from "./rutas";
+import { CACHE_HF, FFMPEG, FFPROBE, HYPERFRAMES_VERSION, PYTHON_VOZ, WHISPER_CLI } from "./rutas";
 
 const SIN_TELEMETRIA = { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" };
 
@@ -23,8 +22,11 @@ export function comandoHf(args: string[]): { cmd: string; args: string[]; env: R
         ELECTRON_RUN_AS_NODE: "1",
         HYPERFRAMES_FFMPEG_PATH: FFMPEG,
         FFMPEG_PATH: FFMPEG,
+        HYPERFRAMES_FFPROBE_PATH: FFPROBE,
+        FFPROBE_PATH: FFPROBE,
         HYPERFRAMES_PYTHON: PYTHON_VOZ,
-        HYPERFRAMES_CACHE_DIR: path.join(ESTUDIO, "hyperframes"),
+        HYPERFRAMES_CACHE_DIR: CACHE_HF,
+        ...(WHISPER_CLI ? { HYPERFRAMES_WHISPER_PATH: WHISPER_CLI } : {}),
       },
     };
   }

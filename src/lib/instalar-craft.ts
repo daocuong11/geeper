@@ -141,7 +141,8 @@ export function crearInstalador(c: AppCraft) {
   let enCurso: Promise<void> | null = null;
 
   async function instalar(): Promise<void> {
-    if (process.platform !== "linux" || process.arch !== "x64") throw new Error("La instalación automática es para Linux x86_64 (WSL).");
+    // Windows (x64, o arm64 emulando) y macOS (universal) tienen su archivo; en Linux sólo hay x86_64.
+    if (SISTEMA === "linux" && process.arch !== "x64") throw new Error("En Linux la instalación automática es sólo para x86_64.");
     const destino = path.join(dir, c.version);
     await fs.mkdir(dir, { recursive: true });
     const tmp = await fs.mkdtemp(path.join(dir, ".instalando-"));

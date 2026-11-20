@@ -4,6 +4,7 @@ import { Aviso, useSondeo } from "./comun";
 import { InstalarPhotocraft } from "./instalar-photocraft";
 import { InstalarHerramienta } from "./instalar-herramienta";
 import { Novedades } from "./novedades";
+import { PrepararEstudio } from "./preparar-estudio";
 
 interface Chequeo { nombre: string; ok: boolean; aviso?: boolean; detalle: string; arreglo?: string }
 
@@ -13,6 +14,7 @@ export function Sistema() {
     <section className="space-y-3">
       <h1 className="text-xl font-semibold">Sistema</h1>
       <p className="text-sm text-tenue">Lo mismo que <code>pnpm run doctor</code>: sólo lee, no cambia nada (salvo que uses un botón de arreglo).</p>
+      <PrepararEstudio alTerminar={() => void recargar()} />
       <AvisoPrivados alCambiar={() => void recargar()} />
       {error && <Aviso tipo="error">{error}</Aviso>}
       {!datos && <p className="text-tenue">Revisando…</p>}

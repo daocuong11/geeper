@@ -34,7 +34,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec prisma generate
       - run: pnpm typecheck
-      - run: pnpm test
+      # Las pruebas que no dependen del estudio de desarrollo (ffmpeg en ~/.local, mpt_acabado, WSL):
+      # las de la app de escritorio, que tienen que pasar en Windows y en macOS.
+      - run: pnpm test:escritorio
       - run: pnpm escritorio:empaquetar
       - uses: actions/upload-artifact@v4
         with:

@@ -8,7 +8,7 @@ import { idempotente } from "../escritorio/sql";
 
 describe("app de escritorio: base de datos", () => {
   it("el esquema de Prisma se aplica dos veces sin error y crea todas las tablas", () => {
-    const sql = execFileSync("npx", ["prisma", "migrate", "diff", "--from-empty", "--to-schema", "prisma/schema.prisma", "--script"], { encoding: "utf8" });
+    const sql = execFileSync("npx", ["prisma", "migrate", "diff", "--from-empty", "--to-schema", "prisma/schema.prisma", "--script"], { encoding: "utf8", shell: process.platform === "win32" });
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "esquema-"));
     const base = new Database(path.join(dir, "g.db"));
     try {

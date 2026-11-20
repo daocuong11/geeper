@@ -1,8 +1,8 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { zipSync } from "fflate";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 const casa = await fs.mkdtemp(path.join(os.tmpdir(), "instalar-craft-"));
@@ -11,11 +11,7 @@ const { bajar, crearInstalador } = await import("@/lib/instalar-craft");
 
 /** Un zip con <raiz>/index.html, como el de una versión web. */
 async function zipWeb(raiz: string): Promise<Buffer> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "zip-"));
-  await fs.mkdir(path.join(dir, raiz));
-  await fs.writeFile(path.join(dir, raiz, "index.html"), raiz);
-  execFileSync("python3", ["-I", "-m", "zipfile", "-c", path.join(dir, "x.zip"), path.join(dir, raiz)]);
-  return fs.readFile(path.join(dir, "x.zip"));
+  return Buffer.from(zipSync({ [`${raiz}/index.html`]: new TextEncoder().encode(raiz) }));
 }
 
 function servir(archivos: Record<string, Buffer | string>) {

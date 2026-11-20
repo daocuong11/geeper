@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { cliCraft, datosPorDefecto, ESCRITORIO, exe, herramientasPorDefecto, pythonDeVenv, RECURSOS } from "./plataforma";
@@ -25,7 +26,6 @@ export const MPT_DIR = path.join(os.homedir(), "dev", "MoneyPrinterTurbo");
 /** gpu-lock del estudio (Linux, compartido con MPT y otras herramientas). Sin él, Geeper usa su propio candado (gpu.ts). */
 export const GPU_LOCK_BIN = path.join(ESTUDIO, "bin", "gpu-lock");
 export const GPU_LOCK_FILE = process.env.GPU_LOCK ?? path.join(ESTUDIO, ".gpu.lock");
-export const MPT_ACABADO_PY = path.join(ESTUDIO, "bin", "mpt_acabado.py");
 /** ffmpeg: el que trae el instalador (GEEPER_RECURSOS) o, en desarrollo, el de ~/.local/bin (con NVENC). */
 const ffDe = (n: string) => (RECURSOS ? path.join(RECURSOS, "ffmpeg", exe(n)) : ESCRITORIO ? path.join(ESTUDIO, "ffmpeg", exe(n)) : path.join(os.homedir(), ".local", "bin", n));
 export const FFMPEG = process.env.GEEPER_FFMPEG ?? ffDe("ffmpeg");
@@ -46,3 +46,12 @@ export const RAIZ_REPO = process.env.GEEPER_REPO ?? process.cwd();
 export const VENV_CLIPS = path.join(ESTUDIO, "venvs", "geeper-clips");
 /** Python con kokoro-onnx para `hyperframes tts` (el venv del estudio). */
 export const PYTHON_VOZ = process.env.HYPERFRAMES_PYTHON ?? (ESCRITORIO ? pythonDeVenv(path.join(ESTUDIO, "venvs", "voz")) : path.join(ESTUDIO, "OpenMontage", ".venv", "bin", "python"));
+/** uv (crea los Python del estudio): el del instalador o, en desarrollo, el del PATH. */
+export const UV = process.env.GEEPER_UV ?? (RECURSOS ? path.join(RECURSOS, "uv", exe("uv")) : "uv");
+/**
+ * whisper-cli del instalador (Windows: binario oficial; macOS: compilado en el empaquetado). Sin él,
+ * Hyperframes busca el suyo (en Linux lo compila solo).
+ */
+export const WHISPER_CLI = process.env.HYPERFRAMES_WHISPER_PATH ?? (RECURSOS && fs.existsSync(path.join(RECURSOS, "whisper", exe("whisper-cli"))) ? path.join(RECURSOS, "whisper", exe("whisper-cli")) : null);
+/** Caché de Hyperframes (navegador para renderizar, modelos de Kokoro y whisper). En la app, dentro de las herramientas. */
+export const CACHE_HF = process.env.HYPERFRAMES_CACHE_DIR ?? (ESCRITORIO ? path.join(ESTUDIO, "hyperframes") : path.join(os.homedir(), ".cache", "hyperframes"));

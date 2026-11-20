@@ -1,18 +1,29 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { agrupar, aplicarCorrecciones, lineas, reemplazar, type Ficha } from "@/lib/subtitulos";
 
 const PY = path.join(process.cwd(), "py", "geeper_py.py");
 const py = (accion: string, datos: unknown) => JSON.parse(execFileSync("python3", [PY, accion], { input: JSON.stringify(datos) }).toString());
+/** El original del estudio (sólo en la PC de desarrollo): la referencia de la paridad. */
+const BIN_ESTUDIO = path.join(os.homedir(), "dev", "video-tools", "bin");
+const hayEstudio = fs.existsSync(path.join(BIN_ESTUDIO, "mpt_acabado.py"));
+const estudio = (fn: string, ...args: unknown[]) =>
+  JSON.parse(
+    execFileSync("python3", ["-c", `import json, sys; sys.path.insert(0, sys.argv[1]); import mpt_acabado as m; a = json.load(sys.stdin); print(json.dumps(getattr(m, sys.argv[2])(*a), ensure_ascii=False))`, BIN_ESTUDIO, fn], {
+      input: JSON.stringify(args),
+    }).toString(),
+  );
 
 const guion = "Vice City te espera. GTA seis llega pronto, y nadie sabe qué pasará en GTA seis… ¿Listo?";
 const palabras = guion.split(" ").map((t, i) => ({ text: t, start: i * 0.4, end: i * 0.4 + (i % 5 === 4 ? 0.2 : 0.38) }));
 const fichas: Ficha[] = palabras.map((w, i) => ({ texto: w.text, inicio: w.start, fin: w.end, origen: [i, i + 1] }));
 
-describe("paridad con mpt_acabado.py", () => {
+describe.skipIf(!hayEstudio)("paridad con mpt_acabado.py", () => {
   it("reemplazar = reemplazos()", () => {
-    const esperado = py("reemplazos", { palabras, pares: ["GTA seis=GTA VI"] }) as { text: string; start: number; end: number }[];
+    const esperado = estudio("reemplazos", palabras, ["GTA seis=GTA VI"]) as { text: string; start: number; end: number }[];
     const nuestro = reemplazar(fichas, [{ de: "GTA seis", a: "GTA VI" }]);
     expect(nuestro.map((f) => [f.texto, +f.inicio.toFixed(6), +f.fin.toFixed(6)])).toEqual(
       esperado.map((w) => [w.text, +w.start.toFixed(6), +w.end.toFixed(6)]),
@@ -20,7 +31,7 @@ describe("paridad con mpt_acabado.py", () => {
   });
 
   it("agrupar = agrupar()", () => {
-    const esperado = py("agrupar", { palabras }) as { text: string }[][];
+    const esperado = estudio("agrupar", palabras) as { text: string }[][];
     const nuestro = agrupar(fichas);
     expect(nuestro.map((g) => g.map((f) => f.texto))).toEqual(esperado.map((g) => g.map((w) => w.text)));
   });
@@ -35,6 +46,14 @@ describe("paridad con mpt_acabado.py", () => {
       { text: "¡Hola,", start: 0, end: 0.3 },
       { text: "mundo!", start: 0.35, end: 0.7 },
     ]);
+  });
+
+  it("la copia de alinear() en py/alineacion.py da lo mismo que el original", () => {
+    // Guion con palabras que whisper no oyó, cambió o agregó, para pasar por insert, replace y delete.
+    const g = "Vice City te espera. GTA seis llega pronto, y nadie sabe qué pasará… ¿Listo? ¡Vamos!";
+    const w = ["vice", "city", "te", "espera", "gta", "6", "llega", "muy", "pronto", "nadie", "sabe", "que", "pasara", "listo"].map((t, i) => ({ text: t, start: i * 0.31, end: i * 0.31 + 0.27 }));
+    expect(py("alinear", { guion: g, palabras: w })).toEqual(estudio("alinear", g, w));
+    expect(py("alinear", { guion: g, palabras: [] })).toEqual(estudio("alinear", g, []));
   });
 });
 
