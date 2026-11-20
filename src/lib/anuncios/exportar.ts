@@ -30,7 +30,7 @@ export function aMarkdown(nombre: string, estado: string, d: DatosCampana, r: Re
   }
   for (const c of d.conceptos) {
     const rc = r.conceptos.find((x) => x.conceptoId === c.id);
-    out.push("", `## Concepto: ${c.nombre}`, "");
+    out.push("", `## Idea: ${c.nombre}`, "");
     const campos: [string, string][] = [
       ["Marco", MARCOS[c.marco]?.nombre ?? c.marco], ["Insight", c.insight], ["Gancho", c.gancho], ["Promesa", c.promesa],
       ["Narrativa", c.narrativa], ["CTA", c.cta], ["Objeciones", c.objeciones], ["Hipótesis", c.hipotesis],

@@ -74,6 +74,7 @@ const NOMBRES: Record<string, string> = {
   entregado: "Entregado",
   ensamblado: "Ensamblado",
   generando: "Generando",
+  borrador: "Borrador",
   "en-revision": "En revisión",
   lista: "Lista para lanzar",
   activa: "Activa",

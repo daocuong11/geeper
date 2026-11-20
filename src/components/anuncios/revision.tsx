@@ -5,6 +5,7 @@ import type { ResultadoChequeo } from "@/lib/anuncios/esquema";
 import type { Chequeo, RevisionConcepto } from "@/lib/anuncios/revision";
 import { Aviso } from "../comun";
 import type { Ctx } from "./campana";
+import { QUE } from "./textos";
 import { BarraResumen, Contadores, NOMBRE_RESULTADO, Resultado, hoy } from "./ui";
 
 const pendiente = (c: Chequeo) => c.estado === "fail" || c.estado === "unknown";
@@ -15,8 +16,8 @@ export function PestanaRevision({ ctx }: { ctx: Ctx }) {
   if (!revision.conceptos.length) {
     return (
       <div className="tarjeta mx-auto max-w-xl p-8 text-center">
-        <p className="text-tenue">La revisión se arma con los conceptos y sus videos.</p>
-        <button className="boton boton-primario mt-4" onClick={() => ctx.irA("conceptos")}>Ir a Conceptos</button>
+        <p className="text-tenue">La revisión aparece cuando tengas ideas y sus videos.</p>
+        <button className="boton boton-primario mt-4" onClick={() => ctx.irA("conceptos")}>Ir a Ideas</button>
       </div>
     );
   }
@@ -25,9 +26,7 @@ export function PestanaRevision({ ctx }: { ctx: Ctx }) {
     <div className="space-y-4">
       <div className="tarjeta flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="min-w-0 flex-1 space-y-2">
-          <p className="text-sm">
-            Cada chequeo <b>pasa</b>, <b>falla</b> o queda <b>sin saber</b>, con su evidencia. «Sin saber» es una respuesta válida: falta un dato o una verificación, y no se adivina.
-          </p>
+          <p className="text-sm">{QUE.revision}</p>
           <BarraResumen r={revision.resumen} />
         </div>
         <label className="flex items-center gap-2 text-sm">
@@ -35,7 +34,17 @@ export function PestanaRevision({ ctx }: { ctx: Ctx }) {
           Sólo lo pendiente
         </label>
       </div>
-      {orden.map((rc) => <TarjetaConcepto key={rc.conceptoId} ctx={ctx} rc={rc} soloPendiente={soloPendiente} />)}
+      <LoQueFalta ctx={ctx} />
+      <h3 className="pt-2 text-sm font-semibold text-tenue">Detalle por idea</h3>
+      {orden.map((rc) => (
+        <details key={rc.conceptoId} open={rc.conceptoId === ctx.conceptoActivo} className="group">
+          <summary className="tarjeta flex cursor-pointer list-none items-center justify-between gap-3 p-3 group-open:rounded-b-none">
+            <span className="flex items-center gap-2 font-medium"><span className="text-tenue transition-transform group-open:rotate-90" aria-hidden>›</span>{rc.nombre}</span>
+            <Contadores r={rc.resumen} compacto />
+          </summary>
+          <TarjetaConcepto ctx={ctx} rc={rc} soloPendiente={soloPendiente} />
+        </details>
+      ))}
     </div>
   );
 }
@@ -162,7 +171,7 @@ function Lista({ titulo, chequeos, arreglar, trabajando, ctx }: { titulo: string
                 {c.accion && pendiente(c) && <p className="mt-0.5 text-slate-300">→ {c.accion}</p>}
                 {c.arreglo && arreglar && pendiente(c) && (
                   <button className="boton mt-1.5" disabled={trabajando} onClick={() => arreglar(c)}>
-                    {c.arreglo === "preparar" ? "Preparar el proyecto para anuncio" : `Pasar a ${c.arreglo.slice(8)}`}
+                    {c.arreglo === "preparar" ? "Preparar para anuncio" : `Pasar a ${c.arreglo.slice(8)}`}
                   </button>
                 )}
                 {c.clave && ctx && <EditorManual ctx={ctx} ch={c} compacto />}
@@ -190,7 +199,7 @@ function Detalle({ ctx, ch, titulo, arreglar, trabajando }: { ctx: Ctx; ch: Cheq
       {ch.arreglo && pendiente(ch) && (
         <div className="mt-2">
           <button className="boton" disabled={trabajando} onClick={() => arreglar(ch)}>
-            {ch.arreglo === "preparar" ? "Preparar el proyecto para anuncio" : `Pasar a ${ch.arreglo.slice(8)}`}
+            {ch.arreglo === "preparar" ? "Preparar para anuncio" : `Pasar a ${ch.arreglo.slice(8)}`}
           </button>
         </div>
       )}
@@ -239,5 +248,80 @@ function EditorManual({ ctx, ch, compacto = false }: { ctx: Ctx; ch: Chequeo; co
       />
       {m?.fecha && <p className="text-xs text-tenue">Anotado el {m.fecha}</p>}
     </div>
+  );
+}
+
+interface Pendiente {
+  clave: string;
+  concepto: string;
+  idea: string;
+  donde: string;
+  ch: Chequeo;
+  orden: number;
+}
+
+/** Todo lo pendiente de la campaña en una lista corta y ordenada: primero lo que falla, luego lo que falta saber. */
+function LoQueFalta({ ctx }: { ctx: Ctx }) {
+  const items: Pendiente[] = [];
+  for (const rc of ctx.revision.conceptos) {
+    const add = (ch: Chequeo, donde: string) => {
+      if (!pendiente(ch)) return;
+      const orden = ch.estado === "fail" ? (ch.arreglo ? 0 : 1) : ch.clave ? 3 : 2;
+      items.push({ clave: `${rc.conceptoId}:${donde}:${ch.id}`, concepto: rc.conceptoId, idea: rc.nombre, donde, ch, orden });
+    };
+    for (const ch of rc.copy) add(ch, "");
+    // Sin video, todo lo demás depende de hacerlo: se muestra una sola tarea en vez de diez «sin saber».
+    if (!rc.proyecto) {
+      const v = rc.video.find((x) => x.id === "vinculado");
+      if (v) add(v, "");
+      continue;
+    }
+    for (const ch of rc.video) add(ch, "");
+    for (const u of rc.ubicaciones) for (const ch of u.chequeos) add(ch, u.ubicacion.nombre);
+  }
+  items.sort((a, b) => a.orden - b.orden);
+  if (!items.length) {
+    return <Aviso tipo="ok">No falta nada: todas las ideas pasaron la revisión. Siguiente: «Comparar» y «Lanzar».</Aviso>;
+  }
+  // Las verificaciones manuales iguales (p. ej. «vista previa» en 4 lugares) se agrupan en una sola línea.
+  const manuales = items.filter((i) => i.orden === 3);
+  const resto = items.filter((i) => i.orden < 3);
+  const grupos = new Map<string, Pendiente[]>();
+  for (const m of manuales) grupos.set(m.ch.nombre, [...(grupos.get(m.ch.nombre) ?? []), m]);
+  const visibles = resto.slice(0, 8);
+  return (
+    <section className="tarjeta p-4" aria-labelledby="lo-que-falta">
+      <h3 id="lo-que-falta" className="font-semibold">Lo que falta, en orden</h3>
+      <ol className="mt-3 space-y-2">
+        {visibles.map((i, n) => (
+          <li key={i.clave} className="flex flex-wrap items-start gap-3 rounded-lg border border-borde bg-[#0f131a] p-3 sm:flex-nowrap">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-xs font-bold tabular-nums">{n + 1}</span>
+            <div className="min-w-0 flex-1 basis-48 text-sm">
+              <p><span className="font-medium">{i.ch.nombre}</span> <span className="text-tenue">· {i.idea}{i.donde ? ` · ${i.donde}` : ""}</span></p>
+              <p className="text-slate-300">{i.ch.accion ?? i.ch.evidencia}</p>
+            </div>
+            <Resultado valor={i.ch.estado} corto />
+            <button className="boton ml-9 shrink-0 sm:ml-0" onClick={() => ctx.irA(i.ch.id === "vinculado" || i.ch.id === "cta" || i.ch.id === "distinto" || i.ch.id === "afirmaciones" || i.ch.id === "pruebas" ? "conceptos" : "revision", i.concepto)}>
+              {i.ch.id === "vinculado" ? "Hacer video" : ["cta", "distinto"].includes(i.ch.id) ? "Editar idea" : ["afirmaciones", "pruebas"].includes(i.ch.id) ? "Revisar" : "Ver"}
+            </button>
+          </li>
+        ))}
+        {resto.length > visibles.length && <li className="text-sm text-tenue">…y {resto.length - visibles.length} más abajo, en el detalle de cada idea.</li>}
+      </ol>
+      {grupos.size > 0 && (
+        <div className="mt-4 rounded-lg border border-borde p-3">
+          <p className="text-sm font-medium">Para revisar tú en la plataforma de anuncios</p>
+          <p className="mt-0.5 text-xs text-tenue">Geeper no puede ver tu cuenta. Cuando subas los videos, revisa esto y márcalo en el detalle de cada idea.</p>
+          <ul className="mt-2 space-y-1 text-sm">
+            {[...grupos.entries()].map(([nombre, xs]) => (
+              <li key={nombre} className="flex items-center justify-between gap-2">
+                <span>{nombre}</span>
+                <span className="text-xs text-tenue tabular-nums">{xs.length} pendiente{xs.length === 1 ? "" : "s"}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

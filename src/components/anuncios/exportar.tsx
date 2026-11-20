@@ -38,14 +38,20 @@ export function PestanaExportar({ ctx, guardar }: { ctx: Ctx; guardar: () => Pro
   return (
     <div className="space-y-4">
       <div className="tarjeta flex flex-wrap items-center justify-between gap-3 p-4">
-        <div>
-          <h3 className="font-semibold">Copy deck y checklist</h3>
-          <p className="text-sm text-tenue">El deck (Markdown) es para leer y aprobar; el checklist (CSV) es para quien arma la campaña en el administrador.</p>
+        <div className="max-w-2xl">
+          <h3 className="font-semibold">Cómo publicar tus anuncios</h3>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-300">
+            <li>Descarga el video de cada idea desde su proyecto («Abrir el video» en Ideas → Descargar).</li>
+            <li>En Meta (Instagram y Facebook), TikTok o Google (YouTube), crea un anuncio nuevo, sube el video y copia el texto de este resumen.</li>
+            <li>Antes de publicar, mira la vista previa y marca lo revisado en «Revisión».</li>
+            <li>Arriba, cambia el estado de la campaña a «Activa». Cuando termine, carga los números en «Comparar».</li>
+          </ol>
+          <p className="mt-2 text-xs text-tenue">El resumen (.md) es para leer y aprobar; la lista (.csv) se abre en Excel o Google Sheets y sirve a quien arma los anuncios.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="boton" onClick={() => void copiar()} disabled={!md}>{copiado ? "Copiado ✓" : "Copiar Markdown"}</button>
-          <a className="boton" href={`/api/anuncios/${ctx.id}/exportar?formato=md`}>Descargar .md</a>
-          <a className="boton boton-primario" href={`/api/anuncios/${ctx.id}/exportar?formato=csv`}>Descargar checklist .csv</a>
+          <button className="boton" onClick={() => void copiar()} disabled={!md}>{copiado ? "Copiado ✓" : "Copiar el resumen"}</button>
+          <a className="boton" href={`/api/anuncios/${ctx.id}/exportar?formato=md`}>Descargar resumen (.md)</a>
+          <a className="boton boton-primario" href={`/api/anuncios/${ctx.id}/exportar?formato=csv`}>Descargar lista (.csv)</a>
         </div>
       </div>
       {error && <Aviso tipo="error">{error}</Aviso>}

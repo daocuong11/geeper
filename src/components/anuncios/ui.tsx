@@ -1,4 +1,5 @@
 "use client";
+import { cloneElement, isValidElement, useId, useState } from "react";
 import type { ResultadoChequeo } from "@/lib/anuncios/esquema";
 
 export type Resumen = Record<ResultadoChequeo, number>;
@@ -53,18 +54,49 @@ export function BarraResumen({ r }: { r: Resumen }) {
   );
 }
 
-export function Campo({ etiqueta, ayuda, children, contador }: { etiqueta: string; ayuda?: string; children: React.ReactNode; contador?: { n: number; max: number } }) {
+/** Botón «?» que despliega una explicación en lenguaje simple. */
+export function Ayuda({ texto, de }: { texto: string; de: string }) {
+  const [abierta, setAbierta] = useState(false);
+  const id = useId();
   return (
-    <label className="block">
-      <span className="etiqueta">
+    <>
+      <button
+        type="button"
+        onClick={() => setAbierta(!abierta)}
+        aria-expanded={abierta}
+        aria-controls={id}
+        aria-label={`Qué significa «${de}»`}
+        className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-slate-500 text-[0.65rem] leading-none text-slate-300 hover:border-cyan-400 hover:text-white"
+      >
+        ?
+      </button>
+      {abierta && (
+        <span id={id} role="note" className="mt-1 block rounded-md border border-cyan-900 bg-cyan-950/40 px-2 py-1.5 text-xs text-slate-200">
+          {texto}
+        </span>
+      )}
+    </>
+  );
+}
+
+export function Campo({ etiqueta, ayuda, que, children, contador }: { etiqueta: string; ayuda?: string; que?: string; children: React.ReactNode; contador?: { n: number; max: number } }) {
+  const id = useId();
+  // La etiqueta apunta al control con htmlFor, así el «?» puede ir al lado sin quedar dentro del <label>.
+  const control = isValidElement<{ id?: string }>(children) ? cloneElement(children, { id: children.props.id ?? id }) : children;
+  return (
+    <div>
+      <div className="etiqueta">
         <span className="flex items-baseline justify-between gap-2">
-          <span>{etiqueta}</span>
+          <span>
+            <label htmlFor={isValidElement(children) ? id : undefined}>{etiqueta}</label>
+            {que && <Ayuda texto={que} de={etiqueta} />}
+          </span>
           {contador && <span className={`tabular-nums ${contador.n > contador.max ? "text-red-300" : ""}`}>{contador.n}/{contador.max}</span>}
         </span>
-      </span>
-      {children}
+      </div>
+      {control}
       {ayuda && <span className="mt-1 block text-xs text-tenue">{ayuda}</span>}
-    </label>
+    </div>
   );
 }
 

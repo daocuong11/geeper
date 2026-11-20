@@ -4,6 +4,7 @@ import type { Brief } from "@/lib/anuncios/esquema";
 import { Aviso, useSondeo } from "../comun";
 import type { Ctx } from "./campana";
 import { MarcaDesdeWeb } from "./marca-web";
+import { OBJETIVO_SIMPLE, QUE } from "./textos";
 import { Campo, Chip, Seccion, nuevoId } from "./ui";
 
 const REDES: { id: (typeof UBICACIONES)[number]["red"]; nombre: string }[] = [
@@ -26,34 +27,34 @@ export function PestanaBrief({ ctx }: { ctx: Ctx }) {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Seccion titulo="Qué se anuncia" descripcion="El contexto que usan los conceptos y la revisión.">
+      <Seccion titulo="Qué vendes" descripcion="Con esto se escriben las ideas y se revisa cada anuncio.">
         <div className="grid gap-3 sm:grid-cols-2">
           <Campo etiqueta="Marca"><input className="campo" value={b.marca} maxLength={120} onChange={(e) => set("marca", e.target.value)} /></Campo>
-          <Campo etiqueta="Producto o servicio"><input className="campo" value={b.producto} maxLength={200} onChange={(e) => set("producto", e.target.value)} /></Campo>
-          <Campo etiqueta="Objetivo">
+          <Campo etiqueta="¿Qué vendes?"><input className="campo" value={b.producto} maxLength={200} onChange={(e) => set("producto", e.target.value)} /></Campo>
+          <Campo etiqueta="¿Qué quieres lograr?" que={QUE.objetivo}>
             <select className="campo" value={b.objetivo} onChange={(e) => set("objetivo", e.target.value as Brief["objetivo"])}>
-              {Object.entries(OBJETIVOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              {Object.keys(OBJETIVOS).map((k) => <option key={k} value={k}>{OBJETIVO_SIMPLE[k]?.titulo}</option>)}
             </select>
           </Campo>
-          <Campo etiqueta="Botón de la red" ayuda="El que eliges en el administrador; aparte del CTA que se dice.">
+          <Campo etiqueta="Botón del anuncio" que={QUE.boton}>
             <select className="campo" value={b.botonCta} onChange={(e) => set("botonCta", e.target.value as Brief["botonCta"])}>
               {BOTONES_CTA.map((c) => <option key={c}>{c}</option>)}
             </select>
           </Campo>
         </div>
-        <Campo etiqueta="Oferta" ayuda="Lo que se ofrece, con sus condiciones (precio, plazo, región).">
+        <Campo etiqueta="¿Qué ofreces?" que={QUE.oferta} ayuda="Con sus condiciones: precio, plazo, región.">
           <textarea className="campo min-h-20" value={b.oferta} maxLength={600} onChange={(e) => set("oferta", e.target.value)} />
         </Campo>
-        <Campo etiqueta="Página de destino">
+        <Campo etiqueta="¿A qué página lleva el anuncio?" que={QUE.destino}>
           <input className="campo" type="url" inputMode="url" placeholder="https://" value={b.destino} maxLength={500} onChange={(e) => set("destino", e.target.value)} />
         </Campo>
       </Seccion>
 
-      <Seccion titulo="A quién" descripcion="Describe a la audiencia con lo que sabes de ella, no con estereotipos.">
-        <Campo etiqueta="Audiencia">
-          <textarea className="campo min-h-28" value={b.audiencia} maxLength={1000} onChange={(e) => set("audiencia", e.target.value)} placeholder="Quiénes son, qué buscan, qué objeciones tienen, de dónde sale ese dato." />
+      <Seccion titulo="A quién le hablas" descripcion="Escribe lo que sabes de tus clientes de verdad, no suposiciones.">
+        <Campo etiqueta="¿Quién es tu cliente?" que={QUE.audiencia}>
+          <textarea className="campo min-h-28" value={b.audiencia} maxLength={1000} onChange={(e) => set("audiencia", e.target.value)} placeholder="Ej.: personas que toman café en casa todos los días; nos preguntan si el café llega fresco." />
         </Campo>
-        <Campo etiqueta="Categoría sensible">
+        <Campo etiqueta="¿Es un tema delicado?" que={QUE.categoria}>
           <select className="campo" value={b.categoria} onChange={(e) => set("categoria", e.target.value as Brief["categoria"])}>
             {Object.entries(CATEGORIAS_SENSIBLES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
@@ -63,7 +64,7 @@ export function PestanaBrief({ ctx }: { ctx: Ctx }) {
         )}
       </Seccion>
 
-      <Seccion titulo="Dónde" descripcion="Cada ubicación tiene su formato nativo. Geeper renderiza 9:16, 16:9 y 1:1.">
+      <Seccion titulo="Dónde se verá" descripcion="Toca los lugares donde vas a mostrar el anuncio. El número es la forma del video: 9:16 vertical, 16:9 horizontal, 1:1 cuadrado.">
         <div className="space-y-3">
           {REDES.map((r) => (
             <div key={r.id} className="flex flex-wrap items-center gap-2">
@@ -78,7 +79,7 @@ export function PestanaBrief({ ctx }: { ctx: Ctx }) {
           ))}
         </div>
         {b.ubicaciones.length === 0 && <Aviso tipo="alerta">Elige al menos una ubicación.</Aviso>}
-        <Campo etiqueta="Plantilla de los videos" ayuda="Colores, voz, música y tarjeta final con que se generan.">
+        <Campo etiqueta="Estilo de los videos" que={QUE.plantilla}>
           <select className="campo" value={b.plantilla} onChange={(e) => set("plantilla", e.target.value)}>
             <option value="">La primera disponible</option>
             {pl?.plantillas.map((p) => <option key={p.slug} value={p.slug}>{p.nombre}</option>)}
@@ -87,23 +88,23 @@ export function PestanaBrief({ ctx }: { ctx: Ctx }) {
       </Seccion>
 
       <Seccion
-        titulo="Qué se puede afirmar"
-        descripcion="Cada cifra, garantía o comparación necesita una prueba. Sólo las aprobadas respaldan un concepto."
-        accion={<button className="boton shrink-0" onClick={() => set("afirmaciones", [...afs, { id: nuevoId("af"), texto: "", prueba: "", aprobada: false }])}>+ Afirmación</button>}
+        titulo="Datos que puedes decir"
+        descripcion="Si el anuncio dice un dato («envío gratis», «30 % más barato»), anótalo aquí con lo que lo demuestra y apruébalo."
+        accion={<button className="boton shrink-0" onClick={() => set("afirmaciones", [...afs, { id: nuevoId("af"), texto: "", prueba: "", aprobada: false }])}>+ Dato</button>}
       >
-        {afs.length === 0 && <p className="text-sm text-tenue">Sin afirmaciones. Si el guion dice «el más rápido» o «30 % menos», agrégala aquí con su fuente.</p>}
+        {afs.length === 0 && <p className="text-sm text-tenue">Ninguno todavía. Si una idea dice algo como «el más rápido» o «30 % menos», Geeper te lo pedirá aquí. <span className="text-slate-300">{QUE.afirmaciones}</span></p>}
         <ul className="space-y-3">
           {afs.map((a, i) => (
             <li key={a.id} className={`rounded-lg border p-3 ${a.aprobada ? "border-emerald-800/70 bg-emerald-950/20" : "border-borde bg-[#0f131a]"}`}>
               <div className="flex gap-2">
-                <input className="campo" placeholder="Afirmación (p. ej. «Envío gratis en todo el país»)" value={a.texto} maxLength={300} onChange={(e) => setAf(i, { texto: e.target.value })} aria-label="Afirmación" />
+                <input className="campo" placeholder="El dato (ej.: «Envío gratis en todo el país»)" value={a.texto} maxLength={300} onChange={(e) => setAf(i, { texto: e.target.value })} aria-label="Afirmación" />
                 <button className="boton shrink-0" aria-label="Quitar afirmación" onClick={() => set("afirmaciones", afs.filter((_, j) => j !== i))}>✕</button>
               </div>
-              <input className="campo mt-2" placeholder="Prueba: fuente, documento o dato que la respalda" value={a.prueba} maxLength={500} onChange={(e) => setAf(i, { prueba: e.target.value })} aria-label="Prueba" />
+              <input className="campo mt-2" placeholder="Cómo lo demuestras (ej.: política de envíos publicada en la web)" value={a.prueba} maxLength={500} onChange={(e) => setAf(i, { prueba: e.target.value })} aria-label="Prueba" />
               <label className="mt-2 flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={a.aprobada} disabled={!a.prueba.trim() && !a.aprobada} onChange={(e) => setAf(i, { aprobada: e.target.checked })} />
-                Aprobada para usar en anuncios
-                {!a.prueba.trim() && <span className="text-xs text-tenue">(primero escribe la prueba)</span>}
+                Es cierto y lo puedo demostrar: aprobado para anuncios
+                {!a.prueba.trim() && <span className="text-xs text-tenue">(primero escribe cómo lo demuestras)</span>}
               </label>
             </li>
           ))}

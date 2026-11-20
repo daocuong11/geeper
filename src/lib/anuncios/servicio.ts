@@ -10,6 +10,8 @@ import { ubicacion } from "./catalogo";
 import { DatosCampana, EstadoCampana, type Concepto } from "./esquema";
 import { revisar, type InfoProyecto, type ReglaQcV } from "./revision";
 import { crearVarianteDeGancho } from "./variantes";
+import { ideasAPropuesta, pedirIdeas } from "./ideas";
+import { aplicarPropuesta } from "./propuesta";
 
 export async function leerCampana(id: string) {
   const fila = await db.campana.findUniqueOrThrow({ where: { id } });
@@ -185,4 +187,15 @@ export async function varianteDeGancho(campanaId: string, conceptoId: string, ga
   }
   await db.campana.update({ where: { id: campanaId }, data: { datos: DatosCampana.parse(datos) as object } });
   return { proyecto: { id: p.id }, concepto: nuevo.id };
+}
+
+/** «Propónme ideas»: borradores del LLM local que entran como conceptos nuevos (sin video). */
+export async function proponerIdeas(campanaId: string) {
+  const { datos } = await leerCampana(campanaId);
+  if (!datos.brief.producto.trim() && !datos.brief.oferta.trim()) throw new Error("Primero cuéntanos qué vendes y qué ofreces (Brief): las ideas salen de ahí.");
+  if (datos.conceptos.length >= 27) throw new Error("La campaña ya tiene casi 30 ideas: borra algunas antes de pedir más.");
+  const crudo = await pedirIdeas(datos);
+  const { datos: nuevos, cambios } = aplicarPropuesta(datos, ideasAPropuesta(datos, crudo));
+  await db.campana.update({ where: { id: campanaId }, data: { datos: nuevos as object } });
+  return { nuevas: nuevos.conceptos.slice(datos.conceptos.length).map((c) => c.id), cambios };
 }

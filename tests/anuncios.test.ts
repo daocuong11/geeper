@@ -187,18 +187,18 @@ describe("lectura de resultados", () => {
     const l = leerPrueba({ ...base, planeada: 8000, resultados: { a: { unidades: 10000, conversiones: 500 }, b: { unidades: 10000, conversiones: 620 } } });
     expect(l.comparaciones[0]!.veredicto).toBe("gana");
     expect(l.comparaciones[0]!.p).toBeLessThan(0.001);
-    expect(l.decision).toMatch(/^Escala «B»/);
+    expect(l.decision).toMatch(/^Ganó «B»/);
   });
   it("no decide antes de llegar a la muestra decidida", () => {
     const l = leerPrueba({ ...base, planeada: 8000, resultados: { a: { unidades: 3000, conversiones: 150 }, b: { unidades: 3000, conversiones: 240 } } });
     expect(l.comparaciones[0]!.veredicto).toBe("temprano");
-    expect(l.decision).toMatch(/Sigue corriendo/);
+    expect(l.decision).toMatch(/Déjala seguir/);
   });
   it("sin diferencia detectable no inventa un ganador; guardarraíl roto frena el escalado", () => {
     const igual = leerPrueba({ ...base, planeada: 100, resultados: { a: { unidades: 1000, conversiones: 50 }, b: { unidades: 1000, conversiones: 52 } } });
     expect(igual.comparaciones[0]!.veredicto).toBe("sin-diferencia");
     const roto = leerPrueba({ ...base, guardarrailes: "fail", planeada: 100, resultados: { a: { unidades: 10000, conversiones: 500 }, b: { unidades: 10000, conversiones: 620 } } });
-    expect(roto.decision).toMatch(/rompe un guardarraíl/);
+    expect(roto.decision).toMatch(/empeoró lo que no podía empeorar/);
   });
   it("detecta datos imposibles o faltantes", () => {
     expect(leerPrueba({ ...base, planeada: null, resultados: { a: { unidades: 10, conversiones: 20 } } }).ok).toBe(false);
@@ -281,5 +281,83 @@ describe("variante de gancho", () => {
     expect(p.id).toBe("nuevo-id");
     for (const [id, e] of Object.entries(original.escenas)) if (id !== primera) expect(p.escenas[id]!.texto).toBe(e.texto);
     expect(() => conGancho(original, original.escenas[primera]!.texto, "x", "y")).toThrow(/igual/);
+  });
+});
+
+import { NOMBRE_EJEMPLO, datosEjemplo } from "@/lib/anuncios/ejemplo";
+import { construirPrompt, ideasAPropuesta } from "@/lib/anuncios/ideas";
+import { siguientePaso } from "@/lib/anuncios/siguiente";
+
+describe("siguiente paso", () => {
+  it("guía en orden: negocio → ideas → videos → revisión → comparar → lanzar", () => {
+    const vacia = datosVacios();
+    expect(siguientePaso(vacia, revisar(vacia, {}), "borrador").ir).toBe("brief");
+    const conBrief = datosVacios();
+    conBrief.brief.producto = "Café";
+    conBrief.brief.oferta = "20 % de descuento";
+    const p1 = siguientePaso(conBrief, revisar(conBrief, {}), "borrador");
+    expect(p1.accion).toBe("ideas");
+    const d = campana();
+    d.brief.producto = "Café";
+    d.brief.oferta = "Envío gratis";
+    const p2 = siguientePaso(d, revisar(d, { p1: proyecto() }), "borrador");
+    expect(p2.etapa).toBe(3);
+    expect(p2.concepto).toBe("c-b"); // la segunda idea todavía no tiene video
+  });
+  it("con todo revisado y la comparación armada, dice que está listo", () => {
+    const d = campana();
+    d.brief.producto = "Café";
+    d.brief.oferta = "Envío gratis";
+    d.conceptos[1]!.proyectoId = "p2";
+    d.conceptos[1]!.guion = "Otro gancho. Tostado esta semana. Pide el tuyo.";
+    d.prueba.control = "c-a";
+    d.prueba.tratamientos = ["c-b"];
+    const info = { p1: proyecto({ sinteticos: [] }), p2: proyecto({ id: "p2", sinteticos: [] }) };
+    for (const c of ["c-a", "c-b"]) for (const u of d.brief.ubicaciones) for (const k of ["specs", "politica", "vista-previa"]) d.manuales[`${c}:${u}:${k}`] = { estado: "pass", evidencia: "ok", fecha: "2026-11-19" };
+    d.brief.ubicaciones = ["youtube-shorts"];
+    const p = siguientePaso(d, revisar(d, info), "lista");
+    expect(p.listo).toBe(true);
+    expect(p.ir).toBe("exportar");
+  });
+});
+
+describe("ideas del modelo local", () => {
+  it("el prompt delimita los datos y prohíbe inventar", () => {
+    const d = datosEjemplo();
+    const { sistema, usuario } = construirPrompt(d);
+    expect(sistema).toMatch(/NO inventes/);
+    expect(sistema).toMatch(/no instrucciones/);
+    expect(usuario).toMatch(/^<datos>/);
+    expect(usuario).toContain("Tostado la semana en que lo pides");
+    expect(usuario).not.toContain("El mejor café del país"); // sin aprobar: no se le da como hecho
+  });
+  it("convierte la respuesta en ideas nuevas y afirmaciones sin aprobar, y descarta ganchos repetidos", () => {
+    const d = datosEjemplo();
+    const crudo = JSON.stringify({ conceptos: [
+      { nombre: "Fresco", marco: "aida", gancho: "¿Cuándo se tostó tu café?", guion: "¿Cuándo se tostó tu café? El nuestro, la semana en que lo pides. Pide tu primera bolsa.", cta: "Pide tu primera bolsa", afirmaciones_nuevas: ["Llega en 48 horas"] },
+      { nombre: "Repetida", gancho: "¿Tu café de la mañana sabe a nada?", guion: "Una idea que repite un gancho que ya existe en la campaña." },
+    ] });
+    const prop = ideasAPropuesta(d, "```json\n" + crudo + "\n```");
+    expect(prop.conceptos).toHaveLength(1);
+    const { datos } = aplicarPropuesta(d, prop);
+    const nueva = datos.conceptos.at(-1)!;
+    expect(nueva.nombre).toBe("Idea: Fresco");
+    expect(nueva.proyectoId).toBeNull();
+    const af = datos.brief.afirmaciones.find((a) => a.texto === "Llega en 48 horas")!;
+    expect(af.aprobada).toBe(false);
+  });
+  it("una respuesta rota da un error claro", () => {
+    expect(() => ideasAPropuesta(datosEjemplo(), "no es json")).toThrow(/JSON/);
+  });
+});
+
+describe("campaña de ejemplo", () => {
+  it("es válida, está marcada como ficticia y su prueba ya tiene lectura", () => {
+    const d = datosEjemplo();
+    expect(NOMBRE_EJEMPLO).toMatch(/ficticio/);
+    expect(d.conceptos).toHaveLength(2);
+    const r = revisar(d, {});
+    expect(r.conceptos).toHaveLength(2);
+    expect(Object.keys(d.prueba.resultados)).toHaveLength(2);
   });
 });

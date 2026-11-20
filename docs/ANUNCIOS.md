@@ -111,7 +111,33 @@ las fuentes son sólo observación (se usan si la persona confirma que están di
 «Crear plantilla y usarla» copia la plantilla base y cambia marca, colores, CTA y tarjeta final.
 Límite conocido: no protege contra un DNS que cambie entre la comprobación y la descarga (uso local).
 
-## 7. Pendiente
+## 7. Modo guiado para quien nunca hizo anuncios (2026-11-19)
+
+- **Asistente de creación** (`/anuncios/nueva`): 4 preguntas, una por pantalla (qué vendes, qué quieres
+  lograr, dónde, qué ofreces), con tarjetas grandes y ejemplos. Llena el brief; el resto se afina después.
+- **Siguiente paso** (`src/lib/anuncios/siguiente.ts`, como `/ads next` de claude-ads): una tarjeta fija
+  con la etapa (Tu negocio › Ideas › Videos › Revisión › Prueba › Lanzar), qué hacer ahora y un solo
+  botón. También aparece en cada tarjeta de la lista.
+- **Lenguaje simple:** pestañas «Tu negocio · Ideas · Revisión · Comparar · Lanzar»; cada término tiene
+  un «?» con su explicación (`src/components/anuncios/textos.ts`); los textos de la revisión y de la
+  lectura de resultados no usan jerga (sin «CTA», «QC», «render», «guardarraíl» ni «control»).
+- **Editor de ideas simple:** gancho, guion, qué pides al final y dónde se ve; lo demás (insight, marco,
+  datos, objeciones…) en «Más detalle (opcional)».
+- **Revisión «Lo que falta, en orden»:** primero lo que falla, luego lo que falta saber, y aparte lo que
+  se revisa en la plataforma. Una idea sin video muestra una sola tarea («Hacer video») en vez de diez.
+- **Comparar:** valores preelegidos (métrica, mejora pequeña/mediana/grande); α, potencia y unidad de
+  aleatorización en «Opciones avanzadas».
+- **Campaña de ejemplo** («Ver un ejemplo»): ficticia, marcada como tal, con dos ideas y una prueba con
+  resultados. Sólo se crea una vez.
+- **«Propónme ideas»** (`src/lib/anuncios/ideas.ts`): 3 borradores con el LLM local de MPT (Ollama,
+  `ollama_model_name` de `config.toml`, o `GEEPER_OLLAMA_MODEL`). Se le habla desde el contenedor de la
+  API de MPT porque Ollama no publica su puerto. Toma el candado de GPU sin esperar (si está ocupada,
+  avisa), libera la VRAM al terminar (`keep_alive: 0`) y pasa por `propuesta.ts`: ideas nuevas sin video,
+  afirmaciones nuevas sin aprobar, ganchos repetidos descartados. Los datos del negocio van delimitados
+  y el prompt prohíbe inventar cifras, testimonios, garantías y urgencia. Errores claros si Docker o MPT
+  no están corriendo. **Pendiente:** probarlo en vivo (Docker Desktop estaba cerrado durante la prueba).
+
+## 8. Pendiente
 
 - Leer resultados reales (CTR, retención) por las APIs oficiales y cruzarlos con el concepto: es el
   bucle D2 de `BRECHAS.md`.

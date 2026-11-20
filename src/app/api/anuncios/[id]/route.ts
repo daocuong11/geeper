@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { json, manejar } from "@/lib/http";
 import { guardarDatos, leerCampana, revisionDe } from "@/lib/anuncios/servicio";
+import { siguientePaso } from "@/lib/anuncios/siguiente";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ type Ctx = { params: Promise<{ id: string }> };
 async function vista(id: string) {
   const { fila, datos } = await leerCampana(id);
   const revision = await revisionDe(datos);
-  return { campana: { id: fila.id, nombre: fila.nombre, estado: fila.estado, actualizado: fila.actualizado }, datos, revision };
+  return { campana: { id: fila.id, nombre: fila.nombre, estado: fila.estado, actualizado: fila.actualizado }, datos, revision, siguiente: siguientePaso(datos, revision, fila.estado) };
 }
 
 export async function GET(_req: Request, ctx: Ctx) {

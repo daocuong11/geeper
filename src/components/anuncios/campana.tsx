@@ -4,10 +4,12 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ESTADOS_CAMPANA, type DatosCampana } from "@/lib/anuncios/esquema";
 import type { Revision } from "@/lib/anuncios/revision";
+import type { Paso } from "@/lib/anuncios/siguiente";
 import { Aviso, pedir, postJson } from "../comun";
 import { PestanaBrief } from "./brief";
 import { PestanaConceptos } from "./conceptos";
 import { PestanaExportar } from "./exportar";
+import { SiguientePaso } from "./guia";
 import { PestanaPrueba } from "./prueba";
 import { PestanaRevision } from "./revision";
 import { Contadores } from "./ui";
@@ -16,6 +18,7 @@ interface Vista {
   campana: { id: string; nombre: string; estado: string; actualizado: string };
   datos: DatosCampana;
   revision: Revision;
+  siguiente: Paso;
 }
 
 const NOMBRES_ESTADO: Record<(typeof ESTADOS_CAMPANA)[number], string> = {
@@ -89,7 +92,7 @@ export function Campana({ id }: { id: string }) {
         });
         // Sólo la respuesta más nueva manda; los datos locales no se pisan mientras se escribe.
         if (n === secuencia.current) {
-          setVista((prev) => (prev ? { ...prev, campana: v.campana, revision: v.revision } : v));
+          setVista((prev) => (prev ? { ...prev, campana: v.campana, revision: v.revision, siguiente: v.siguiente } : v));
           setGuardado("guardado");
           setError(null);
         }
@@ -130,7 +133,7 @@ export function Campana({ id }: { id: string }) {
       if (guardado !== "guardado") return;
       try {
         const v = await pedir<Vista>(`/api/anuncios/${id}`);
-        setVista((prev) => (prev ? { ...prev, revision: v.revision } : prev));
+        setVista((prev) => (prev ? { ...prev, revision: v.revision, siguiente: v.siguiente } : prev));
       } catch {
         /* el próximo intento lo vuelve a probar */
       }
@@ -171,11 +174,11 @@ export function Campana({ id }: { id: string }) {
   };
 
   const PESTANAS: { id: Pestana; nombre: string; insignia?: number; alerta?: boolean }[] = [
-    { id: "brief", nombre: "Brief" },
-    { id: "conceptos", nombre: "Conceptos", insignia: datos.conceptos.length },
+    { id: "brief", nombre: "Tu negocio" },
+    { id: "conceptos", nombre: "Ideas", insignia: datos.conceptos.length },
     { id: "revision", nombre: "Revisión", insignia: pendientes || undefined, alerta: revision.resumen.fail > 0 },
-    { id: "prueba", nombre: "Prueba" },
-    { id: "exportar", nombre: "Exportar" },
+    { id: "prueba", nombre: "Comparar" },
+    { id: "exportar", nombre: "Lanzar" },
   ];
 
   async function duplicar() {
@@ -195,7 +198,7 @@ export function Campana({ id }: { id: string }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <Link href="/anuncios" className="text-sm text-tenue hover:text-white">← Anuncios</Link>
         <input
-          className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1 text-xl font-bold tracking-tight hover:border-borde focus:border-borde focus:outline-none"
+          className="min-w-0 flex-1 basis-full rounded-md border border-transparent bg-transparent px-1 text-xl font-bold tracking-tight hover:border-borde focus:border-borde focus:outline-none sm:basis-auto"
           defaultValue={campana.nombre}
           aria-label="Nombre de la campaña"
           maxLength={120}
@@ -240,6 +243,8 @@ export function Campana({ id }: { id: string }) {
       </div>
 
       {error && <Aviso tipo="error">{error}</Aviso>}
+
+      <SiguientePaso ctx={ctx} paso={vista.siguiente} />
 
       <div role="tabpanel">
         {pestana === "brief" && <PestanaBrief ctx={ctx} />}

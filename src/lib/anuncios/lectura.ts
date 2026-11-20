@@ -67,20 +67,20 @@ export function leerPrueba(e: {
   const alfaCorregido = e.alfa / k;
   const nombre = (id: string) => e.nombres[id] ?? id;
   if (!e.control || !e.tratamientos.length) {
-    return { ok: false, alfaCorregido, avisos, comparaciones: [], decision: "Elige el control y al menos un tratamiento." };
+    return { ok: false, alfaCorregido, avisos, comparaciones: [], decision: "Elige la idea base y al menos una que compita." };
   }
   const c = e.resultados[e.control];
-  if (!valido(c)) return { ok: false, alfaCorregido, avisos, comparaciones: [], decision: `Faltan los datos del control («${nombre(e.control)}»).` };
-  if (c.conversiones > c.unidades) return { ok: false, alfaCorregido, avisos, comparaciones: [], decision: "El control tiene más conversiones que unidades: revisa los datos." };
-  if (e.planeada == null) avisos.push("No hay tamaño de muestra decidido: la lectura es orientativa.");
+  if (!valido(c)) return { ok: false, alfaCorregido, avisos, comparaciones: [], decision: `Faltan los números de la idea base («${nombre(e.control)}»).` };
+  if (c.conversiones > c.unidades) return { ok: false, alfaCorregido, avisos, comparaciones: [], decision: "La idea base tiene más resultados que personas que la vieron: revisa los números." };
+  if (e.planeada == null) avisos.push("No calculaste cuánta gente hacía falta (paso 3): toma el resultado sólo como orientación.");
   const z = zInversa(1 - alfaCorregido / 2);
   const pc = c.conversiones / c.unidades;
 
   const comparaciones = e.tratamientos.map((id): Comparacion => {
     const t = e.resultados[id];
     const base = { tratamiento: id, tasaControl: pc, tasaTratamiento: 0, diferencia: 0, relativa: null, intervalo: [0, 0] as [number, number], z: 0, p: 1 };
-    if (!valido(t)) return { ...base, veredicto: "falta", texto: `Faltan los datos de «${nombre(id)}».` };
-    if (t.conversiones > t.unidades) return { ...base, veredicto: "invalido", texto: `«${nombre(id)}» tiene más conversiones que unidades.` };
+    if (!valido(t)) return { ...base, veredicto: "falta", texto: `Faltan los números de «${nombre(id)}».` };
+    if (t.conversiones > t.unidades) return { ...base, veredicto: "invalido", texto: `«${nombre(id)}» tiene más resultados que personas que la vieron.` };
     const pt = t.conversiones / t.unidades;
     const dif = pt - pc;
     const se = Math.sqrt((pc * (1 - pc)) / c.unidades + (pt * (1 - pt)) / t.unidades);
@@ -90,27 +90,27 @@ export function leerPrueba(e: {
     const p = se0 > 0 ? 2 * (1 - normalAcumulada(Math.abs(zz))) : 1;
     const r = { ...base, tasaTratamiento: pt, diferencia: dif, relativa: pc > 0 ? dif / pc : null, intervalo: [dif - z * se, dif + z * se] as [number, number], z: zz, p };
     const rel = r.relativa != null ? ` (${r.relativa >= 0 ? "+" : ""}${pct(r.relativa, 1)})` : "";
-    const resumen = `${pct(pt)} contra ${pct(pc)}${rel}, intervalo ${pct(r.intervalo[0])} a ${pct(r.intervalo[1])}, p ${p < 0.001 ? "< 0,001" : `= ${p.toFixed(3).replace(".", ",")}`}`;
+    const resumen = `${pct(pt)} contra ${pct(pc)} de la base${rel}; la diferencia real está probablemente entre ${pct(r.intervalo[0])} y ${pct(r.intervalo[1])} (p ${p < 0.001 ? "< 0,001" : `= ${p.toFixed(3).replace(".", ",")}`})`;
     if (e.planeada != null && (c.unidades < e.planeada || t.unidades < e.planeada)) {
       const falta = Math.max(0, e.planeada - Math.min(c.unidades, t.unidades));
-      return { ...r, veredicto: "temprano", texto: `Todavía no: faltan ~${falta.toLocaleString("es")} unidades para la muestra decidida. Provisional: ${resumen}.` };
+      return { ...r, veredicto: "temprano", texto: `Todavía no se puede saber: faltan ~${falta.toLocaleString("es")} personas por anuncio. Por ahora: ${resumen}.` };
     }
-    if (p < alfaCorregido && dif > 0) return { ...r, veredicto: "gana", texto: `«${nombre(id)}» supera al control: ${resumen}.` };
-    if (p < alfaCorregido && dif < 0) return { ...r, veredicto: "pierde", texto: `«${nombre(id)}» queda por debajo del control: ${resumen}.` };
-    return { ...r, veredicto: "sin-diferencia", texto: `Sin diferencia detectable con esta muestra: ${resumen}.` };
+    if (p < alfaCorregido && dif > 0) return { ...r, veredicto: "gana", texto: `«${nombre(id)}» funcionó mejor, y no parece suerte: ${resumen}.` };
+    if (p < alfaCorregido && dif < 0) return { ...r, veredicto: "pierde", texto: `«${nombre(id)}» funcionó peor que la base: ${resumen}.` };
+    return { ...r, veredicto: "sin-diferencia", texto: `No hay diferencia clara: puede ser suerte. ${resumen}.` };
   });
 
   let decision: string;
   const ganan = comparaciones.filter((x) => x.veredicto === "gana").sort((a, b) => b.diferencia - a.diferencia);
-  if (comparaciones.some((x) => x.veredicto === "falta" || x.veredicto === "invalido")) decision = "Completa o corrige los datos antes de decidir.";
-  else if (comparaciones.some((x) => x.veredicto === "temprano")) decision = "Sigue corriendo: aún no se llegó a la muestra decidida. No cortes la prueba por un resultado parcial.";
+  if (comparaciones.some((x) => x.veredicto === "falta" || x.veredicto === "invalido")) decision = "Completa o corrige los números antes de decidir.";
+  else if (comparaciones.some((x) => x.veredicto === "temprano")) decision = "Déjala seguir: todavía no la vio suficiente gente. No la cortes por lo que se ve hoy.";
   else if (ganan.length) {
     const g = nombre(ganan[0]!.tratamiento);
     decision =
-      e.guardarrailes === "fail" ? `«${g}» gana en la métrica primaria pero rompe un guardarraíl: no lo escales sin entender por qué.`
-      : e.guardarrailes === "pass" ? `Escala «${g}»: gana en la métrica primaria y los guardarraíles se mantuvieron.`
-      : `«${g}» gana en la métrica primaria. Confirma los guardarraíles antes de escalarlo.`;
-  } else if (comparaciones.every((x) => x.veredicto === "pierde")) decision = "Quédate con el control: ningún tratamiento lo supera.";
-  else decision = "Sin ganador claro: quédate con el control (o con el más barato) y prueba una idea más distinta.";
+      e.guardarrailes === "fail" ? `«${g}» consiguió más resultados, pero empeoró lo que no podía empeorar: no le pongas más dinero hasta entender por qué.`
+      : e.guardarrailes === "pass" ? `Ganó «${g}»: ponle más presupuesto. Consiguió más resultados y no empeoró lo que cuidabas.`
+      : `«${g}» consiguió más resultados. Antes de ponerle más dinero, confirma abajo que no empeoró lo que cuidabas.`;
+  } else if (comparaciones.every((x) => x.veredicto === "pierde")) decision = "Quédate con la idea base: ninguna la superó.";
+  else decision = "No hubo un ganador claro: sigue con la idea base (o la más barata) y prueba otra idea más distinta.";
   return { ok: true, alfaCorregido, avisos, comparaciones, decision };
 }
