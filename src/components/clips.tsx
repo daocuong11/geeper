@@ -6,6 +6,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Aviso, Barra, archivo, pedir, postJson, useSondeo } from "./comun";
+import { SugerenciasBusqueda } from "./sugerencias-busqueda";
 
 interface Vista { video: string; poster: string; desde: number; hasta: number }
 interface Candidato { n: number; inicio: number; fin: number; puntaje: number; motivos: string[]; texto?: string; vista?: Vista }
@@ -262,17 +263,24 @@ function Radar({ alElegir }: { alElegir: (url: string) => void }) {
   const [res, setRes] = useState<Tendencia[] | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function medir(e: React.FormEvent) {
-    e.preventDefault();
+  async function buscar(consulta: string) {
     setCargando(true);
     setError(null);
     try {
-      setRes((await pedir<{ videos: Tendencia[] }>(`/api/clips/tendencias?q=${encodeURIComponent(q)}&horas=24`)).videos);
+      setRes((await pedir<{ videos: Tendencia[] }>(`/api/clips/tendencias?q=${encodeURIComponent(consulta)}&horas=24`)).videos);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setCargando(false);
     }
+  }
+  function medir(e: React.FormEvent) {
+    e.preventDefault();
+    void buscar(q);
+  }
+  function elegirSugerencia(s: string) {
+    setQ(s);
+    if (!cargando) void buscar(s);
   }
   return (
     <details className="tarjeta p-4">
@@ -281,6 +289,7 @@ function Radar({ alElegir }: { alElegir: (url: string) => void }) {
         <div className="grow"><label className="etiqueta" htmlFor="q">Tema</label><input id="q" className="campo" value={q} onChange={(e) => setQ(e.target.value)} /></div>
         <button className="boton" disabled={cargando || !q.trim()}>{cargando ? "Buscando (cerca de 1 min)…" : "Buscar en YouTube"}</button>
       </form>
+      {!cargando && <SugerenciasBusqueda consulta={q} alElegir={elegirSugerencia} texto="Toca una para buscar sus videos de moda." />}
       {error && <div className="mt-3"><Aviso tipo="error">{error}</Aviso></div>}
       {res && (
         <div className="mt-3 space-y-2">

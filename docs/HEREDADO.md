@@ -77,6 +77,20 @@ Plugin de Claude Code en Python para sacar clips verticales de directos y videos
 | `campaign-finder`, `payouts.py` | Campañas pagadas de Whop y registro de pagos | No: operación del canal, no producto. Las reglas de una campaña entran con `--campania` |
 | `questions-to-posts`, `secrets-map`, `cheat-codes`, `playbook` | Contenido y rutina de una página de GTA 6 | No: contenido. Sus reglas duras (sin leaks, sin «oficial», acreditar siempre, no prometer ingresos) sí están en la skill y el QC |
 
+## open-seo (every-app, MIT) — revisión 2026-11-20
+
+Alternativa abierta a Semrush/Ahrefs (TanStack Start en Cloudflare o Docker), commit `af3f995`. Casi todo
+su valor son datos de **DataForSEO, que se paga por consulta**, y SEO de sitios web; Geeper es un estudio
+de video a US$0 cuyo único sitio (`sitio/`) es la página legal para la verificación de las apps de redes.
+
+| Pieza | Qué hace | En Geeper |
+|---|---|---|
+| `src/shared/audit-issues.ts` | Registro de problemas de la auditoría: gravedad, explicación y cómo arreglarlo (`missing-title`, `duplicate-title`, `missing-meta-description`…) | **Portada la idea** a `src/lib/redes/revision-texto.ts`: en el panel de publicar, cada cuenta muestra «✓ listo» o lo que la red recortaría, ignoraría o rechazaría, con botón de arreglo cuando se puede (YouTube: `<` `>`, título > 70 que se corta, sin descripción, descripción > 5000 bytes, > 60 hashtags; TikTok e Instagram: 2200 caracteres; Instagram: > 30 hashtags o > 20 menciones bloquea). Avisa de títulos repetidos en la cuenta, en cualquier proyecto (`/api/cuentas/titulos`) |
+| Skills `keyword-research`, `keyword-clustering` | Elegir temas por lo que la gente busca y por encaje con el negocio, no por volumen; no inventar métricas | **Hecho con fuente gratis**: «Lo que busca la gente en YouTube» (`src/lib/busquedas.ts`, autocompletado de YouTube, sin clave; país en `GEEPER_PAIS_BUSQUEDAS`, por defecto MX) al escribir el tema en /nuevo y en el radar de tendencias. No es API oficial: si falla, no se muestra nada. Sale a Google sólo el texto del tema. Sin volúmenes: open-seo los saca de DataForSEO (de pago) |
+| Auditoría de sitio, Lighthouse, backlinks, rank tracking, visibilidad en IA, SEO local | Rastreador propio + DataForSEO + LLMs | **No**: SEO web o de pago; `sitio/` no compite en búsquedas |
+| MCP y skills de SEO para agentes | Herramientas sobre su API | **No**: requieren una instancia de OpenSEO con clave de DataForSEO |
+| Skills internas (`papercuts`, `test-audit`, `merge-ready`, `deslop`) | Flujo de trabajo del repo | **No por ahora**: `deslop` ya lo cubre la skill `humanizer`; las otras están atadas a su CI y su facturación |
+
 ## Descartado
 
 - **Remotion:** licencia de empresa paga para algunas organizaciones; Hyperframes ya cubre lo mismo con Apache-2.0.

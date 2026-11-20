@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { SugerenciasBusqueda, cambiarUltimaLinea, ultimaLinea } from "./sugerencias-busqueda";
 import { Aviso, postJson, useSondeo } from "./comun";
 
 interface Plantilla {
@@ -45,6 +46,7 @@ export function FormNuevo() {
         <textarea id="temas" className="campo min-h-36 font-mono" value={temas} onChange={(e) => setTemas(e.target.value)}
           placeholder={"Por qué los faros siguen siendo importantes\nFaros que se convirtieron en hoteles"} required />
         <p className="mt-1 text-xs text-tenue">{lista.length === 0 ? "Sin temas todavía" : lista.length === 1 ? "1 proyecto" : `Lote de ${lista.length} proyectos (si se corta, se retoma sin repetir los terminados)`}</p>
+        <SugerenciasBusqueda consulta={ultimaLinea(temas)} alElegir={(s) => setTemas(cambiarUltimaLinea(temas, s))} texto="Toca una para usarla como tema." />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <fieldset>

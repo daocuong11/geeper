@@ -420,6 +420,30 @@
       "pruebas": [
         "tests/estudio.test.ts"
       ]
+    },
+    {
+      "id": "open-seo",
+      "repo": "every-app/open-seo",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "commit": "af3f995",
+      "revisado": "2026-11-20",
+      "que": "Registro de problemas de su auditoría (gravedad + qué hacer) pasado a la revisión del texto antes de publicar, con arreglos de un clic; criterio de su skill keyword-research con el autocompletado de YouTube como fuente gratis. El resto depende de DataForSEO (de pago) o es SEO de sitios web.",
+      "archivos": [
+        "src/lib/redes/revision-texto.ts",
+        "src/components/panel-publicar.tsx",
+        "src/app/api/cuentas/titulos/route.ts",
+        "src/lib/busquedas.ts",
+        "src/app/api/busquedas/route.ts",
+        "src/components/sugerencias-busqueda.tsx"
+      ],
+      "docs": "docs/HEREDADO.md#open-seo-every-app-mit--revisión-2026-11-20",
+      "pruebas": [
+        "tests/revision-texto.test.ts",
+        "tests/busquedas.test.ts"
+      ]
     }
   ]
 }
