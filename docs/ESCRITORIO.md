@@ -39,6 +39,10 @@ pnpm escritorio:probar       # abre la app desde escritorio-app/ (Linux/WSLg)
 pnpm escritorio:empaquetar   # instalador del sistema donde corre → dist-escritorio/
 ```
 
+Desde la terminal de VS Code, `ELECTRON_RUN_AS_NODE=1` viene puesto y hace que Electron arranque como
+Node, sin ventana: `escritorio:probar` lo quita. Probado en WSLg el 2026-11-20: crea la base, siembra
+las plantillas, arranca servidor y worker, todas las páginas sin errores y al cerrar no quedan procesos.
+
 Los instaladores de Windows y macOS se hacen en **GitHub Actions** (`.github/workflows/escritorio.yml`),
 en una máquina de cada sistema: a mano desde la pestaña *Actions* («Run workflow») o subiendo una
 etiqueta `v*` (entonces publica una release con el `.exe` y el `.dmg`).

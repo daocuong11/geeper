@@ -13,7 +13,7 @@
     "build": "next build",
     "start": "next start --port 3300",
     "escritorio:preparar": "tsx scripts/escritorio/empaquetar.ts --sin-instalador",
-    "escritorio:probar": "electron escritorio-app",
+    "escritorio:probar": "env -u ELECTRON_RUN_AS_NODE electron escritorio-app",
     "escritorio:empaquetar": "tsx scripts/escritorio/empaquetar.ts",
     "worker": "tsx worker/index.ts",
     "dev:up": "tsx scripts/dev-up.ts",
