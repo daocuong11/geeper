@@ -20,6 +20,7 @@ import { obtenerRed } from "./redes/index";
 import { juzgar, leerAjustes, salidaActual, verificarSalida } from "./redes/salida";
 import { REDES_IDS } from "./redes/tipos";
 import { PYTHON_CARAS } from "./caras";
+import { estadoModelos, faltaEnInstalacion, instalacionWan2gp, MODELOS_PLANO } from "./wan2gp";
 
 export interface Chequeo {
   nombre: string;
@@ -104,6 +105,18 @@ export async function diagnosticar(): Promise<Chequeo[]> {
     nombre: `VectorCraft ${VECTORCRAFT_VERSION} (logos vectoriales)`, ok: !!vc?.includes(VECTORCRAFT_VERSION), aviso: !vc?.includes(VECTORCRAFT_VERSION),
     detalle: vc ?? `no está ${VECTORCRAFT_CLI}`,
     arreglo: vc?.includes(VECTORCRAFT_VERSION) ? undefined : "Botón «Instalar con un clic» aquí abajo. Sin ella, los logos se suben como SVG o PNG (no .ai, .pdf ni .eps).",
+  });
+  // Wan2GP (planos generativos, opcional): lo instala la persona; Geeper sólo lo llama (wan2gp.ts).
+  const wan = instalacionWan2gp();
+  const faltaWan = faltaEnInstalacion(wan);
+  const modelosWan = faltaWan ? null : estadoModelos(wan);
+  c.push({
+    nombre: "Wan2GP (animar escenas, opcional)", ok: !faltaWan, aviso: true,
+    detalle: faltaWan ?? (() => {
+      const bajados = MODELOS_PLANO.filter((m) => modelosWan![m.id] === "listo").map((m) => m.nombre);
+      return `instalado en ${wan.dir} · ${bajados.length ? `motores descargados: ${bajados.join(", ")}` : "ningún motor descargado todavía (se baja al animar la primera vez)"}`;
+    })(),
+    arreglo: faltaWan ? "Sólo si quieres animar escenas: botón «Instalar con un clic» aquí abajo (o pnpm tsx scripts/instalar-wan2gp.ts)." : undefined,
   });
   const whisper = await existe(path.join(CACHE_HF, "whisper", "models", `ggml-${MODELO_WHISPER}.bin`));
   c.push({

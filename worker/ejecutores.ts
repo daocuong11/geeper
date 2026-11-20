@@ -15,7 +15,9 @@ import { apiViva, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/l
 import type { Contexto } from "@/lib/pasos";
 import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
+import { generarPlanoEscena, type OpcionesPlano } from "@/lib/plano";
 import { regenerarVoz } from "@/lib/regenerar";
+import type { Avance } from "@/lib/wan2gp";
 import { reencuadrarEscena } from "@/lib/reencuadre";
 import { renderEntregar, versionDeProyecto } from "@/lib/render";
 import { publicarSubir } from "@/lib/redes/publicar";
@@ -211,6 +213,41 @@ async function vozRegenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+/** Lo que ve la persona en Trabajos mientras se anima una escena. */
+export function etapaDePlano(a: Avance): string {
+  switch (a.fase) {
+    case "descargando":
+      return `Bajando el modelo (sólo la primera vez): ${(a.bytes! / 1024 ** 3).toFixed(1)} GB`;
+    case "cargando":
+      return "Cargando el modelo en la GPU";
+    case "codificando":
+      return "Preparando la imagen";
+    case "generando":
+      return a.pasos ? `Animando: paso ${a.paso} de ${a.pasos}` : "Animando";
+    case "decodificando":
+      return "Armando el video";
+    default:
+      return "Guardando el plano";
+  }
+}
+
+async function planoGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const escena = String(t.payload.escena ?? "");
+  const opciones = (t.payload.opciones ?? {}) as OpcionesPlano;
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras anima)", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  let ultima = "";
+  const r = await generarPlanoEscena(
+    { ...h, alAvanzar: (a) => {
+      const e = etapaDePlano(a);
+      if (e !== ultima) void h.etapa((ultima = e), a.avance);
+    } },
+    t.proyectoId!, p, escena, opciones,
+  );
+  h.log(`Escena animada en ${r.segundos} s → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
 async function renderEntregarEj(t: Trabajo, h: Herramientas): Promise<Salida> {
   const version = typeof t.payload.version === "number" ? t.payload.version : undefined;
   const r = await renderEntregar(h, t.proyectoId!, t.id, version);
@@ -237,6 +274,7 @@ export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Pr
   "clip.momentos": clipMomentos,
   "clip.importar": clipImportar,
   "visual.reencuadrar": visualReencuadrar,
+  "plano.generar": planoGenerar,
   "voz.regenerar": vozRegenerar,
   "render.entregar": renderEntregarEj,
   "publicar.subir": publicarSubirEj,

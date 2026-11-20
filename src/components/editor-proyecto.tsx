@@ -6,6 +6,7 @@ import { explicar, resumirQc } from "@/lib/qc-explicado";
 import { VistaEnVivo } from "./vista-en-vivo";
 import { ListaTrabajos } from "./lista-trabajos";
 import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
+import { PanelAnimar, type OpcionesAnimar } from "./panel-animar";
 import { PanelPortada } from "./panel-portada";
 import { SelectorEncuadre, type EncuadreV } from "./selector-encuadre";
 import { PanelOtroEditor } from "./panel-otro-editor";
@@ -173,12 +174,13 @@ function lista(n: number[]): string {
   return n.length <= 1 ? String(n[0] ?? "") : `${n.slice(0, -1).join(", ")} y ${n[n.length - 1]}`;
 }
 
-function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subirClip, regenerarVoz, reencuadrar, ocupado }: {
-  e: EscenaV; anterior?: EscenaV; slug: string; total: number; ocupado: boolean; formato: string; estilo: EstiloV | null;
+function TarjetaEscena({ e, anterior, slug, proyectoId, total, formato, estilo, editar, subirClip, regenerarVoz, reencuadrar, animar, ocupado }: {
+  e: EscenaV; anterior?: EscenaV; slug: string; proyectoId: string; total: number; ocupado: boolean; formato: string; estilo: EstiloV | null;
   editar: (ed: object) => Promise<void>;
   subirClip: (escena: string, f: File) => Promise<void>;
   regenerarVoz: (escena: string) => Promise<void>;
   reencuadrar: (escena: string, layout: string) => Promise<void>;
+  animar: (escena: string, opciones: OpcionesAnimar) => Promise<void>;
 }) {
   return (
     <li id={`escena-${e.id}`} className="tarjeta flex scroll-mt-4 flex-col gap-3 p-3 md:flex-row">
@@ -226,6 +228,7 @@ function TarjetaEscena({ e, anterior, slug, total, formato, estilo, editar, subi
         </div>
         <EfectosEscena escena={e.id} indice={e.indice} efectos={e.efectos} estilo={estilo} formato={formato}
           imgA={anterior ? miniatura(slug, anterior) : undefined} imgB={miniatura(slug, e)} editar={editar} ocupado={ocupado} />
+        <PanelAnimar proyectoId={proyectoId} escena={e.id} numero={e.indice + 1} ocupado={ocupado} animar={animar} />
       </div>
     </li>
   );
@@ -279,6 +282,8 @@ export function EditorProyecto({ id }: { id: string }) {
   }, `Clip reemplazado por «${f.name}».`);
   const reencuadrar = (escena: string, layout: string) => hacer(() => postJson(`/api/proyectos/${id}/reencuadre`, { escena, layout }),
     "Reencuadre en cola (detección de cara en CPU). Al terminar queda como versión nueva; si no encuentra una cara estable, lo dice en Trabajos.");
+  const animar = (escena: string, opciones: OpcionesAnimar) => hacer(() => postJson(`/api/proyectos/${id}/plano`, { escena, opciones }),
+    "Animación en cola. Verás el avance en la escena y en «Trabajos»; al terminar queda como versión nueva (ya se ve en «En vivo»).");
   const regenerarVoz = (escena: string | null) => hacer(() => postJson(`/api/proyectos/${id}/voz`, { escena }),
     "Voz en cola (Kokoro y whisper en CPU). Al terminar se realinean los subtítulos y se vuelve a renderizar.");
   const renderizar = () => hacer(() => postJson(`/api/proyectos/${id}/render`, {}), "Render en cola: sólo compila y renderiza, no genera nada con la GPU.");
@@ -465,7 +470,7 @@ export function EditorProyecto({ id }: { id: string }) {
           <ol className="space-y-3">
             {escenas.map((e, i) => (
               <TarjetaEscena key={e.id} e={e} anterior={escenas[i - 1]} slug={fila.slug} total={escenas.length} formato={p?.formato ?? fila.formato}
-                estilo={v.extras?.estilo ?? null} editar={editar} subirClip={subirClip} regenerarVoz={regenerarVoz} reencuadrar={reencuadrar} ocupado={ocupado} />
+                estilo={v.extras?.estilo ?? null} editar={editar} subirClip={subirClip} regenerarVoz={regenerarVoz} reencuadrar={reencuadrar} animar={animar} proyectoId={id} ocupado={ocupado} />
             ))}
           </ol>
         </section>

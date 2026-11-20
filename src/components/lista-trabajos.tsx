@@ -24,6 +24,7 @@ const TIPOS: Record<string, string> = {
   "mpt.generar": "Generar con MPT",
   "proyecto.importar": "Importar y alinear",
   "voz.regenerar": "Regenerar voz",
+  "plano.generar": "Animar escena",
   "render.entregar": "Render y QC",
 };
 

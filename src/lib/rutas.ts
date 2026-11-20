@@ -44,6 +44,14 @@ export const VECTORCRAFT_VERSION = process.env.GEEPER_VECTORCRAFT_VERSION ?? "0.
 export const RAIZ_REPO = process.env.GEEPER_REPO ?? process.cwd();
 /** Venv de Python de Geeper para clips y caras (OpenCV, yt-dlp). */
 export const VENV_CLIPS = path.join(ESTUDIO, "venvs", "geeper-clips");
+/**
+ * Wan2GP (opcional, lo instala la persona: github.com/deepbeepmeep/Wan2GP): motor local de planos
+ * generativos con manejo de VRAM para 16 GB (wan2gp.ts). Python por defecto: el venv de esa carpeta.
+ */
+export const WAN2GP_DIR = process.env.GEEPER_WAN2GP ?? path.join(ESTUDIO, "Wan2GP");
+export const WAN2GP_PYTHON = process.env.GEEPER_WAN2GP_PYTHON ?? pythonDeVenv(path.join(WAN2GP_DIR, "venv"));
+/** gpu-solo del estudio: toma el candado y pausa los contenedores de MPT que ocupan VRAM. */
+export const GPU_SOLO_BIN = path.join(ESTUDIO, "bin", "gpu-solo");
 /** Python con kokoro-onnx para `hyperframes tts` (el venv del estudio). */
 export const PYTHON_VOZ = process.env.HYPERFRAMES_PYTHON ?? (ESCRITORIO ? pythonDeVenv(path.join(ESTUDIO, "venvs", "voz")) : path.join(ESTUDIO, "OpenMontage", ".venv", "bin", "python"));
 /** uv (crea los Python del estudio): el del instalador o, en desarrollo, el del PATH. */

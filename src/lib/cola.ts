@@ -22,6 +22,8 @@ export const TIPOS = {
   "clip.importar": { motor: "voz", usaGpu: false, nombre: "Importar clip de material largo" },
   "visual.reencuadrar": { motor: "voz", usaGpu: false, nombre: "Reencuadrar siguiendo la cara" },
   "voz.regenerar": { motor: "voz", usaGpu: false, nombre: "Regenerar voz" },
+  // Mismo motor que MPT: los dos usan toda la GPU y así nunca corren a la vez.
+  "plano.generar": { motor: "mpt", usaGpu: true, nombre: "Animar escena" },
   "render.entregar": { motor: "render", usaGpu: true, nombre: "Render y QC" },
   "publicar.subir": { motor: "red", usaGpu: false, nombre: "Publicar en red" },
 } as const;
