@@ -7,6 +7,9 @@ on:
   workflow_dispatch:
   push:
     tags: ["v*"]
+    # Las ramas de integración también arman los instaladores (el botón «Run workflow» sólo aparece
+    # cuando el flujo ya está en main).
+    branches: ["integracion/**"]
 
 permissions:
   contents: write
