@@ -1,7 +1,9 @@
 /**
  * Instala Wan2GP con un clic (Sistema → «Wan2GP»), para animar escenas (plano.ts). Pasos, cada uno se
  * salta si ya está:
- *  1. El código, en el commit fijado (WAN2GP_COMMIT), como checkout de git en WAN2GP_DIR.
+ *  1. El código, en el commit fijado (WAN2GP_COMMIT), en WAN2GP_DIR: el archivo .tar.gz de ese commit
+ *     que publica GitHub (no hace falta Git; un equipo normal no lo tiene). Si la carpeta ya es un
+ *     checkout de git (el estudio de desarrollo), se actualiza con git.
  *  2. Python 3.11 propio con uv, en `<Wan2GP>/venv` (nada se instala en el sistema).
  *  3. PyTorch 2.10 con CUDA 13 (lo que Wan2GP recomienda para RTX 20xx a 50xx; driver R580 o más nuevo).
  *  4. Sus dependencias (requirements.txt), con PyTorch fijado para que no lo cambie.
@@ -15,12 +17,17 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { entornoUv } from "./estudio";
+import { bajar, carpetaRaiz } from "./instalar-craft";
 import { SISTEMA } from "./plataforma";
 import { correr, type Registro } from "./proceso";
 import { UV, WAN2GP_DIR } from "./rutas";
 import { ajustesWan2gp, faltaEnInstalacion, instalacionWan2gp, modeloPlano, MODELO_POR_DEFECTO, probarWan2gp, type InstalacionWan2gp } from "./wan2gp";
 
 export const WAN2GP_REPO = "https://github.com/deepbeepmeep/Wan2GP.git";
+/** El código de un commit, sin Git. */
+export const urlArchivoWan2gp = (commit: string) => `https://codeload.github.com/deepbeepmeep/Wan2GP/tar.gz/${commit}`;
+/** Marca con el commit instalado desde el archivo (en un checkout de git, manda git). */
+const MARCA = ".geeper-commit";
 /** Commit fijado (v20, 2026-11-17). Subirlo es trabajo de /novedades (fuente «wan2gp»). */
 export const WAN2GP_COMMIT = "f4cfc1259215577be9a2ee280c41efbedfb4459a";
 export const WAN2GP_PYTHON_VERSION = "3.11";
@@ -104,32 +111,52 @@ function poner(id: string, estado: PasoWan2gp["estado"]) {
   if (p) p.estado = estado;
 }
 
-/** ¿Está el código en el commit fijado y sin cambios? */
+/** Commit del código instalado: el de git si es un checkout; si no, el de la marca que deja el archivo. */
 async function commitActual(dir: string): Promise<string | null> {
-  if (!existsSync(path.join(dir, ".git"))) return null;
-  const r = await correr("git", ["-C", dir, "rev-parse", "HEAD"], { permitirFallo: true }).catch(() => null);
-  return r?.codigo === 0 ? r.stdout.trim() : null;
+  if (existsSync(path.join(dir, ".git"))) {
+    const r = await correr("git", ["-C", dir, "rev-parse", "HEAD"], { permitirFallo: true }).catch(() => null);
+    return r?.codigo === 0 ? r.stdout.trim() : null;
+  }
+  return fs.readFile(path.join(dir, MARCA), "utf8").then((t) => t.trim(), () => null);
 }
 
-async function bajarCodigo(dir: string, log: Registro) {
+export async function bajarCodigo(dir: string, log: Registro) {
   if ((await commitActual(dir)) === WAN2GP_COMMIT && existsSync(path.join(dir, "wgp.py"))) return log("El código ya está en la versión fijada.");
+  if (existsSync(path.join(dir, ".git"))) return bajarConGit(dir, log);
+  if (existsSync(dir) && !existsSync(path.join(dir, MARCA))) {
+    // Ni checkout ni instalado por Geeper: sólo se usa si está vacía (o tiene sólo el venv de un intento anterior).
+    const dentro = (await fs.readdir(dir)).filter((n) => n !== "venv");
+    if (dentro.length) throw new Error(`Ya hay una carpeta ${dir} que no es de Wan2GP. Muévela o bórrala y vuelve a intentar.`);
+  }
+  log(`Descargando Wan2GP (${WAN2GP_COMMIT.slice(0, 7)})…`);
+  const r = await bajar(urlArchivoWan2gp(WAN2GP_COMMIT));
+  if (!r.ok) throw new Error(`GitHub respondió ${r.status} al descargar Wan2GP`);
+  await fs.mkdir(path.dirname(dir), { recursive: true });
+  const tmp = await fs.mkdtemp(path.join(path.dirname(dir), ".wan2gp-"));
+  try {
+    const archivo = path.join(tmp, "wan2gp.tar.gz");
+    await fs.writeFile(archivo, Buffer.from(await r.arrayBuffer()));
+    await fs.mkdir(path.join(tmp, "x"));
+    // tar viene con Windows 10+ y macOS; en Linux siempre está.
+    await correr("tar", ["-xzf", archivo, "-C", path.join(tmp, "x")], { log, timeout: 10 * 60_000 });
+    const raiz = path.join(tmp, "x", await carpetaRaiz(path.join(tmp, "x"), ""));
+    if (!existsSync(path.join(raiz, "wgp.py"))) throw new Error("El archivo de Wan2GP no trae wgp.py: no se instaló.");
+    // Encima de lo que haya: el venv y los pesos (ckpts/) de una versión anterior se conservan.
+    await fs.cp(raiz, dir, { recursive: true, force: true });
+    await fs.writeFile(path.join(dir, MARCA), `${WAN2GP_COMMIT}\n`);
+    log("Código de Wan2GP listo.");
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
+  }
+}
+
+/** El estudio de desarrollo puede tener Wan2GP como checkout de git: se actualiza con git. */
+async function bajarConGit(dir: string, log: Registro) {
   const git = await correr("git", ["--version"], { permitirFallo: true }).catch(() => null);
-  if (git?.codigo !== 0) throw new Error("Falta Git en este equipo. Instálalo (git-scm.com) y vuelve a intentar.");
-  if (existsSync(dir)) {
-    if (!existsSync(path.join(dir, ".git"))) {
-      const dentro = await fs.readdir(dir);
-      if (dentro.length) throw new Error(`Ya hay una carpeta ${dir} que no es de Wan2GP. Muévela o bórrala y vuelve a intentar.`);
-    } else {
-      // Un Wan2GP con cambios propios no se toca.
-      const cambios = await correr("git", ["-C", dir, "status", "--porcelain", "--untracked-files=no"], { log });
-      if (cambios.stdout.trim()) throw new Error(`Wan2GP en ${dir} tiene cambios sin guardar; no lo toco. Guárdalos (git stash) o usa otra carpeta con GEEPER_WAN2GP.`);
-    }
-  }
-  await fs.mkdir(dir, { recursive: true });
-  if (!existsSync(path.join(dir, ".git"))) {
-    await correr("git", ["-C", dir, "init", "-q"], { log });
-    await correr("git", ["-C", dir, "remote", "add", "origin", WAN2GP_REPO], { log });
-  }
+  if (git?.codigo !== 0) throw new Error(`${dir} es un checkout de git y no hay Git en este equipo. Instálalo (git-scm.com) o borra la carpeta para instalarlo sin Git.`);
+  // Un Wan2GP con cambios propios no se toca.
+  const cambios = await correr("git", ["-C", dir, "status", "--porcelain", "--untracked-files=no"], { log });
+  if (cambios.stdout.trim()) throw new Error(`Wan2GP en ${dir} tiene cambios sin guardar; no lo toco. Guárdalos (git stash) o usa otra carpeta con GEEPER_WAN2GP.`);
   // Sólo ese commit, sin la historia: es mucho más liviano.
   await correr("git", ["-C", dir, "fetch", "--depth", "1", "origin", WAN2GP_COMMIT], { log, timeout: 30 * 60_000 });
   await correr("git", ["-C", dir, "checkout", "-q", "--detach", "FETCH_HEAD"], { log });
