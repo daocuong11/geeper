@@ -102,8 +102,10 @@ export function segundos(s: number | null | undefined) {
   return s >= 60 ? `${Math.floor(s / 60)} min ${Math.round(s % 60)} s` : `${s.toFixed(1)} s`;
 }
 
+/** En Windows el servidor arma rutas con «\» (path.relative): se parten igual, si no el navegador vería
+ *  un solo segmento y los archivos relativos de la página (p. ej. la vista previa) apuntarían a otra carpeta. */
 export function archivo(rutaRelativaADatos: string, descargar = false) {
-  return `/api/archivos/${rutaRelativaADatos.split("/").map(encodeURIComponent).join("/")}${descargar ? "?descargar" : ""}`;
+  return `/api/archivos/${rutaRelativaADatos.split(/[\\/]/).map(encodeURIComponent).join("/")}${descargar ? "?descargar" : ""}`;
 }
 
 export function Aviso({ tipo = "info", children }: { tipo?: "info" | "error" | "ok" | "alerta"; children: React.ReactNode }) {
