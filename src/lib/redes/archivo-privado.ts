@@ -8,6 +8,7 @@
  * lectura el archivo no se puede cambiar por otro.
  */
 import fs from "node:fs";
+import path from "node:path";
 
 export class ErrorArchivoPrivado extends Error {}
 
@@ -83,4 +84,20 @@ export function protegerPrivado(ruta: string): EstadoPrivado {
     fs.closeSync(fd);
   }
   return revisarPrivado(ruta).estado;
+}
+
+/**
+ * Escribe un archivo secreto de una vez: carpeta 700, archivo 600 (en Windows, la carpeta del usuario ya
+ * es sólo suya), a través de un temporal y rename para que nunca quede a medias.
+ */
+export function escribirPrivado(ruta: string, contenido: string): void {
+  fs.mkdirSync(path.dirname(ruta), { recursive: true, mode: 0o700 });
+  const tmp = `${ruta}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, contenido, { mode: 0o600, flag: "w" });
+    if (POSIX) fs.chmodSync(tmp, 0o600);
+    fs.renameSync(tmp, ruta);
+  } finally {
+    fs.rmSync(tmp, { force: true });
+  }
 }

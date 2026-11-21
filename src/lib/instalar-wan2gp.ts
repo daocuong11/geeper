@@ -33,6 +33,13 @@ export const WAN2GP_COMMIT = "f4cfc1259215577be9a2ee280c41efbedfb4459a";
 export const WAN2GP_PYTHON_VERSION = "3.11";
 export const TORCH = ["torch==2.10.0", "torchvision==0.25.0", "torchaudio==2.10.0"] as const;
 export const INDICE_TORCH = "https://download.pytorch.org/whl/cu130";
+/**
+ * Las dependencias se resuelven con lo publicado hasta el día siguiente al commit fijado: así la
+ * instalación es la misma hoy que dentro de un mes, y no entra un paquete subido hace minutos (el
+ * 2026-11-21 kaldifst 1.9.2 salió primero sin su versión para Windows y la instalación intentó compilarlo;
+ * además, un paquete recién publicado es justo donde se cuela uno comprometido). Subirla va con el commit.
+ */
+export const FECHA_CORTE = "2026-11-18T00:00:00Z";
 
 export interface PasoWan2gp {
   id: string;
@@ -78,7 +85,7 @@ export function comandosWan2gp(dir: string, python: string): { paso: string; arg
     {
       paso: "dependencias",
       // PyTorch ya está (con CUDA 13); las restricciones lo dejan como está.
-      args: ["pip", "install", "--python", python, "-r", path.join(dir, "requirements.txt"), "-c", rutaRestricciones(dir)],
+      args: ["pip", "install", "--python", python, "-r", path.join(dir, "requirements.txt"), "-c", rutaRestricciones(dir), "--exclude-newer", FECHA_CORTE],
     },
   ];
 }

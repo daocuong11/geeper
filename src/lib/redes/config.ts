@@ -29,7 +29,7 @@ export function urlCallback(red: IdRed): string {
   return `${urlBase()}/api/cuentas/callback/${red}`;
 }
 
-const Config = z.object({
+export const Config = z.object({
   youtube: z.object({ clientId: z.string().min(1), clientSecret: z.string().min(1) }).optional(),
   tiktok: z.object({ clientKey: z.string().min(1), clientSecret: z.string().min(1), publicacionDirecta: z.boolean().default(false) }).optional(),
   instagram: z.object({ appId: z.string().min(1), appSecret: z.string().min(1) }).optional(),

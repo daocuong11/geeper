@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AvisoPrivados } from "./aviso-privados";
+import { AppsRedes } from "./apps-redes";
 import { Aviso, Estado, pedir, useSondeo } from "./comun";
 
 export interface RedInfo {
@@ -234,8 +235,7 @@ function SeccionRed({ red, cuentas, vpn, bloqueada, alCambiar, avisar }: {
       )}
       {!red.configurada && !bloqueada && (
         <Aviso tipo="info">
-          Faltan las credenciales de la app de {red.nombre}. Agrégalas en <code>~/.config/geeper/redes.json</code> (permisos 600, ver docs/PUBLICAR.md §6)
-          y registra este redirect URI en la consola de la red: <code className="break-all">{red.callback}</code>
+          Falta la app de {red.nombre}: cárgala arriba, en «Apps de las redes» (o importa el archivo del equipo).
         </Aviso>
       )}
       {red.id === "youtube" && (
@@ -288,6 +288,7 @@ export function Cuentas({ ok, error, aviso }: { ok: string | null; error: string
         <>
           <AvisoPrivados alCambiar={() => void recargar()} />
           <BarraVpn ajustes={datos.ajustes} vpn={datos.vpn} alCambiar={() => void recargar()} />
+          <AppsRedes alCambiar={() => void recargar()} />
           {datos.redes.map((r) => (
             <SeccionRed key={r.id} red={r} cuentas={datos.cuentas.filter((c) => c.red === r.id)} vpn={datos.vpn} bloqueada={!!datos.privadosBloquean} alCambiar={() => void recargar()} avisar={setMsg} />
           ))}

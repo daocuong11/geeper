@@ -18,6 +18,7 @@ import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
 import { app, BrowserWindow, dialog, Menu, shell } from "electron";
+import { esVueltaOAuth } from "./oauth";
 
 const RAIZ = app.isPackaged ? path.join(process.resourcesPath, "app") : path.join(__dirname, "..", "escritorio-app");
 const hijos: { nombre: string; p: ChildProcess }[] = [];
@@ -143,6 +144,12 @@ function crearVentana(): void {
     return { action: "deny" };
   });
   ventana.webContents.on("will-navigate", (e, destino) => {
+    // «Conectar» una cuenta: el inicio de sesión de la red va en su propia ventana (ver abrirLogin).
+    if (destino.startsWith(`${url}/api/cuentas/conectar/`)) {
+      e.preventDefault();
+      abrirLogin(destino);
+      return;
+    }
     if (!destino.startsWith(url)) {
       e.preventDefault();
       void shell.openExternal(destino);
@@ -150,6 +157,54 @@ function crearVentana(): void {
   });
   void ventana.loadURL(url);
   ventana.on("closed", () => (ventana = null));
+}
+
+/**
+ * Inicio de sesión con una red (YouTube, TikTok, Meta) en una ventana de Geeper, con la misma sesión de
+ * cookies que la principal: ahí vive la cookie firmada con el state y el verifier de PKCE que se validan
+ * al volver. Si se abriera en el navegador del sistema, la vuelta llegaría sin esa cookie y fallaría.
+ *
+ * La red vuelve al redirect URI registrado (http://localhost:3300/…), pero la app corre en 127.0.0.1 y
+ * quizá en otro puerto: esa vuelta se lleva a la dirección real de Geeper, con la misma ruta y parámetros.
+ * Cuando Geeper termina y manda a /cuentas, la ventana se cierra y la principal muestra el resultado.
+ */
+function abrirLogin(inicio: string): void {
+  const login = new BrowserWindow({
+    parent: ventana ?? undefined,
+    width: 560,
+    height: 760,
+    title: "Conectar cuenta",
+    backgroundColor: "#ffffff",
+    autoHideMenuBar: true,
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  const guiar = (e: { preventDefault: () => void }, destino: string) => {
+    if (esVueltaOAuth(destino) && !destino.startsWith(url)) {
+      e.preventDefault();
+      const u = new URL(destino);
+      void login.loadURL(`${url}${u.pathname}${u.search}`);
+      return;
+    }
+    if (destino.startsWith(url)) {
+      // Geeper ya procesó la vuelta (o devolvió un error): se muestra en la ventana principal.
+      if (!new URL(destino).pathname.startsWith("/api/cuentas/")) {
+        e.preventDefault();
+        void ventana?.loadURL(destino);
+        login.close();
+      }
+      return;
+    }
+    // Las páginas de inicio de sesión de las redes van siempre por https.
+    if (!destino.startsWith("https://")) e.preventDefault();
+  };
+  login.webContents.on("will-navigate", guiar);
+  login.webContents.on("will-redirect", guiar);
+  login.webContents.setWindowOpenHandler(({ url: destino }) => {
+    // Enlaces de ayuda o privacidad de la red: al navegador.
+    if (destino.startsWith("https://")) void shell.openExternal(destino);
+    return { action: "deny" };
+  });
+  void login.loadURL(inicio);
 }
 
 function menu(): void {

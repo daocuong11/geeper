@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db";
-import { configurada, rutaRedes } from "@/lib/redes/config";
+import { configurada } from "@/lib/redes/config";
 import { esIdRed, obtenerRed } from "@/lib/redes/index";
 import { privadosBloquean } from "@/lib/redes/privados";
 import { challenge, COOKIE_OAUTH, DURACION_OAUTH_MS, nuevoEstado, sellar } from "@/lib/redes/oauth";
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ red: string
     if (!esIdRed(idRed)) return volver(req, `Red desconocida: ${idRed}`);
     const red = obtenerRed(idRed);
     if (privadosBloquean()) return volver(req, "Tus datos de acceso no están protegidos. Pulsa «Protegerlos ahora» en esta página y vuelve a intentarlo.");
-    if (!configurada(idRed)) return volver(req, `Faltan las credenciales de ${red.nombre} en ${rutaRedes()}`);
+    if (!configurada(idRed)) return volver(req, `Falta la app de ${red.nombre}: cárgala en «Apps de las redes».`);
     const vpn = await verificarSalida();
     if (!vpn.ok) return volver(req, `No se conecta con el VPN en este estado: ${vpn.detalle}`);
 

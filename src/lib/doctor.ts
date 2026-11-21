@@ -14,7 +14,7 @@ import { PYTHON_CLIPS } from "./fuentes";
 import { db } from "./db";
 import { existeClave, rutaClave } from "./redes/cifrado";
 import { ErrorArchivoPrivado } from "./redes/archivo-privado";
-import { leerConfig, rutaRedes, urlCallback, type ConfigRedes } from "./redes/config";
+import { leerConfig, rutaRedes, type ConfigRedes } from "./redes/config";
 import { revisarPrivados } from "./redes/privados";
 import { obtenerRed } from "./redes/index";
 import { juzgar, leerAjustes, salidaActual, verificarSalida } from "./redes/salida";
@@ -258,7 +258,7 @@ async function diagnosticarRedes(): Promise<Chequeo[]> {
     c.push({
       nombre: `Credenciales de ${nombre}`, ok: presente, aviso: !presente,
       detalle: presente ? `presentes en ${ruta}` : "faltan: no se pueden conectar cuentas de esta red",
-      arreglo: presente ? undefined : `Agrega "${id}" a ${ruta}${SISTEMA === "windows" ? "" : " (chmod 600)"} y registra el redirect URI ${urlCallback(id)}`,
+      arreglo: presente ? undefined : "Cuentas → «Apps de las redes»: cárgala ahí (o importa el archivo del equipo).",
     });
   }
   for (const a of privados.filter((x) => x.problema)) {

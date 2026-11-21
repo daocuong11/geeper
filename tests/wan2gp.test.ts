@@ -17,7 +17,7 @@ const HERRAMIENTAS = vi.hoisted(() => {
   return tmp;
 });
 
-import { comandosWan2gp, INDICE_TORCH } from "@/lib/instalar-wan2gp";
+import { comandosWan2gp, FECHA_CORTE, INDICE_TORCH } from "@/lib/instalar-wan2gp";
 import { planearPlano, velocidadParaLlenar } from "@/lib/plano";
 import { camaraDe, CAMARAS, LENTES, MOVIMIENTOS, NOMBRES, promptConCamara } from "@/lib/prompt-camara";
 import {
@@ -133,7 +133,9 @@ describe("instalación con un clic", () => {
     expect(c[1]!.args).toContain("torch==2.10.0");
     expect(c[1]!.args.slice(-2)).toEqual(["--index-url", INDICE_TORCH]);
     // Sin mezclar índices: PyTorch queda fijado por restricciones, no por un índice extra.
-    expect(c[2]!.args).toEqual(["pip", "install", "--python", "/h/Wan2GP/venv/bin/python", "-r", "/h/Wan2GP/requirements.txt", "-c", "/h/Wan2GP/venv/geeper-restricciones.txt"]);
+    expect(c[2]!.args).toEqual(["pip", "install", "--python", "/h/Wan2GP/venv/bin/python", "-r", "/h/Wan2GP/requirements.txt", "-c", "/h/Wan2GP/venv/geeper-restricciones.txt", "--exclude-newer", FECHA_CORTE]);
+    // Nada publicado después del commit fijado (reproducible y sin paquetes de hace minutos).
+    expect(FECHA_CORTE).toMatch(/^2026-11-18T/);
     expect(c.flatMap((x) => x.args)).not.toContain("unsafe-best-match");
   });
 });
