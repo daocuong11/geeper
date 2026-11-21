@@ -197,6 +197,8 @@ async function main() {
   if (anidados.length) throw new Error(`Hay node_modules fuera de la raíz de la app (el instalador no los lleva): ${anidados.map((e) => e.parentPath).join(", ")}`);
   const quedan = fs.readdirSync(APP, { recursive: true, withFileTypes: true }).filter((e) => e.isSymbolicLink() && !e.parentPath.includes(`${path.sep}node_modules${path.sep}.bin`));
   if (quedan.length) throw new Error(`Quedaron enlaces simbólicos en la app (no viajan en el instalador): ${quedan.slice(0, 5).map((e) => path.join(e.parentPath, e.name)).join(", ")}`);
+  // La vista previa copia este archivo en tiempo de ejecución (vista-previa.ts): sin él, no hay vista previa.
+  if (!fs.existsSync(path.join(APP, "node_modules", "hyperframes", "dist", "hyperframe.runtime.iife.js"))) throw new Error("Falta hyperframes/dist/hyperframe.runtime.iife.js en la app (la vista previa lo necesita).");
 
   // 4. Lo que el código lee en tiempo de ejecución (RAIZ_REPO = la carpeta de la app).
   const esquema = execFileSync(win ? "npx.cmd" : "npx", ["prisma", "migrate", "diff", "--from-empty", "--to-schema", "prisma/schema.prisma", "--script"], { cwd: REPO, encoding: "utf8", shell: win });
