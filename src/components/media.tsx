@@ -10,7 +10,7 @@ interface EstadoInstalacion {
   detalle: string;
 }
 interface Lanzamiento { version: string; fecha: string; url: string; notas: string }
-type FilaApp = AppCraft & { release: string; instalada: string | null; versiones: string[]; ultima: Lanzamiento | null; instalacion: EstadoInstalacion | null };
+type FilaApp = AppCraft & { release: string; instalada: string | null; versiones: string[]; ultima: Lanzamiento | null; instalacion: EstadoInstalacion | null; escritorio?: boolean };
 
 /** «0.25.0» > «0.24.1». */
 const masNueva = (a: string, b: string) => {
@@ -26,6 +26,15 @@ const instalando = (e: EstadoInstalacion | null) => !!e && ["descargando", "veri
 export function Media() {
   const { datos, error } = useSondeo<FilaApp[]>("/api/media", 2000);
   const [msg, setMsg] = useState<string | null>(null);
+
+  async function escritorio(a: FilaApp, accion: "instalar" | "abrir") {
+    setMsg(null);
+    try {
+      await pedir(`/api/media/${a.app}/escritorio`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ accion }) });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function enviar(a: FilaApp, cuerpo: { version?: string; usar?: string } = {}) {
     setMsg(null);
@@ -63,11 +72,30 @@ export function Media() {
                 <p className="text-sm">{a.que}</p>
                 {a.paraGeeper && <p className="text-xs text-tenue">En Geeper: {a.paraGeeper}</p>}
                 <div className="mt-auto space-y-2 pt-2">
-                  {a.soloEscritorio ? (
+                  {a.soloEscritorio && !a.escritorio ? (
                     <p className="text-xs text-tenue">
                       No tiene versión para el navegador.{" "}
-                      <a className="underline" href={a.release} target="_blank" rel="noreferrer">Descargar para Windows</a>
+                      <a className="underline" href={a.release} target="_blank" rel="noreferrer">Descargarla desde su página</a>
                     </p>
+                  ) : a.soloEscritorio && instalando(a.instalacion) ? (
+                    <>
+                      <Barra valor={a.instalacion!.progreso} />
+                      <p className="text-xs text-tenue" role="status">{a.instalacion!.detalle}</p>
+                    </>
+                  ) : a.soloEscritorio && a.instalada ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" className="boton boton-primario" onClick={() => void escritorio(a, "abrir")}>Abrir {a.nombre}</button>
+                      <span className="text-xs text-tenue">se abre en su propia ventana</span>
+                      <span className="ml-auto text-xs text-tenue">{a.instalada}</span>
+                    </div>
+                  ) : a.soloEscritorio ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" className="boton" onClick={() => void escritorio(a, "instalar")}>Instalar ({a.version})</button>
+                        <span className="text-xs text-tenue">unos 20 MB</span>
+                      </div>
+                      <p className="text-xs text-tenue">No tiene versión para el navegador: se instala su programa oficial y se abre en su propia ventana.</p>
+                    </>
                   ) : instalando(a.instalacion) ? (
                     <>
                       <Barra valor={a.instalacion!.progreso} />
