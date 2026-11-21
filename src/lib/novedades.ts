@@ -24,6 +24,11 @@ const Fuente = z.object({
   archivos: z.array(z.string()).optional(),
   docs: z.string().optional(),
   pruebas: z.array(z.string()).optional(),
+  /**
+   * Ya no se sigue (p. ej. el autor borró el repo): queda registrada con el motivo, pero no se consulta.
+   * Lo que se integró sigue en Geeper; `copia` apunta, sólo como referencia, a una copia fiel.
+   */
+  archivada: z.object({ fecha: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), motivo: z.string(), copia: z.string().optional() }).optional(),
 });
 export type Fuente = z.infer<typeof Fuente>;
 const Registro = z.object({ fuentes: z.array(Fuente) }).passthrough();
@@ -149,7 +154,7 @@ export async function buscarNovedades({ forzar = false, pedir = pedirJson }: { f
   const cache = await leerCache();
   if (!forzar && cache && Date.now() - Date.parse(cache.fecha) < UN_DIA) return cache;
   g.__buscandoNovedades ??= (async () => {
-    const fuentes = await leerFuentes();
+    const fuentes = (await leerFuentes()).filter((f) => !f.archivada);
     const novedades: Novedad[] = [];
     // De a 4 para no saturar la red ni el límite de GitHub.
     for (let i = 0; i < fuentes.length; i += 4) novedades.push(...(await Promise.all(fuentes.slice(i, i + 4).map((f) => consultar(f, pedir)))));

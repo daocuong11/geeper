@@ -72,3 +72,12 @@ describe("novedades de los repos integrados", () => {
     }
   });
 });
+
+describe("fuentes archivadas", () => {
+  it("gtavi-claudecode queda archivada (el autor borró el repo) con su motivo", async () => {
+    const { leerFuentes } = await import("@/lib/novedades");
+    const g = (await leerFuentes()).find((f) => f.id === "gtavi-claudecode");
+    expect(g?.archivada?.motivo).toMatch(/borró el repo/);
+    expect(g?.commit).toBe("dd95d39");
+  });
+});

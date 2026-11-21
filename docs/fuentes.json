@@ -351,6 +351,11 @@
         "codigo"
       ],
       "commit": "dd95d39",
+      "archivada": {
+        "fecha": "2026-11-21",
+        "motivo": "El autor borró el repo y su cuenta de GitHub (404). Su último commit (dd95d39, 2026-11-19) es el que integró Geeper; las copias que quedan tienen cambios de terceros y no se siguen.",
+        "copia": "Vivian1987/gtavi-claudecode (copia fiel hasta dd95d39, sólo como referencia)"
+      },
       "revisado": "2026-11-19",
       "que": "Clips de material largo: momentos por sonoridad, reencuadre react, radar de tendencias.",
       "archivos": [
