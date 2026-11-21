@@ -199,7 +199,12 @@ async function probar(i: InstalacionWan2gp, log: Registro) {
     const ajustes = ajustesWan2gp(modeloPlano(MODELO_POR_DEFECTO), { prompt: "a calm sea at sunset", formato: "9:16", segundos: 1, semilla: 1 });
     const v = await probarWan2gp(i, ajustes, tmp);
     log(v.mensaje);
-    if (!v.ok) throw new Error(`Wan2GP no validó la tarea de prueba: ${v.mensaje.split("\n").slice(-1)[0]}`);
+    if (!v.ok) {
+      // La última línea de un traceback suele ser el consejo, no el error: se busca la línea del error.
+      const lineas = v.mensaje.split("\n").map((l) => l.trim()).filter(Boolean);
+      const error = lineas.findLast((l) => /(Error|Exception)\b.*:/.test(l)) ?? lineas.at(-1);
+      throw new Error(`Wan2GP no validó la tarea de prueba: ${error}`);
+    }
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });
   }

@@ -427,7 +427,17 @@ function lanzar(i: InstalacionWan2gp, args: string[], conGpuSolo: boolean) {
   const [cmd, ...resto] = conGpuSolo ? [GPU_SOLO_BIN, i.python, i.wgp, ...args] : [i.python, i.wgp, ...args];
   return spawn(cmd!, resto, {
     cwd: i.dir,
-    env: { ...process.env, PYTHONUNBUFFERED: "1", PYTORCH_CUDA_ALLOC_CONF: process.env.PYTORCH_CUDA_ALLOC_CONF ?? "expandable_segments:True" },
+    env: {
+      ...process.env,
+      PYTHONUNBUFFERED: "1",
+      // Igual que correr(): en Windows Python usa la página de códigos del sistema si no.
+      PYTHONUTF8: "1",
+      PYTHONIOENCODING: "utf-8",
+      // wgp.py importa GitPython (sólo lo usa su gestor de plugins); sin Git en el PATH, el import
+      // revienta. La app no instala Git, así que se silencia: Geeper no usa los plugins.
+      GIT_PYTHON_REFRESH: "quiet",
+      PYTORCH_CUDA_ALLOC_CONF: process.env.PYTORCH_CUDA_ALLOC_CONF ?? "expandable_segments:True",
+    },
     // Grupo propio en POSIX: cancelar llega a todo el árbol.
     detached: process.platform !== "win32",
   });
