@@ -35,14 +35,27 @@ export interface OpcionesCorrer extends Pick<SpawnOptions, "cwd"> {
 
 const MAX = 2_000_000;
 
+/** ¿Es un intérprete de Python? (python, python3, python3.12, python.exe). */
+export const esPython = (cmd: string) => /^python(\d+(\.\d+)?)?(\.exe)?$/i.test(cmd.split(/[\\/]/).pop() ?? "");
+
+/**
+ * Python siempre en UTF-8: en Windows escribe en la página de códigos del sistema y las tildes que
+ * devuelve (subtítulos alineados, mensajes) llegarían rotas. `-X utf8` vale aunque vaya `-I` (que ignora
+ * las variables PYTHON*); la variable cubre a los Python que lance ese Python.
+ */
+export function argsPython(cmd: string, args: string[]): string[] {
+  return esPython(cmd) && !args.includes("utf8") ? ["-X", "utf8", ...args] : args;
+}
+
 /** Corre un comando sin shell, registra su salida línea por línea y devuelve stdout/stderr. */
-export function correr(cmd: string, args: string[], op: OpcionesCorrer = {}): Promise<Resultado> {
+export function correr(cmd: string, argsPedidos: string[], op: OpcionesCorrer = {}): Promise<Resultado> {
+  const args = argsPython(cmd, argsPedidos);
   const texto = [cmd, ...args].map((a) => (/[\s"']/.test(a) ? JSON.stringify(a) : a)).join(" ");
   op.log?.(`$ ${texto}`);
   return new Promise((ok, mal) => {
     const hijo = spawn(cmd, args, {
       cwd: op.cwd,
-      env: { ...process.env, ...op.env },
+      env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8", ...op.env },
       stdio: [op.entrada === undefined ? "ignore" : "pipe", "pipe", "pipe"],
       signal: op.signal,
       timeout: op.timeout,

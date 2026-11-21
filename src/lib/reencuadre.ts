@@ -5,6 +5,7 @@
  */
 import path from "node:path";
 import { describirAsset, guardarProyecto, registrarAssetsEnDb } from "./almacen";
+import { asegurarYunet, envModelos } from "./caras";
 import { validarProyecto, pista, type Asset, type Proyecto } from "./esquema";
 import { PYTHON_CLIPS } from "./fuentes";
 import { ffmpeg, huellaFfmpeg } from "./media";
@@ -23,7 +24,9 @@ export interface Deteccion {
 }
 
 export async function detectar(video: string, layout: LayoutReencuadre): Promise<Deteccion> {
+  await asegurarYunet();
   const r = await correr(PYTHON_CLIPS, ["-I", path.join(RAIZ_REPO, "py", "reencuadre.py")], {
+    env: envModelos(),
     entrada: JSON.stringify({ op: "reencuadre", video, layout }),
   });
   return JSON.parse(r.stdout) as Deteccion;

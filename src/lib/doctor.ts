@@ -9,7 +9,8 @@ import { ESCRITORIO, PYTHON_SISTEMA, SISTEMA } from "./plataforma";
 import { MODELO_WHISPER } from "./voz";
 import { versionPhotocraft } from "./photocraft";
 import { versionVectorcraft } from "./vectorcraft";
-import { existe } from "./archivos";
+import { existe, sha256Archivo } from "./archivos";
+import { rutaVad, VAD_SILERO } from "./whisper";
 import { PYTHON_CLIPS } from "./fuentes";
 import { db } from "./db";
 import { existeClave, rutaClave } from "./redes/cifrado";
@@ -19,7 +20,7 @@ import { revisarPrivados } from "./redes/privados";
 import { obtenerRed } from "./redes/index";
 import { juzgar, leerAjustes, salidaActual, verificarSalida } from "./redes/salida";
 import { REDES_IDS } from "./redes/tipos";
-import { PYTHON_CARAS } from "./caras";
+import { envModelos, PYTHON_CARAS } from "./caras";
 import { estadoModelos, faltaEnInstalacion, instalacionWan2gp, MODELOS_PLANO } from "./wan2gp";
 
 export interface Chequeo {
@@ -116,18 +117,25 @@ export async function diagnosticar(): Promise<Chequeo[]> {
       const bajados = MODELOS_PLANO.filter((m) => modelosWan![m.id] === "listo").map((m) => m.nombre);
       return `instalado en ${wan.dir} · ${bajados.length ? `motores descargados: ${bajados.join(", ")}` : "ningún motor descargado todavía (se baja al animar la primera vez)"}`;
     })(),
-    arreglo: faltaWan ? "Sólo si quieres animar escenas: botón «Instalar con un clic» aquí abajo (o pnpm tsx scripts/instalar-wan2gp.ts)." : undefined,
+    arreglo: faltaWan ? (ESCRITORIO ? "Sólo si quieres animar escenas: botón «Instalar con un clic» aquí abajo." : "Sólo si quieres animar escenas: botón «Instalar con un clic» aquí abajo (o pnpm tsx scripts/instalar-wan2gp.ts).") : undefined,
   });
   const whisper = await existe(path.join(CACHE_HF, "whisper", "models", `ggml-${MODELO_WHISPER}.bin`));
   c.push({
     nombre: `whisper ${MODELO_WHISPER} (Hyperframes)`, ok: whisper, detalle: whisper ? "modelo en caché" : "falta el modelo",
     arreglo: whisper ? undefined : ESCRITORIO ? PREPARAR : "Se descarga solo en el primer `hyperframes transcribe --model medium` (~1,5 GB).",
   });
+  // Filtro de voz de whisper (src/lib/whisper.ts): sin él, whisper puede inventar palabras sobre música.
+  const vad = (await existe(rutaVad())) && (await sha256Archivo(rutaVad())) === VAD_SILERO.sha256;
+  c.push({
+    nombre: "Filtro de voz para subtítulos (VAD Silero)", ok: vad, aviso: true,
+    detalle: vad ? `${VAD_SILERO.id} verificado` : "falta: se transcribe sin él (puede inventar palabras sobre música o silencio)",
+    arreglo: vad ? undefined : ESCRITORIO ? PREPARAR : "Se descarga solo (885 KB, SHA-256 fijado) la próxima vez que Geeper transcriba con internet.",
+  });
 
   // Clips de material largo (opcional): venv con OpenCV + yt-dlp y el modelo YuNet verificado.
   const ping = await intento(PYTHON_CLIPS, ["-I", "-c", "import cv2, numpy, yt_dlp; print(yt_dlp.version.__version__)"]);
   const yuNet = ping.codigo === 0
-    ? await correr(PYTHON_CLIPS, ["-I", path.join(RAIZ_REPO, "py", "reencuadre.py")], { entrada: '{"op":"ping"}', permitirFallo: true }).catch(() => null)
+    ? await correr(PYTHON_CLIPS, ["-I", path.join(RAIZ_REPO, "py", "reencuadre.py")], { entrada: '{"op":"ping"}', env: envModelos(), permitirFallo: true }).catch(() => null)
     : null;
   const yuOk = Boolean(yuNet && /"ok": true/.test(yuNet.stdout));
   c.push({
@@ -137,7 +145,7 @@ export async function diagnosticar(): Promise<Chequeo[]> {
       : ping.codigo !== 0
       ? 'uv venv ~/dev/video-tools/venvs/geeper-clips && uv pip install --python ~/dev/video-tools/venvs/geeper-clips/bin/python "numpy>=1.26,<3" "opencv-python-headless>=4.9,<5" "yt-dlp[default]>=2026.10"'
       : yuOk ? undefined
-      : "mkdir -p ~/.cache/geeper/modelos && curl -L -o ~/.cache/geeper/modelos/face_detection_yunet_2023mar.onnx https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+      : "Se descarga solo (227 KB, SHA-256 fijado) la próxima vez que Geeper reencuadre o analice caras con internet.",
   });
 
   // ffmpeg con NVENC.
@@ -258,7 +266,7 @@ async function diagnosticarRedes(): Promise<Chequeo[]> {
     c.push({
       nombre: `Credenciales de ${nombre}`, ok: presente, aviso: !presente,
       detalle: presente ? `presentes en ${ruta}` : "faltan: no se pueden conectar cuentas de esta red",
-      arreglo: presente ? undefined : `Agrega "${id}" a ${ruta} (chmod 600) y registra el redirect URI ${urlCallback(id)}`,
+      arreglo: presente ? undefined : `Agrega "${id}" a ${ruta}${SISTEMA === "windows" ? "" : " (chmod 600)"} y registra el redirect URI ${urlCallback(id)}`,
     });
   }
   for (const a of privados.filter((x) => x.problema)) {
@@ -274,7 +282,7 @@ async function diagnosticarRedes(): Promise<Chequeo[]> {
   c.push({
     nombre: "Clave de cifrado de tokens", ok: clave, aviso: !clave,
     detalle: clave ? rutaClave() : `todavía no existe ${rutaClave()}`,
-    arreglo: clave ? undefined : "Se crea sola al conectar la primera cuenta (o con `pnpm run setup`).",
+    arreglo: clave ? undefined : ESCRITORIO ? "Se crea sola al conectar la primera cuenta." : "Se crea sola al conectar la primera cuenta (o con `pnpm run setup`).",
   });
 
   try {

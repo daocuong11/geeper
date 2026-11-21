@@ -35,6 +35,8 @@ export const YUNET = {
 export const PUNTAJE_MIN = 0.8;
 
 export const rutaYunet = () => path.join(dirDatos(), "modelos", YUNET.archivo);
+/** Para los scripts que buscan YuNet por su cuenta (py/facecam.py): la misma carpeta que usa Geeper. */
+export const envModelos = () => ({ GEEPER_MODELOS: path.dirname(rutaYunet()) });
 
 /** Python con OpenCV ≥ 4.8 (trae FaceDetectorYN). */
 export const PYTHON_CARAS =
