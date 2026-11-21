@@ -129,6 +129,17 @@ export async function apuntar(dir: string, actual: string, destino: string): Pro
   await fs.rename(enlaceTmp, actual);
 }
 
+/**
+ * Carpeta del archivo que queda como `actual`. Cada app empaqueta distinto (el zip de Windows de
+ * PhotoCraft trae los archivos sueltos; el de VectorCraft, dentro de una carpeta): si la esperada no
+ * está, se usa la única carpeta de primer nivel, o la raíz si los archivos vienen sueltos.
+ */
+export async function carpetaRaiz(extraido: string, esperada: string): Promise<string> {
+  if (esperada && (await fs.stat(path.join(extraido, esperada)).then((s) => s.isDirectory(), () => false))) return esperada;
+  const entradas = await fs.readdir(extraido, { withFileTypes: true });
+  return entradas.length === 1 && entradas[0]!.isDirectory() ? entradas[0]!.name : "";
+}
+
 export function crearInstalador(c: AppCraft) {
   const base = `https://github.com/storytold/${c.app}/releases/download/v${c.version}`;
   // Por defecto, el CLI de este sistema (plataforma.ts): tarball de Linux, zip portable de Windows o zip del CLI de macOS.
@@ -178,18 +189,22 @@ export function crearInstalador(c: AppCraft) {
       if (extraer === "zip") await extraerZip(archivo, extraido);
       // tar viene con Windows 10+ y macOS; en Linux siempre está.
       else await correr("tar", ["-xzf", archivo, "-C", extraido], { timeout: 300_000 });
-      await c.preparar?.(path.join(extraido, raiz));
+      const raizReal = await carpetaRaiz(extraido, raiz);
+      await c.preparar?.(path.join(extraido, raizReal));
       await fs.rm(destino, { recursive: true, force: true });
       await fs.rename(extraido, destino);
       const actual = path.join(dir, "actual");
-      const anterior = await fs.readlink(actual).catch(() => null);
-      await apuntar(dir, actual, path.join(destino, raiz));
+      const nueva = path.join(destino, raizReal);
+      // En Windows el «junction» se lee con barra final o con el prefijo \\?\: se compara normalizado.
+      const leida = await fs.readlink(actual).catch(() => null);
+      const anterior = leida && path.resolve(leida.replace(/^\\\\\?\\/, "")) !== path.resolve(nueva) ? leida : null;
+      await apuntar(dir, actual, nueva);
 
       const v = await c.verificar().catch(() => null);
       if (!v?.includes(c.version)) {
-        // La versión nueva no arranca: se vuelve a la que había (si había una) y se avisa.
-        if (anterior && anterior !== path.join(destino, raiz)) await apuntar(dir, actual, anterior);
-        throw new Error(anterior ? "La versión nueva no pasó la verificación: se dejó la anterior." : "Se instaló pero no arranca.");
+        // La versión nueva no arranca: se vuelve a la que había (si había otra) y se avisa.
+        if (anterior) await apuntar(dir, actual, anterior);
+        throw new Error(anterior ? "La versión nueva no pasó la verificación: se dejó la anterior." : "Se instaló pero no arranca (no responde a --version).");
       }
       estado = { fase: "lista", progreso: 1, detalle: `Instalada: ${v}` };
     } finally {

@@ -81,3 +81,21 @@ describe("instalador de apps Craft", () => {
     expect(n).toBe(1);
   });
 });
+
+describe("carpeta raíz del archivo", () => {
+  it("usa la esperada, la única carpeta de primer nivel o la raíz si los archivos vienen sueltos", async () => {
+    const { carpetaRaiz } = await import("@/lib/instalar-craft");
+    const d = await fs.mkdtemp(path.join(os.tmpdir(), "raiz-"));
+    // Como el zip de Windows de VectorCraft: todo dentro de una carpeta.
+    await fs.mkdir(path.join(d, "a", "vectorcraft-0.24.1-windows-x64-portable"), { recursive: true });
+    expect(await carpetaRaiz(path.join(d, "a"), "")).toBe("vectorcraft-0.24.1-windows-x64-portable");
+    expect(await carpetaRaiz(path.join(d, "a"), "vectorcraft-0.24.1-windows-x64-portable")).toBe("vectorcraft-0.24.1-windows-x64-portable");
+    // Como el de PhotoCraft: archivos sueltos.
+    await fs.mkdir(path.join(d, "b"));
+    await fs.writeFile(path.join(d, "b", "photocraft-cli.exe"), "");
+    await fs.writeFile(path.join(d, "b", "LICENSE-MIT"), "");
+    expect(await carpetaRaiz(path.join(d, "b"), "")).toBe("");
+    expect(await carpetaRaiz(path.join(d, "b"), "photocraft-cli-0.23.1-macos-universal")).toBe("");
+    await fs.rm(d, { recursive: true, force: true });
+  });
+});
