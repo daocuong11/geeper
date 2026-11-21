@@ -491,6 +491,87 @@
       ],
       "commit": "f4cfc12",
       "version": "v20"
+    },
+    {
+      "id": "comfyui",
+      "repo": "Comfy-Org/ComfyUI",
+      "tipo": "release",
+      "como": [
+        "codigo"
+      ],
+      "version": "0.46.0",
+      "commit": "0072b86",
+      "revisado": "2026-11-21",
+      "que": "Motor de nodos (GPL-3.0). Ideas de sus nodos de personajes que hablan y edición de identidad, hechas con Wan2GP; paso 2: instalarlo aparte para la sección Workflows.",
+      "archivos": [
+        "src/lib/avatares.ts",
+        "src/lib/presentador.ts",
+        "src/lib/marco.ts"
+      ],
+      "docs": "docs/HEREDADO.md",
+      "pruebas": [
+        "tests/avatares.test.ts",
+        "tests/presentador.test.ts"
+      ]
+    },
+    {
+      "id": "comfy-workflow-templates",
+      "repo": "Comfy-Org/workflow_templates",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "revisado": "2026-11-21",
+      "que": "Las 776 plantillas del hub (templates/index.json): catálogo de la futura sección Workflows.",
+      "archivos": [],
+      "docs": "docs/HEREDADO.md",
+      "pruebas": []
+    },
+    {
+      "id": "comfy-cinematic-studio",
+      "repo": "Comfy-Org/comfy-cinematic-studio",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "commit": "f223ccf",
+      "revisado": "2026-11-21",
+      "que": "Plano, luz y look para los prompts (lib/prompt.ts, MIT).",
+      "archivos": [
+        "src/lib/prompt-camara.ts"
+      ],
+      "docs": "docs/HEREDADO.md",
+      "pruebas": [
+        "tests/avatares.test.ts"
+      ]
+    },
+    {
+      "id": "comfy-reshoot",
+      "repo": "Comfy-Org/comfy-reshoot",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "commit": "dc53fc7",
+      "revisado": "2026-11-21",
+      "que": "Cambiar la cámara de un clip (MIT); paso 3, sin portar todavía.",
+      "archivos": [],
+      "docs": "docs/HEREDADO.md",
+      "pruebas": []
+    },
+    {
+      "id": "comfy-openjutsu",
+      "repo": "Comfy-Org/comfy-openjutsu",
+      "tipo": "commits",
+      "como": [
+        "codigo"
+      ],
+      "commit": "70ec62d",
+      "revisado": "2026-11-21",
+      "que": "Cambiar a la persona de un tramo por un personaje (MIT); paso 3, sin portar todavía.",
+      "archivos": [],
+      "docs": "docs/HEREDADO.md",
+      "pruebas": []
     }
   ]
 }

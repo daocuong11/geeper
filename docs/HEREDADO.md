@@ -635,6 +635,86 @@ pnpm tsx scripts/avatar.ts retocar <avatar> "ponle lentes"
 pnpm tsx scripts/avatar.ts presentador <slug> <avatar> [--burbuja --esquina arriba-izquierda | --escenas 1,5] [--probar]
 ```
 
+### Workflows (2026-11-21, paso 2)
+
+**Página Workflows** (`/workflows`, `src/components/workflows.tsx`): el catálogo de recetas de ComfyUI para
+quien no sabe de nodos. Arriba, lo que está en curso y los resultados (ver, escuchar, descargar). Buscador,
+«Corren en tu PC / Todos / De pago» y categorías en español. Al abrir una receta: su ejemplo y descripción,
+**1. Tus archivos** (un botón por entrada; sin archivo usa el ejemplo de la plantilla), **2. Lo que quieres**
+(los textos del workflow como cajas de texto, con etiquetas como «Lo que NO quieres que aparezca») y cuántos
+modelos baja la primera vez. «Para expertos: el editor de ComfyUI» abre ComfyUI tal cual (puerto 8190) para
+lo que Geeper no corre solo.
+
+- **Instalar** con un clic desde la misma página (`src/lib/instalar-comfyui.ts`): código fijado
+  (`0072b86`, v0.46.0) del .tar.gz de GitHub en `<herramientas>/ComfyUI` (`GEEPER_COMFYUI`), Python 3.12
+  propio con uv, el mismo PyTorch 2.10 + CUDA 13 de Wan2GP (la caché de uv no lo baja dos veces) y sus
+  dependencias con PyTorch fijado. Trae el editor (`comfyui-frontend-package`) y las plantillas
+  (`comfyui-workflow-templates`) de esa versión: el catálogo siempre coincide con lo instalado.
+- **Catálogo** (`py/comfy_catalogo.py` + `leerCatalogo`): índice y ruta de cada archivo, en caché por
+  versión. Las de pago (`openSource: false`) y las que piden nodos de la comunidad quedan bloqueadas con el
+  motivo en palabras simples (`bloqueo`).
+- **Correr** (trabajo `workflow.correr`, fila de la GPU; `src/lib/workflows.ts`): baja los modelos que
+  declaran los nodos (`properties.models`, también dentro de subgrafos; sólo https y sin `..`), copia los
+  archivos de la persona a `ComfyUI/input/`, pone sus textos, arranca ComfyUI con gpu-solo en el puerto 8189,
+  **convierte con el propio editor de ComfyUI en un Chrome sin ventana** (`app.graphToPrompt()`: subgrafos,
+  nodos salteados y widgets quedan como los resuelve ComfyUI, sin reescribir esa lógica), manda `/prompt`,
+  sigue el avance por las barras de su salida, espera `/history`, copia lo que salió a
+  `~/geeper-data/workflows/<corrida>/` y apaga ComfyUI.
+
+- **Código de la comunidad** (`src/lib/nodos-comfy.ts`, decisión del dueño 2026-11-21: «con permiso y
+  versión fija»): sólo se instala lo que está en `src/lib/nodos-comfy.json`, generado con
+  `scripts/fijar-nodos-comfy.ts` desde el registro oficial (api.comfy.org): por paquete, la última versión
+  que el registro tiene como **activa** (salta las «marcadas» por su revisión), con su sha256, autor, repo y
+  licencia. La receta muestra qué paquetes usa, de quién y un enlace al código; nada se instala sin la casilla
+  «Permito instalar este código de la comunidad» (queda en `~/geeper-data/comfy-nodos.json`). Al correr: baja
+  el .zip, **comprueba la huella**, lo pone en `custom_nodes/<id>`, instala su `requirements.txt` con PyTorch
+  fijado (su `install.py` no se corre) y ComfyUI arranca **siempre** con `--disable-all-custom-nodes` y sólo
+  carga los paquetes de esa receta (`--whitelist-custom-nodes`); el editor, sólo los ya permitidos.
+  Fijado 2026-11-21: 33 paquetes; de las 45 recetas locales que piden nodos, 36 quedan usables. Siguen bloqueadas
+  (con el motivo) las que usan ComfyMath, comfyui-gimm-vfi, ComfyUI-LTXVideo, comfyui-string-converter,
+  masquerade-nodes-comfyui o RES4LYF (todas sus versiones marcadas) y ComfyUI_Swwan, FL_PromptSelectorBasic
+  o QwenVL (no están en el registro). Volver a fijar es trabajo de /novedades.
+- **Todo el hub** (`src/lib/hub-comfy.ts`): el paquete de pip deja fuera las recetas con código de la
+  comunidad y las de sólo nube (0.11.114: trae 693 de 776). Geeper lee el índice del repo oficial
+  (Comfy-Org/workflow_templates, MIT) en el **mismo commit** de esa versión (`f77d47c`), baja los .json de
+  las 83 que faltan (~9 MB) y sus miniaturas y ejemplos al pedirlos (~560 MB en total si se usaran todas).
+  Resultado 2026-11-21: 776 recetas, 315 locales, 306 usables. Las de `includeOnDistributions: ["cloud"]`
+  quedan como «nube». Si la receta no recibe archivo, se copia su ejemplo a `ComfyUI/input/`.
+- **Experimentales**: las recetas de MiniMax H3 (licencia por revisar, pensadas para mucha más memoria)
+  corren pero salen al final con «Experimental» y un aviso de no usarlas en videos que se publiquen.
+- **Usar en un video** (`src/app/api/workflows/usar/route.ts`): cada imagen o video que sale tiene
+  «Usar en un video» → elegir el video y la escena → reemplaza su visual en una versión nueva (con
+  reencuadre a la cara) y la licencia dice de qué receta salió.
+
+Falta: clave de Comfy para las de pago (bloqueadas por decisión del dueño).
+
+### Rehacer la toma: Openjutsu y Reshoot (2026-11-21, paso 3)
+
+De comfy-openjutsu y comfy-reshoot (MIT) se toma la idea y la experiencia, no sus modelos (MiniMax H3,
+licencia por revisar): todo corre en Wan2GP, que ya está, con licencia Apache-2.0. Panel «Rehacer la toma con
+IA» en cada escena con video (`src/components/panel-rehacer.tsx`, trabajo `escena.rehacer`,
+`src/lib/rehacer.ts`):
+
+- **Cambiar la persona** (Openjutsu): elige uno de tus avatares → Wan2.2 Animate 14B, modo «Replace Person»
+  (`PVBAIH#`, con «Igualar la luz» = reiluminación `#1`), 30 fps, ventanas de 81 cuadros, lightx2v 4 pasos.
+  La máscara de la persona se hace sola con **SAM 3.1** de Meta (SAM License: uso comercial sin regalías)
+  por el mismo código del «Magic Mask» de Wan2GP (`py/mascara_persona.py`, palabra «person»); si no
+  encuentra a nadie en el 30 % de los cuadros, lo dice antes de usar la GPU. Hasta 15 s por escena.
+- **Mover la cámara** (Reshoot): 10 movimientos de ReCamMaster 1.3B (`model_mode` 1–10: girar, mirar arriba
+  o abajo, acercarse, alejarse, subir, bajar, rodear), cada uno con su **vista previa animada sobre la
+  imagen de la propia escena** para elegir viéndolo. ReCamMaster hace 81 cuadros a 16 fps (5 s): una escena
+  de hasta 8 s entra acelerada y se pasa más lenta para llenarla.
+- Si la escena **sigue a su voz** (`sincro: "voz"`, un clip de un directo), «Cambiar la persona» recorta el
+  mismo tramo de la grabación y el clip nuevo sigue a la voz con el desplazamiento justo: los recortes de
+  palabras siguen cortando la imagen y la boca no se desincroniza (test en `tests/rehacer.test.ts`). Mover
+  la cámara ahí se rechaza (la boca dejaría de coincidir).
+- Validado con `wgp.py --dry-run` y **probado en la RTX 5080** (2026-11-21), con los pesos bajándose la
+  primera vez: «Cambiar la persona» sobre 3 s del avatar hablando, con otro retrato de la biblioteca →
+  1147 s en total (máscara SAM 3.1: 183 s, persona en el 100 % de los cuadros; baja ~23 GB: Animate int8
+  18 GB, reiluminación 2,9 GB, SAM 3.1 1,7 GB): cambia cara, ropa y lentes y conserva gestos y boca.
+  «Mover la cámara» (rodear por la derecha) sobre un plano de FastWan → 781 s con ~3 GB de descarga; la
+  toma se vuelve a filmar girando. Sin medir aún los tiempos con los pesos ya bajados.
+
 ### Parches a Wan2GP (2026-11-21)
 
 `src/lib/parches-wan2gp.ts`: reemplazos exactos e idempotentes, al instalar y antes de cada tarea; si el

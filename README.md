@@ -68,6 +68,13 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   consentimiento), elige entre varias opciones y retócalo con una frase («ponle lentes»). Cada avatar tiene
   su voz. En cada proyecto, **Presentador** lo hace hablar con la voz del video, en una burbuja todo el video
   o a pantalla completa en las escenas que elijas (InfiniteTalk en Wan2GP; ver HEREDADO.md «ComfyUI»).
+  En cada escena con video, **Rehacer la toma** cambia a la persona por uno de tus avatares (copia sus gestos
+  y su boca) o vuelve a filmarla con otro movimiento de cámara, elegido viéndolo sobre tu propia escena.
+- **Workflows** (`/workflows`): las 776 recetas del hub de ComfyUI (imágenes, video, música, voces, 3D) para usar
+  sin saber de nodos: buscar, subir tu archivo o escribir lo que quieres, y «Crear». ComfyUI se instala con un
+  clic en la misma página; cada receta baja sus modelos al usarla. Las de pago aparecen bloqueadas; las que
+  usan código de la comunidad piden tu permiso y sólo instalan la versión revisada. Lo que sale se pone en
+  una escena de tus videos con «Usar en un video».
 - **Trabajos** (`/trabajos`): avance en vivo, log, relanzar o cancelar.
 - **Anuncios** (`/anuncios`): campañas con brief, conceptos (cada uno genera su video con el guion
   exacto), revisión pass/fail/sin saber por ubicación, diseño de prueba A/B y exportación. Geeper no

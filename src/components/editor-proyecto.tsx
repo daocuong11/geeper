@@ -10,6 +10,7 @@ import { PanelAnimar, type OpcionesAnimar } from "./panel-animar";
 import { PanelPortada } from "./panel-portada";
 import { ElegirVoz, type MotorVoz } from "./elegir-voz";
 import { PanelPresentador } from "./panel-presentador";
+import { PanelRehacer } from "./panel-rehacer";
 import { SelectorEncuadre, type EncuadreV } from "./selector-encuadre";
 import { PanelOtroEditor } from "./panel-otro-editor";
 import { useAccionesProyecto } from "./acciones-proyecto";
@@ -231,6 +232,7 @@ function TarjetaEscena({ e, anterior, slug, proyectoId, total, formato, estilo, 
         <EfectosEscena escena={e.id} indice={e.indice} efectos={e.efectos} estilo={estilo} formato={formato}
           imgA={anterior ? miniatura(slug, anterior) : undefined} imgB={miniatura(slug, e)} editar={editar} ocupado={ocupado} />
         <PanelAnimar proyectoId={proyectoId} escena={e.id} numero={e.indice + 1} ocupado={ocupado} animar={animar} />
+        {e.visual.tipo === "video" && <PanelRehacer proyectoId={proyectoId} escena={e.id} numero={e.indice + 1} ocupado={ocupado} miniatura={miniatura(slug, e)} />}
       </div>
     </li>
   );

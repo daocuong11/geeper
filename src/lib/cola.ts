@@ -30,6 +30,9 @@ export const TIPOS = {
   "avatar.proponer": { motor: "mpt", usaGpu: true, nombre: "Crear avatar" },
   "avatar.retocar": { motor: "mpt", usaGpu: true, nombre: "Retocar avatar" },
   "presentador.generar": { motor: "mpt", usaGpu: true, nombre: "Presentador (avatar que habla)" },
+  "escena.rehacer": { motor: "mpt", usaGpu: true, nombre: "Rehacer la toma" },
+  // ComfyUI (sección Workflows): toda la GPU, en la misma fila.
+  "workflow.correr": { motor: "mpt", usaGpu: true, nombre: "Workflow de ComfyUI" },
   "render.entregar": { motor: "render", usaGpu: true, nombre: "Render y QC" },
   "publicar.subir": { motor: "red", usaGpu: false, nombre: "Publicar en red" },
 } as const;

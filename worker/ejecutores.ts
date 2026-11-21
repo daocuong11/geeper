@@ -18,6 +18,8 @@ import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
 import { generarPlanoEscena, type OpcionesPlano } from "@/lib/plano";
 import { generarPresentador, type OpcionesPresentador } from "@/lib/presentador";
+import { PedidoRehacer, rehacerEscena } from "@/lib/rehacer";
+import { correrWorkflow, PedidoWorkflow } from "@/lib/workflows";
 import { disenarVoz } from "@/lib/voces";
 import { regenerarVoz } from "@/lib/regenerar";
 import type { Avance } from "@/lib/wan2gp";
@@ -289,6 +291,27 @@ async function presentadorGenerar(t: Trabajo, h: Herramientas): Promise<Salida> 
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+async function escenaRehacer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const pedido = PedidoRehacer.parse(t.payload.pedido);
+  await h.etapa(pedido.tipo === "persona" ? "Buscando a la persona en cada cuadro" : "Preparando la toma", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await rehacerEscena(conAvance(h, pedido.tipo === "persona" ? "Cambiando la persona" : "Moviendo la cámara"), t.proyectoId!, p, String(t.payload.escena ?? ""), pedido);
+  h.log(`Toma rehecha en ${r.segundos} s → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function workflowCorrer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU", 0.01);
+  let ultima = "";
+  const c = await correrWorkflow(
+    { ...h, avanzar: (a) => { if (a.etapa !== ultima) void h.etapa((ultima = a.etapa), a.avance); } },
+    String(t.payload.corrida ?? ""),
+    PedidoWorkflow.parse(t.payload.pedido),
+  );
+  h.log(`Workflow listo en ${c.segundos} s: ${c.salidas.map((s) => s.archivo).join(", ")}`);
+  return { resultado: { corrida: c.id, salidas: c.salidas.length } };
+}
+
 async function renderEntregarEj(t: Trabajo, h: Herramientas): Promise<Salida> {
   const version = typeof t.payload.version === "number" ? t.payload.version : undefined;
   const r = await renderEntregar(h, t.proyectoId!, t.id, version);
@@ -319,6 +342,8 @@ export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Pr
   "avatar.proponer": avatarProponer,
   "avatar.retocar": avatarRetocar,
   "presentador.generar": presentadorGenerar,
+  "escena.rehacer": escenaRehacer,
+  "workflow.correr": workflowCorrer,
   "voz.regenerar": vozRegenerar,
   "voz.disenar": vozDisenar,
   "render.entregar": renderEntregarEj,

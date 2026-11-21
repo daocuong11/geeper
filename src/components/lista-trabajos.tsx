@@ -29,6 +29,8 @@ const TIPOS: Record<string, string> = {
   "avatar.proponer": "Crear avatar",
   "avatar.retocar": "Retocar avatar",
   "presentador.generar": "Presentador (avatar que habla)",
+  "escena.rehacer": "Rehacer la toma",
+  "workflow.correr": "Workflow de ComfyUI",
   "render.entregar": "Render y QC",
 };
 
