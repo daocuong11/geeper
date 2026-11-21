@@ -20,6 +20,7 @@ import path from "node:path";
 import type { Formato } from "./esquema";
 import { tomarGpu } from "./gpu";
 import { LICENCIAS } from "./licencias";
+import { aplicarParchesWan2gp } from "./parches-wan2gp";
 import { GPU_SOLO_BIN, WAN2GP_DIR, WAN2GP_PYTHON } from "./rutas";
 
 export interface ModeloPlano {
@@ -135,7 +136,7 @@ export interface PedidoPlano {
   semilla?: number;
 }
 
-export type AjustesWan2gp = Record<string, string | number>;
+export type AjustesWan2gp = Record<string, string | number | string[]>;
 
 /**
  * Ajustes para `wgp.py --process`. Sólo se fija lo que se pidió; el resto queda con los valores por
@@ -368,23 +369,24 @@ function tamanoCarpeta(dir: string): number {
 }
 
 const MEDIOS = new Set([".mp4", ".mkv", ".mov", ".webm"]);
+const IMAGENES = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
-function videoMasNuevo(dir: string): string | null {
-  let mejor: { p: string; t: number } | null = null;
+/** Archivos de ese tipo en `dir`, del más viejo al más nuevo (Wan2GP no anuncia la ruta de las imágenes). */
+function archivosDe(dir: string, tipos: Set<string>): string[] {
   let nombres: string[];
   try {
     nombres = readdirSync(dir);
   } catch {
-    return null;
+    return [];
   }
-  for (const n of nombres) {
-    if (!MEDIOS.has(path.extname(n).toLowerCase())) continue;
-    const p = path.join(dir, n);
-    const t = statSync(p).mtimeMs;
-    if (!mejor || t > mejor.t) mejor = { p, t };
-  }
-  return mejor?.p ?? null;
+  return nombres
+    .filter((n) => tipos.has(path.extname(n).toLowerCase()))
+    .map((n) => ({ p: path.join(dir, n), t: statSync(path.join(dir, n)).mtimeMs }))
+    .sort((a, b) => a.t - b.t || a.p.localeCompare(b.p))
+    .map((x) => x.p);
 }
+
+const videoMasNuevo = (dir: string): string | null => archivosDe(dir, MEDIOS).at(-1) ?? null;
 
 const escaparRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -480,9 +482,23 @@ export interface OpcionesGenerar {
  * tamaño de esa carpeta).
  */
 export async function generarPlano(op: OpcionesGenerar): Promise<string> {
+  return (await correrWan2gp(op, "video"))[0]!;
+}
+
+/**
+ * Genera imágenes (modelos de imagen de Wan2GP con `image_mode: 1`, p. ej. Z-Image o Qwen Edit) y devuelve
+ * sus rutas en el orden en que se guardaron (con `batch_size`, una por toma).
+ */
+export async function generarImagenes(op: OpcionesGenerar): Promise<string[]> {
+  return correrWan2gp(op, "imagen");
+}
+
+async function correrWan2gp(op: OpcionesGenerar, tipo: "video" | "imagen"): Promise<string[]> {
   const { instalacion: i, ajustes, dirCorrida, signal } = op;
+  const inicio = Date.now();
   const falta = faltaEnInstalacion(i);
   if (falta) throw new Error(falta);
+  await aplicarParchesWan2gp(i.dir, op.log);
   const out = path.join(dirCorrida, "out");
   await fs.mkdir(out, { recursive: true });
   const archivo = path.join(dirCorrida, "ajustes.json");
@@ -511,15 +527,21 @@ export async function generarPlano(op: OpcionesGenerar): Promise<string> {
     const cancelar = () => matarArbol(hijo, i, conGpuSolo);
     signal?.addEventListener("abort", cancelar, { once: true });
     try {
-      return await new Promise<string>((ok, mal) => {
+      return await new Promise<string[]>((ok, mal) => {
         hijo.on("error", (e) => mal(new Error(`No arrancó Wan2GP (${i.python}): ${e.message}`)));
         hijo.on("close", (codigo, senal) => {
           void fs.writeFile(path.join(dirCorrida, "wgp.log"), salida()).catch(() => {});
           const r = resumirCorrida(codigo, senal, salida());
           if (!r.ok) return mal(new Error(r.error));
+          if (tipo === "imagen") {
+            // Sólo las de esta corrida (si la carpeta se reusó, las viejas no cuentan).
+            const imagenes = archivosDe(out, IMAGENES).filter((f) => statSync(f).mtimeMs >= inicio - 1000);
+            if (!imagenes.length) return mal(new Error(`Wan2GP dijo que terminó pero no hay imágenes en ${out}.\n\n${colaLog(salida())}`));
+            return ok(imagenes);
+          }
           const ruta = r.ruta && existsSync(r.ruta) ? r.ruta : videoMasNuevo(out);
           if (!ruta) return mal(new Error(`Wan2GP dijo que terminó pero no hay video en ${out}.\n\n${colaLog(salida())}`));
-          ok(ruta);
+          ok([ruta]);
         });
       });
     } finally {

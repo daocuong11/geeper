@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { crearCarpetas } from "@/lib/almacen";
+import { generarPropuesta, retocarAvatar } from "@/lib/avatares";
 import { guardarPayload, type Payload, type TipoTrabajo } from "@/lib/cola";
 import { db } from "@/lib/db";
 import { Formato } from "@/lib/esquema";
@@ -16,6 +17,8 @@ import type { Contexto } from "@/lib/pasos";
 import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
 import { generarPlanoEscena, type OpcionesPlano } from "@/lib/plano";
+import { generarPresentador, type OpcionesPresentador } from "@/lib/presentador";
+import { disenarVoz } from "@/lib/voces";
 import { regenerarVoz } from "@/lib/regenerar";
 import type { Avance } from "@/lib/wan2gp";
 import { reencuadrarEscena } from "@/lib/reencuadre";
@@ -213,6 +216,12 @@ async function vozRegenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+async function vozDisenar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Creando 3 voces que cumplan la descripción (VoxCPM2, tarjeta gráfica)", 0.1);
+  const r = await disenarVoz(h, String(t.payload.propuesta ?? ""), String(t.payload.descripcion ?? ""));
+  return { resultado: r };
+}
+
 /** Lo que ve la persona en Trabajos mientras se anima una escena. */
 export function etapaDePlano(a: Avance): string {
   switch (a.fase) {
@@ -248,6 +257,38 @@ async function planoGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+/** El avance de Wan2GP en palabras, para los trabajos de avatar. */
+function conAvance(h: Herramientas, verbo: string) {
+  let ultima = "";
+  return {
+    ...h,
+    alAvanzar: (a: Avance) => {
+      const e = a.fase === "generando" ? (a.pasos ? `${verbo}: paso ${a.paso} de ${a.pasos}` : verbo) : etapaDePlano(a).replace("Guardando el plano", "Guardando");
+      if (e !== ultima) void h.etapa((ultima = e), a.avance);
+    },
+  };
+}
+
+async function avatarProponer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras dibuja)", 0.01);
+  return { resultado: await generarPropuesta(conAvance(h, "Dibujando"), String(t.payload.propuesta ?? "")) };
+}
+
+async function avatarRetocar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras retoca)", 0.01);
+  const semilla = typeof t.payload.semilla === "number" ? t.payload.semilla : undefined;
+  const a = await retocarAvatar(conAvance(h, "Retocando"), String(t.payload.avatar ?? ""), String(t.payload.instruccion ?? ""), semilla);
+  return { resultado: { avatar: a.id, versiones: a.versiones.length } };
+}
+
+async function presentadorGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras el avatar habla)", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await generarPresentador(conAvance(h, "Haciendo hablar al avatar"), t.proyectoId!, p, t.payload.opciones as OpcionesPresentador);
+  h.log(`Presentador listo en ${r.segundos} s → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
 async function renderEntregarEj(t: Trabajo, h: Herramientas): Promise<Salida> {
   const version = typeof t.payload.version === "number" ? t.payload.version : undefined;
   const r = await renderEntregar(h, t.proyectoId!, t.id, version);
@@ -275,7 +316,11 @@ export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Pr
   "clip.importar": clipImportar,
   "visual.reencuadrar": visualReencuadrar,
   "plano.generar": planoGenerar,
+  "avatar.proponer": avatarProponer,
+  "avatar.retocar": avatarRetocar,
+  "presentador.generar": presentadorGenerar,
   "voz.regenerar": vozRegenerar,
+  "voz.disenar": vozDisenar,
   "render.entregar": renderEntregarEj,
   "publicar.subir": publicarSubirEj,
 };

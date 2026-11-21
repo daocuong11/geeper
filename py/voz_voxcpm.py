@@ -1,0 +1,63 @@
+"""Voz con VoxCPM2 (openbmb, Apache-2.0: código y pesos). Corre con su venv propio
+(~/dev/video-tools/venvs/voxcpm, torch cu128) y, desde Geeper, con el gpu-lock tomado (~6 GB de VRAM).
+
+Lee un pedido JSON por stdin:
+  {"modo": "disenar", "descripcion": "…", "texto": "…", "tomas": 3, "salida": "/dir"}
+      → /dir/toma-1.wav … (cada toma es una voz distinta que cumple la descripción)
+  {"modo": "decir", "referencia": "/x/referencia.wav", "texto_referencia": "…", "texto": "…", "salida": "/x/voz.wav"}
+      → la misma voz que la referencia (clonación con su transcripción: el timbre no cambia entre escenas)
+Responde una línea JSON por archivo escrito y una final con el pico de VRAM.
+
+torch.compile (inductor) falla con «CUDA error: unknown error» en esta RTX 5080 bajo WSL: se apaga.
+"""
+import json
+import os
+import sys
+import time
+
+os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+
+import soundfile as sf  # noqa: E402
+import torch  # noqa: E402
+from voxcpm import VoxCPM  # noqa: E402
+
+MODELO = os.environ.get("GEEPER_VOXCPM", "openbmb/VoxCPM2")
+
+
+def main() -> int:
+    pedido = json.load(sys.stdin)
+    t0 = time.time()
+    if torch.cuda.is_available():
+        torch.cuda.reset_peak_memory_stats()
+    modelo = VoxCPM.from_pretrained(MODELO, load_denoiser=False)
+    sr = modelo.tts_model.sample_rate
+    print(json.dumps({"cargado_s": round(time.time() - t0, 1), "sample_rate": sr}), flush=True)
+    texto = pedido["texto"].strip()
+    if pedido["modo"] == "disenar":
+        os.makedirs(pedido["salida"], exist_ok=True)
+        for i in range(int(pedido.get("tomas", 3))):
+            t = time.time()
+            wav = modelo.generate(text=f"({pedido['descripcion'].strip()}){texto}", cfg_value=2.0, inference_timesteps=10)
+            ruta = os.path.join(pedido["salida"], f"toma-{i + 1}.wav")
+            sf.write(ruta, wav, sr)
+            print(json.dumps({"archivo": ruta, "duracion_s": round(len(wav) / sr, 2), "generar_s": round(time.time() - t, 1)}), flush=True)
+    elif pedido["modo"] == "decir":
+        t = time.time()
+        wav = modelo.generate(
+            text=texto,
+            prompt_wav_path=pedido["referencia"],
+            prompt_text=pedido["texto_referencia"].strip(),
+            cfg_value=2.0,
+            inference_timesteps=10,
+        )
+        sf.write(pedido["salida"], wav, sr)
+        print(json.dumps({"archivo": pedido["salida"], "duracion_s": round(len(wav) / sr, 2), "generar_s": round(time.time() - t, 1)}), flush=True)
+    else:
+        raise SystemExit(f"Modo desconocido: {pedido['modo']}")
+    vram = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else 0
+    print(json.dumps({"vram_pico_gb": round(vram, 2), "total_s": round(time.time() - t0, 1)}), flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

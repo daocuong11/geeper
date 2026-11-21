@@ -20,6 +20,8 @@ calidad. Uso interno, en esta PC, US$0 al mes. Ver `docs/PRODUCTO.md` (qué es y
    formato, ver HEREDADO.md «VectorCraft») o videos encima y efectos de sonido en su
    segundo; música alineada para que los cortes caigan en el pulso.
 6. **Regenerar la voz** de una escena o del guion (Kokoro de MPT, en CPU) y realinear los subtítulos.
+   **Elegir la voz escuchándola** o crear una nueva describiéndola («narradora cálida de documental»):
+   VoxCPM2 propone 3 y la elegida queda en la biblioteca `~/geeper-data/voces` (GPU, ~6 GB).
    Lo recortado ya no se vuelve a decir.
 7. **Descargar** el render (H.264 High CRF 20, ~4 Mbps: un short de 57 s pesa ~31 MB), sus subtítulos
    `.srt` y, si se pide, un máster de archivo `.mov`, sólo si pasó el QC: −14 LUFS y pico ≤ −1 dBTP
@@ -62,6 +64,10 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   la sigue (los proyectos viejos se revisan solos la primera vez que se abren).
   También la **portada** en tres pasos (escena, títulos que propone la IA local, diseño), que se sube
   como miniatura al publicar en YouTube. Ver `docs/PHOTOCRAFT.md`.
+- **Avatares** (`/avatares`): crea un personaje realista o animado describiéndolo o desde una foto (con
+  consentimiento), elige entre varias opciones y retócalo con una frase («ponle lentes»). Cada avatar tiene
+  su voz. En cada proyecto, **Presentador** lo hace hablar con la voz del video, en una burbuja todo el video
+  o a pantalla completa en las escenas que elijas (InfiniteTalk en Wan2GP; ver HEREDADO.md «ComfyUI»).
 - **Trabajos** (`/trabajos`): avance en vivo, log, relanzar o cancelar.
 - **Anuncios** (`/anuncios`): campañas con brief, conceptos (cada uno genera su video con el guion
   exacto), revisión pass/fail/sin saber por ubicación, diseño de prueba A/B y exportación. Geeper no
@@ -93,6 +99,7 @@ pnpm tsx scripts/exportar-otio.ts <slug>                           # .otio con r
 pnpm tsx scripts/analizar-caras.ts <slug> [--aplicar]             # busca caras para el reencuadre (lo nuevo lo hace solo)
 pnpm tsx scripts/plano.ts <slug> <escena> [--probar]              # animar una escena con Wan2GP (usa la GPU; en la web: «Animar esta escena con IA»)
 pnpm tsx scripts/instalar-wan2gp.ts                                # instala Wan2GP (en la web: Sistema → «Instalar con un clic»)
+pnpm tsx scripts/avatar.ts crear "<descripción>" [--estilo animado-3d] [--probar]   # avatares y presentador (ver el script)
 ```
 
 **Clips de material largo** (VOD, video publicado o grabación propia; nunca un directo en vivo): desde la

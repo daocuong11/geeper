@@ -7,7 +7,7 @@
  *   pnpm tsx scripts/plano.ts <slug> <escena> [opciones]                genera y lo guarda (usa la GPU)
  *
  * Opciones: --modelo rapido|ti2v|i2v|ltx2 (rapido) · --prompt "…" · --segundos N · --semilla N · --pasos N ·
- *   --sin-imagen · --negativo "…" · cámara: --camara --lente --focal --apertura --movimiento
+ *   --sin-imagen · --negativo "…" · cámara: --camara --lente --focal --apertura --movimiento --plano --luz --look
  *   (src/lib/prompt-camara.ts).
  * <escena> es el id (p. ej. e03) o el número en la línea de tiempo (1 = la primera).
  */

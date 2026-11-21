@@ -41,7 +41,7 @@ export const Edicion = z.discriminatedUnion("tipo", [
   z.object({ tipo: z.literal("renombrar"), nombre: z.string().min(1) }),
   z.object({
     tipo: z.literal("cambiarVoz"),
-    motor: z.enum(["mpt", "kokoro"]).optional(),
+    motor: z.enum(["mpt", "kokoro", "voxcpm"]).optional(),
     voz: z.string().min(1).optional(),
     velocidad: z.number().min(0.5).max(2).optional(),
   }),

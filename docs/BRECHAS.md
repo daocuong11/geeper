@@ -19,7 +19,8 @@
 | G5 ingesta de material largo | **Hecho** (2026-11-19): `scripts/momentos.ts` + `scripts/importar-clip.ts` y la página /clips, visual en sincro con la voz, regla de QC de clips (DECISIONES §21) |
 | E4 reencuadre por cara | **Hecho parcial**: punto fijo por clip con YuNet para todo material (HEREDADO.md, LightCraft) y reencuadre react/cara para clips 9:16 (`py/reencuadre.py`); falta el seguimiento dinámico |
 | D1 portada y ganchos | **Hecho** (2026-11-19): portada en 3 pasos con PhotoCraft, diseños propios .psd y miniatura en YouTube (docs/PHOTOCRAFT.md); rúbrica de ganchos en la skill `geeper`. Falta descripción y hashtags con IA |
-| E3, G1, G2, G4, Q3, D2, D3, P1, P2 | Pendientes |
+| G2 voz nueva | **Hecho** (2026-11-20): elegir la voz escuchándola y crear voces nuevas describiéndolas (VoxCPM2, Apache 2.0); DECISIONES §24. Pendiente: Pocket TTS para voces nuevas sin GPU |
+| E3, G1, G4, Q3, D2, D3, P1, P2 | Pendientes |
 
 ## 0. Qué significa «el mejor» aquí
 
@@ -172,8 +173,8 @@ para reusar planos, música y efectos con su licencia.
 ## 4. Lo que no conviene perseguir
 
 - Colaboración multiusuario, nube o SaaS: rompe US$0 y el uso es interno.
-- Avatares hablando y sincronización de labios: caros, de calidad irregular en local y poco útiles
-  para los canales actuales. Revisar en 2027.
+- ~~Avatares hablando y sincronización de labios~~: **hecho** el 2026-11-21 a pedido del dueño
+  (Avatares + Presentador con InfiniteTalk en Wan2GP, ver HEREDADO.md «ComfyUI»).
 - Edición manual de nivel profesional (corrección de color avanzada, multicámara): para eso está
   Resolve, y el `.otio` ya permite pasarle la pieza.
 - ACES u OCIO: ya se descartó (PRODUCTO.md, anexo).

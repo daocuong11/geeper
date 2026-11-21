@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { json, manejar } from "@/lib/http";
 import { revisarWan2gp } from "@/lib/instalar-wan2gp";
 import { planearPlano, type OpcionesPlano } from "@/lib/plano";
-import { APERTURAS, CAMARAS, LENTES, MOVIMIENTOS } from "@/lib/prompt-camara";
+import { APERTURAS, CAMARAS, LENTES, LOOKS, LUCES, MOVIMIENTOS, PLANOS } from "@/lib/prompt-camara";
 import { versionDeProyecto } from "@/lib/render";
 import { estadoModelos, instalacionWan2gp, MODELO_POR_DEFECTO, MODELOS_PLANO } from "@/lib/wan2gp";
 
@@ -26,6 +26,9 @@ const Opciones = z.object({
     focal: z.union([z.literal(8), z.literal(14), z.literal(24), z.literal(35), z.literal(50), z.literal(85)]).optional(),
     apertura: z.enum(claves(APERTURAS)).optional(),
     movimiento: z.enum(claves(MOVIMIENTOS)).optional(),
+    plano: z.enum(claves(PLANOS)).optional(),
+    luz: z.enum(claves(LUCES)).optional(),
+    look: z.enum(claves(LOOKS)).optional(),
   }).optional(),
 }).strict();
 

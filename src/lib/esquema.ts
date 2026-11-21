@@ -99,6 +99,15 @@ export const Color = z.object({
 });
 export type Color = z.infer<typeof Color>;
 
+/** Pistas libres de video: en un recuadro (la «burbuja» del presentador, marco.ts) en vez de llenar el cuadro. */
+export const Marco = z.object({
+  forma: z.enum(["circulo", "redondeado"]).default("circulo"),
+  esquina: z.enum(["abajo-derecha", "abajo-izquierda", "arriba-derecha", "arriba-izquierda"]).default("abajo-derecha"),
+  /** Ancho del recuadro sobre el ancho de la banda segura (0,15–0,6). */
+  tamano: z.number().min(0.15).max(0.6).default(0.34),
+});
+export type Marco = z.infer<typeof Marco>;
+
 export const Clip = z.object({
   id: z.string().min(1),
   asset: z.string().min(1),
@@ -131,6 +140,8 @@ export const Clip = z.object({
   opacidad: z.number().min(0).max(1).optional(),
   /** Pistas libres de video: modo de fusión con lo de abajo. */
   fusion: Fusion.optional(),
+  /** Pistas libres de video: en un recuadro en una esquina (el presentador en burbuja). */
+  marco: Marco.optional(),
   /** Sólo audio: ganancia lineal. */
   volumen: z.number().min(0).max(4).optional(),
 });
@@ -206,7 +217,9 @@ export const Marcador = z.object({
 });
 
 export const Voz = z.object({
-  motor: z.enum(["kokoro", "mpt"]),
+  /** kokoro: Kokoro local (CPU) · mpt: el Kokoro de MPT · voxcpm: voz diseñada de la biblioteca (voces.ts, GPU). */
+  motor: z.enum(["kokoro", "mpt", "voxcpm"]),
+  /** Con voxcpm, el id de la voz en ~/geeper-data/voces. */
   voz: z.string().min(1),
   velocidad: z.number().min(0.5).max(2).default(1),
   idioma: z.string().default("es"),

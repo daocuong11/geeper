@@ -2,8 +2,34 @@
  * Lenguaje de cámara para los prompts de planos generativos. Los modelos (Wan, LTX) responden mejor a
  * descripciones de cámara en inglés que a «cinematográfico». Cámara, lente, focal y apertura vienen de
  * Cinema Studio de Open-Generative-AI (MIT, commit 7858e08, src/lib/promptUtils.js) con nombres en
- * español; el movimiento es de Geeper (Wan 2.2 lo entiende como instrucción de cámara).
+ * español; el movimiento es de Geeper (Wan 2.2 lo entiende como instrucción de cámara). Plano, luz y look
+ * vienen de Cinematic Studio de Comfy Org (MIT, commit f223ccf, lib/prompt.ts), con más opciones.
  */
+
+export const PLANOS = {
+  general: "wide establishing shot",
+  medio: "medium shot",
+  primero: "close-up portrait",
+  contrapicado: "low-angle shot",
+  cenital: "overhead shot",
+} as const;
+
+export const LUCES = {
+  ventana: "soft window light",
+  "hora-dorada": "golden-hour backlight",
+  mediodia: "hard noon sunlight",
+  "hora-azul": "blue-hour practical lights",
+  estudio: "soft even studio lighting",
+  neon: "colorful neon lights",
+} as const;
+
+export const LOOKS = {
+  "pelicula-calida": "warm cinematic film look",
+  "ciencia-ficcion": "cool science-fiction film look",
+  documental: "natural documentary color",
+  noir: "high-contrast noir look",
+  vivo: "vibrant saturated colors",
+} as const;
 
 export const CAMARAS = {
   "digital-8k": "modular 8K digital cinema camera",
@@ -54,6 +80,9 @@ export const MOVIMIENTOS = {
 } as const;
 
 export interface Camara {
+  plano?: keyof typeof PLANOS;
+  luz?: keyof typeof LUCES;
+  look?: keyof typeof LOOKS;
   camara?: keyof typeof CAMARAS;
   lente?: keyof typeof LENTES;
   focal?: keyof typeof FOCALES;
@@ -70,6 +99,9 @@ export function camaraDe(o: Record<string, string | undefined>): Camara {
   };
   const focal = o.focal === undefined || o.focal === "" ? undefined : Number(o.focal);
   return {
+    plano: elegir("Plano", PLANOS, o.plano),
+    luz: elegir("Luz", LUCES, o.luz),
+    look: elegir("Look", LOOKS, o.look),
     camara: elegir("Cámara", CAMARAS, o.camara),
     lente: elegir("Lente", LENTES, o.lente),
     focal: focal === undefined ? undefined : (elegir("Focal", FOCALES, String(focal)) as unknown as keyof typeof FOCALES),
@@ -78,9 +110,12 @@ export function camaraDe(o: Record<string, string | undefined>): Camara {
   };
 }
 
-/** Agrega al prompt base lo que se eligió, en el orden en que lo lee el modelo: movimiento primero. */
+/**
+ * Agrega al prompt base lo que se eligió, en el orden en que lo lee el modelo: el plano antes de la escena
+ * (como Cinematic Studio), después el movimiento, la cámara y la óptica, y al final la luz y el look.
+ */
 export function promptConCamara(base: string, c: Camara): string {
-  const partes = [base.trim()];
+  const partes = [c.plano ? PLANOS[c.plano] : "", base.trim()];
   if (c.movimiento) partes.push(MOVIMIENTOS[c.movimiento]);
   if (c.camara) partes.push(`shot on a ${CAMARAS[c.camara]}`);
   if (c.lente || c.focal) {
@@ -88,11 +123,35 @@ export function promptConCamara(base: string, c: Camara): string {
     partes.push(c.focal ? `using a ${lente} at ${c.focal}mm (${FOCALES[c.focal]})` : `using a ${lente}`);
   }
   if (c.apertura) partes.push(`aperture ${c.apertura}`, APERTURAS[c.apertura]);
+  if (c.luz) partes.push(LUCES[c.luz]);
+  if (c.look) partes.push(LOOKS[c.look]);
   return partes.filter(Boolean).join(", ");
 }
 
 /** Nombres para la persona (la UI muestra éstos; al modelo va el texto en inglés de arriba). */
 export const NOMBRES = {
+  plano: {
+    general: "General (se ve todo el lugar)",
+    medio: "Medio (de la cintura para arriba)",
+    primero: "Primer plano (la cara)",
+    contrapicado: "Desde abajo (imponente)",
+    cenital: "Desde arriba",
+  } satisfies Record<keyof typeof PLANOS, string>,
+  luz: {
+    ventana: "Luz suave de ventana",
+    "hora-dorada": "Atardecer dorado",
+    mediodia: "Sol fuerte de mediodía",
+    "hora-azul": "Anochecer con luces",
+    estudio: "Estudio pareja",
+    neon: "Neones de colores",
+  } satisfies Record<keyof typeof LUCES, string>,
+  look: {
+    "pelicula-calida": "Película cálida",
+    "ciencia-ficcion": "Ciencia ficción fría",
+    documental: "Natural de documental",
+    noir: "Blanco y negro de alto contraste",
+    vivo: "Colores vivos",
+  } satisfies Record<keyof typeof LOOKS, string>,
   movimiento: {
     fijo: "Quieta",
     acercar: "Acercarse",

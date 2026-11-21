@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { entornoUv } from "./estudio";
 import { bajar, carpetaRaiz } from "./instalar-craft";
+import { aplicarParchesWan2gp } from "./parches-wan2gp";
 import { SISTEMA } from "./plataforma";
 import { correr, type Registro } from "./proceso";
 import { UV, WAN2GP_DIR } from "./rutas";
@@ -151,6 +152,7 @@ export async function bajarCodigo(dir: string, log: Registro) {
     // Encima de lo que haya: el venv y los pesos (ckpts/) de una versión anterior se conservan.
     await fs.cp(raiz, dir, { recursive: true, force: true });
     await fs.writeFile(path.join(dir, MARCA), `${WAN2GP_COMMIT}\n`);
+    await aplicarParchesWan2gp(dir, log);
     log("Código de Wan2GP listo.");
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });

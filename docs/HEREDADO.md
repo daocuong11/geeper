@@ -91,6 +91,79 @@ de video a US$0 cuyo único sitio (`sitio/`) es la página legal para la verific
 | MCP y skills de SEO para agentes | Herramientas sobre su API | **No**: requieren una instancia de OpenSEO con clave de DataForSEO |
 | Skills internas (`papercuts`, `test-audit`, `merge-ready`, `deslop`) | Flujo de trabajo del repo | **No por ahora**: `deslop` ya lo cubre la skill `humanizer`; las otras están atadas a su CI y su facturación |
 
+## VoiceStudio (debpalash, AGPL-3.0) — revisión 2026-11-20
+
+Estudio de voz local (clonar, diseñar, doblar, dictar y transcribir), v0.5.8, commit `1ceb6d7`. **Es
+AGPL-3.0**: como con OpenMontage, Geeper no copia su código. Sólo se toman ideas, que se reescriben, y
+el inventario de licencias de modelos (`docs/licensing/model-license-data.json`, 73 modelos). Su voz por
+defecto (OmniVoice) tiene **pesos CC-BY-NC**: no sirve para uso comercial.
+
+**Lo que Geeper ya tenía** (no se toca): su verificación del doblaje por ASR (`dub_qc.py`: volver a
+transcribir la voz generada y medir la distancia de edición contra el texto) es lo que ya hace
+`src/lib/confianza.ts` palabra por palabra. Su chequeo de señal (`audio_quality.py`: silencio, recorte,
+muestras inválidas) lo cubren el QC de sonoridad y pico real y `silencedetect`. Su diccionario de
+pronunciación (`pronunciation.py`) lo resuelven las reglas «Mostrar en pantalla otra cosa que la que se
+oye»: el guion se escribe como se dice y la regla cambia lo que se lee (`GTA seis=GTA VI`). Un segundo
+mecanismo para lo mismo sólo confundiría.
+
+**Medido y descartado: separar la voz con Demucs antes de whisper** (su `dub_pipeline.py` usa
+`htdemucs --two-stems vocals`). La idea era mejorar los tiempos de los clips con música de fondo (BRECHAS
+E5). Prueba del 2026-11-20 con la voz y la música de «los faros más extraños del mundo» (47 s, 126
+palabras), whisper `medium` a través de `transcribir()` de Geeper. Las columnas de error comparan el
+inicio de cada palabra con el de la voz limpia:
+
+| Audio | WER contra la voz limpia | Error de inicio, mediana / p90 | Dudosas |
+|---|---|---|---|
+| Voz + música al mismo nivel | 0 % | 140 / 370 ms | 1 |
+| … separada con Demucs | 0 % | 140–150 / 410–450 ms | 0–1 |
+| Voz + música 3 dB por encima | 0 % | 180 / 460 ms | 1 |
+| … separada | 0 % | 140 / 390 ms | 1 |
+| Voz + música 9 dB por encima | 0 % | 150 / 410 ms | 1 |
+| … separada | 0 % | 140 / 360 ms | 2 |
+
+Whisper `medium` ya aguanta la música instrumental y la separación no cambia nada que se note.
+Separar cuesta 12 s en CPU por 47 s de audio (en GPU, menos de 3 s). Hace falta torch (~3 GB); el venv
+de prueba quedó en `~/dev/video-tools/venvs/demucs`. Con torchaudio 2.11 hay que guardar con soundfile,
+porque `demucs.separate` exige `torchcodec`. **Volver a medirlo** sólo si un clip real de directo (voces
+encimadas, diálogo del juego) da muchas palabras dudosas. Esta prueba no cubre ese caso.
+
+**Para BRECHAS G2 (voz nueva)**, del inventario de VoiceStudio. Verificar cada licencia en la tarjeta del
+modelo antes de usarlo:
+
+| Modelo | Licencia | Español | Lo que aporta | Contra |
+|---|---|---|---|---|
+| VoxCPM2 (openbmb) | Apache 2.0 | Sí (30 idiomas) | Clona y **diseña una voz desde una descripción**; 48 kHz nativos | GPU |
+| Pocket TTS (kyutai) | CC-BY-4.0 (atribución), descarga con aceptación de términos | Sí (un modelo por idioma) | **Sólo CPU** y clona: mantiene «reeditar sin GPU» | Revisar los términos de la aceptación; la conversión de sherpa-onnx es no comercial |
+| Ming-3.0-tts 0.5B (inclusionAI) | MIT | Sí (7 idiomas) | Liviano (~3 GB), clona, 44,1 kHz | Calidad sin medir |
+| dots.tts-soar (rednote) | Apache 2.0 | Sí (24 idiomas) | De los mejores clonando; 48 kHz | ~9 GB de VRAM |
+| MOSS-TTS v1.5 (OpenMOSS) | Apache 2.0 | Sí (31 idiomas) | Control de duración por token y pausas `[pause Ns]` | 8B: ~16 GB en bf16, no cabe junto a nada |
+| Fun-CosyVoice3 0.5B | Apache 2.0 | Sí | Clona; ~5,4 GB | Instalación pesada (Matcha-TTS) |
+
+Descartados por licencia: OmniVoice (CC-BY-NC), NLLB-200 (traducción, CC-BY-NC), OuteTTS (CC-BY-NC-SA),
+IndexTTS 2.5 («other»), Supertonic-3 (OpenRAIL con condiciones). La conversión MLX de Chatterbox no
+declara licencia (el original de Resemble es MIT; usar ése).
+
+**Para G3 (efectos de sonido):** MOSS-SoundEffect v2.0 (Apache 2.0, código y pesos) genera efectos desde
+una descripción en inglés, hasta 30 s a 48 kHz. Pesa 11,2 GB en bf16: hay que medir si cabe en los 16 GB
+con `gpu-lock` antes de pensar en una biblioteca generada.
+
+**Integrado el 2026-11-20** (DECISIONES §23–§25): «Hacer una versión en otro idioma», voces diseñadas con VoxCPM2 y efectos de sonido con MOSS-SoundEffect. Abajo, las ideas de origen.
+
+**Para la Localización (PRODUCTO.md §4)**, ideas de su doblaje (reescritas en `src/lib/traducir.ts`):
+
+- **Antes de sintetizar**, estimar cuánto durará cada frase traducida con los caracteres por segundo
+  medidos en la voz del propio proyecto (mediana de lo ya generado; sin datos, ~15,5 car./s en español) y
+  marcar las que no caben en su tramo. A ésas, pedirle a Claude una versión más corta con el mismo
+  sentido (su `duration_planner.py`).
+- **Después de sintetizar**, ajustar cada frase a su tramo (su `fit_planner.py`). Usar primero el
+  silencio hasta la frase siguiente, dejando 50 ms. Acelerar sólo el audio hasta 1,2× (no se nota). Más
+  allá, repartir entre audio (tope 1,5×) y video (tope 2× más lento). Una frase que queda corta se estira
+  hasta 0,85× para no dejar un hueco mudo. Lo que no quepa, se recorta y se avisa.
+- **Traducir con Claude Code** pasándole el guion completo, en orden y con el tiempo de cada frase, en
+  vez de frase por frase.
+- **QC del doblaje:** volver a transcribir la voz doblada y comparar con el texto traducido. Es la
+  confianza de `confianza.ts` aplicada al idioma destino.
+
 ## Descartado
 
 - **Remotion:** licencia de empresa paga para algunas organizaciones; Hyperframes ya cubre lo mismo con Apache-2.0.
@@ -466,3 +539,117 @@ con 3 pasos. Render v6 con el plano: QC aprobado. **Sin medir:** Calidad (50 pas
 ~7 s/paso), I2V-A14B y LTX-2.3.
 
 Falta: comparar Rápido y Calidad lado a lado; botón «Cancelar» en el propio panel (hoy, desde Trabajos).
+
+## ComfyUI (Comfy-Org, GPL-3.0) — revisión 2026-11-21
+
+Motor de nodos para imagen, video y audio con IA, commit `0072b86` (v0.46.0), y sus repos vecinos:
+`workflow_templates` (las 776 plantillas del hub, `templates/index.json`), Cinematic Studio (`f223ccf`),
+Reshoot (`dc53fc7`) y Openjutsu (`70ec62d`), los tres MIT. ComfyUI es GPL-3.0: si entra, entra como
+**proceso aparte** (su API HTTP `/prompt` + websocket), como OpenMontage; Geeper no importa su código.
+
+**Lo que sirve, y dónde lo hace Geeper.** Casi todo lo que ComfyUI trae en el núcleo para personajes
+que hablan también lo trae Wan2GP, que ya está instalado y maneja mejor la memoria en 16 GB. Para no
+duplicar 30–60 GB de pesos en otro formato, el avatar se hizo con Wan2GP (decisión del dueño, 2026-11-21):
+
+| En ComfyUI | Qué hace | En Geeper |
+|---|---|---|
+| `WanInfiniteTalkToVideo` (`comfy_extras/nodes_wan.py`), plantilla `video_wan2_1_infinitetalk` | Imagen + audio → personaje que habla (Wan 2.1 I2V 14B + InfiniteTalk, Apache-2.0) | **Hecho** con Wan2GP (`infinitetalk` + lightx2v 4 pasos): «Presentador» (`src/lib/presentador.ts`) |
+| `TextEncodeQwenImageEditPlus`, plantilla `templates-1_click_multiple_character_angles` | Retocar conservando la identidad | **Hecho** con Wan2GP (`qwen_image_edit_plus2_20B` + Lightning 4 pasos): retoques y avatar desde foto (`src/lib/avatares.ts`) |
+| Z-Image en el núcleo | Retrato desde una descripción | **Hecho** con Wan2GP (`z_image`), 4 tomas para elegir |
+| `WanSoundImageToVideo` (Wan 2.2 S2V), `WanHuMoImageToVideo`, LongCat Avatar | Otros personajes que hablan | **Para probar**: S2V/HuMo no están en Wan2GP v20; LongCat Avatar sí (licencia por revisar) |
+| `WanAnimateToVideo`, SCAIL-2 (`nodes_scail.py`), plantillas `video_wan_animate2`, `video_wan21_scail2_character_replacement_int8` | Cambiar a la persona de un video por un personaje | **Paso 3** (Openjutsu local): también en Wan2GP (`animate2`, `scail2_14B`) |
+| SAM 3 (`nodes_sam3.py`), MediaPipe Face (`nodes_mediapipe.py`), `RemoveBackground` | Seguir y recortar personas, caras y fondos en video | **Para después**: avatar con fondo transparente; hoy la burbuja recorta un círculo y no lo necesita |
+| SeedVR2 (`nodes_seedvr.py`), `FrameInterpolate` | Superresolución e interpolación de cuadros | **Para después**: subir el presentador de 480p sin generarlo a 720p |
+| Sección **Workflows** (las plantillas del hub) | Cualquier workflow oficial | **Paso 2**: instalar ComfyUI y catalogar las 776 (abajo) |
+
+**Workflows del hub.** `comfy.org/hub/workflows` sale de `Comfy-Org/workflow_templates` (`templates/index.json`:
+título, descripción, modelos, tamaño en bytes, nodos personalizados, versión mínima de ComfyUI, entradas).
+Medido el 2026-11-21: **776** plantillas; **504** usan nodos de pago de la nube de Comfy (`openSource: false`:
+Kling, Veo, Gemini, Flux Pro…) y **272** corren en el equipo (51 de ellas piden nodos personalizados); de
+las locales, 69 pesan menos de 10 GB, 84 entre 10 y 25, 89 entre 25 y 50 y 30 más de 50. Los workflows
+de la comunidad del hub no tienen API pública: se importarán pegando su JSON. Decisión del dueño: mostrar
+las 776, con las de pago bloqueadas («nube de pago») hasta que haya una clave de Comfy y avisando el costo
+en cada corrida.
+
+**Cinematic Studio** (MIT). Una app que arma un prompt con plano, cámara, luz y look y lo manda a
+FLUX.2 Pro en la nube de Comfy (de pago). **Portado** sólo el lenguaje: `PLANOS`, `LUCES` y `LOOKS` en
+`src/lib/prompt-camara.ts` (más opciones que el original), en «Animar esta escena» y en los retratos de avatar.
+
+**Reshoot** (MIT). Sube un clip, estima profundidad (MoGe), deja mover la cámara con una vista previa
+deformada (`src/lib/crossview/camera.ts`, `warp-renderer.ts`, `cvgeo.ts`) y regenera la toma con
+MiniMax H3 + un LoRA CrossView. **Paso 3**: se porta la cámara y la vista previa (MIT); la generación, con
+lo que cabe en 16 GB. H3 pide 96 GB en su guía (el modelo podado más chico, 16 GB, más 15,7 GB de su
+codificador de texto) y su licencia, «MiniMax H3 Community License», está por revisar: sólo experimental.
+
+**Openjutsu** (MIT; el pack de nodos de Akatz es GPL-3.0). Cambia a la persona de un tramo de 5–15 s por
+el personaje de una imagen, conservando escena, actuación y sonido, con MiniMax H3 + SAM 3.1 + LoRA de
+Akatz (licencia de H3). Lo útil: el tramo, el «primer cuadro ancla» y los límites (un solo plano, una
+persona en el primer cuadro). **Paso 3**: lo mismo con Wan Animate o SCAIL-2 en 16 GB, y con el avatar
+de la biblioteca como personaje.
+
+### Avatar y Presentador (2026-11-21)
+
+**Avatares** (`/avatares`, `src/lib/avatares.ts`): asistente de 3 pasos. 1) Cómo lo quieres: describirlo
+(estilo realista, animado 3D, anime, caricatura, ilustración o plastilina; fondo; luz y look opcionales)
+o desde una foto (con la casilla de consentimiento, que queda escrita en `avatar.json`). 2) Elegir entre 4
+retratos (2 si es desde una foto) u «Hacer otras». 3) Nombre. Después, «Retocar» con una frase («ponle
+lentes») conserva la cara; «Deshacer retoque» vuelve al anterior. Biblioteca en `~/geeper-data/avatares/`.
+El prompt fija lo que InfiniteTalk necesita: de frente, mirando a cámara, boca cerrada y cara despejada.
+
+**Presentador** (panel del proyecto, `src/lib/presentador.ts`): el avatar dice la voz del video.
+- *Burbuja*: un recuadro (círculo o rectángulo redondeado, 3 tamaños, 4 esquinas) todo el video, en la
+  pista libre `presentador` con el campo nuevo `marco` del esquema (`src/lib/marco.ts`: dentro de la banda
+  segura, debajo de la marca y encima de los subtítulos; la cara se encuadra con YuNet). Se hace sobre la
+  voz final: si después cambia lo que se dice, el panel avisa («hay que actualizarlo», por la huella de
+  los tramos de voz).
+- *Pantalla completa*: reemplaza el visual de las escenas elegidas, en `sincro: "voz"` sobre el audio sin
+  recortes de cada escena (con la entrada de 0,3 s en silencio al comienzo): recortar palabras después
+  corta igual imagen y voz.
+- Audio: ffmpeg recorta y concatena los tramos a mono 16 kHz (`argsAudio`). Ajustes de Wan2GP: la imagen
+  va en `image_refs` con `video_prompt_type: "0KI"` (con `image_start` InfiniteTalk la rechaza), audio en
+  `audio_guide` + `audio_prompt_type: "A"`, 25 fps, ventana 81 con solape 9, 480p (alta: 720p). Hasta 120 s
+  por vez. El retrato se copia al proyecto: el video no depende de que el avatar siga en la biblioteca.
+- Trabajos `avatar.proponer`, `avatar.retocar` y `presentador.generar`, en la fila de la GPU (motor `mpt`).
+
+**Verificado** (2026-11-21): `wgp.py --dry-run` valida retratos, retoque, desde foto, presentador en
+pantalla (480p y 720p) y en burbuja; 23 pruebas nuevas (`tests/avatares.test.ts`, `tests/presentador.test.ts`);
+capturas a 1280 y 390 px sin errores de consola ni desbordes.
+
+**Medido en la RTX 5080** (2026-11-21, carpeta aislada): 4 retratos 371 s la primera vez (baja ~11 GB) y
+103 s después, VRAM pico 3,7 GB, calidad muy buena; retoque «ponle lentes» con Qwen Edit, conserva la cara
+(1310 s con la descarga de sus pesos); el avatar hablando: 3,2 s de voz → 497 s y 10,4 s → 622 s a 480p
+(~7 min fijos + ~18 s por segundo de voz; pesos ~28 GB la primera vez), VRAM pico 6,9 GB, identidad y
+lentes estables, parpadeo, sin cortes visibles entre ventanas; la boca sigue a la energía de la voz
+(correlación 0,56, desfase de un cuadro). Dos hallazgos: (1) InfiniteTalk fallaba siempre en Wan2GP v20
+(parche en «Parches a Wan2GP»); (2) en WSL, consultar `nvidia-smi` cada 2 s durante la generación lo hizo
+caer con «CUDA error: unknown error» dos veces en ventanas distintas; sin consultarlo, pasó. Por eso Sistema
+ya no consulta `nvidia-smi` mientras un trabajo usa la GPU (`doctor.ts`).
+
+Terminal:
+
+```bash
+pnpm tsx scripts/avatar.ts --lista
+pnpm tsx scripts/avatar.ts crear "mujer de 30 años, blusa blanca" --estilo animado-3d [--fondo oficina] [--probar]
+pnpm tsx scripts/avatar.ts guardar <propuesta> <toma> "Sofía"
+pnpm tsx scripts/avatar.ts retocar <avatar> "ponle lentes"
+pnpm tsx scripts/avatar.ts presentador <slug> <avatar> [--burbuja --esquina arriba-izquierda | --escenas 1,5] [--probar]
+```
+
+### Parches a Wan2GP (2026-11-21)
+
+`src/lib/parches-wan2gp.ts`: reemplazos exactos e idempotentes, al instalar y antes de cada tarea; si el
+texto ya no está (Wan2GP cambió), no se toca nada y se avisa. Hoy uno: en el commit fijado (`f4cfc12`, v20)
+**InfiniteTalk fallaba siempre** en la GPU («indices should be either on cpu or on the same device…»):
+mmgp deja CUDA como dispositivo por defecto y los índices del audio se creaban en la GPU contra una tabla en
+la CPU (`models/wan/multitalk/multitalk.py`, `rows`). El arreglo mueve los índices al dispositivo de la tabla.
+Tampoco está arreglado arriba (main, 2026-11-21): conviene reportarlo.
+
+### Voz del avatar (2026-11-21)
+
+Cada avatar tiene su voz, elegida escuchándola en el paso 3 («Nombre y voz») o después con «Cambiar voz»:
+las de Kokoro o las diseñadas de la biblioteca (`src/components/elegir-voz-avatar.tsx`). En el panel
+Presentador, si el video habla con otra voz, un aviso ofrece «Usar la voz de <avatar> en el video» (lo mismo
+que la sección de voz: cambia la voz y ofrece decir el guion de nuevo). El presentador no se encola mientras
+la voz se está diciendo de nuevo, y en pantalla completa también avisa si después cambió el audio de una
+escena (huella por escena). El panel muestra además una **vista previa a escala** de dónde queda el avatar,
+la forma de hablar en botones en español («Alegre y con energía», «Seria y profesional»…) y «Cancelar».

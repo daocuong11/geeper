@@ -15,11 +15,13 @@ import { crearAudio, esperarAudio } from "./mpt";
 import { correr } from "./proceso";
 import { HYPERFRAMES_VERSION, MPT_CONTENEDOR, MPT_TAREAS } from "./rutas";
 import { huellaPesos } from "./modelos";
+import { LICENCIA_VOXCPM, sintetizarVoxcpm } from "./voces";
 import { MODELO_WHISPER, sintetizar } from "./voz";
 
 const tokens = (s: string) => s.split(/\s+/).filter(Boolean);
 
-async function sintetizarAsset(ctx: Contexto & { signal?: AbortSignal }, p: Proyecto, texto: string) {
+/** Voz de Kokoro para `texto` con la voz del proyecto (`p.voz`), como asset con sus palabras alineadas. */
+export async function sintetizarAsset(ctx: Contexto & { signal?: AbortSignal }, p: Pick<Proyecto, "voz">, texto: string) {
   const { motor, voz, velocidad, idioma } = p.voz;
   const clave = sha256Texto(JSON.stringify({ texto, motor, voz, velocidad })).slice(0, 12);
   const id = `voz-tts-${clave}`;
@@ -27,7 +29,7 @@ async function sintetizarAsset(ctx: Contexto & { signal?: AbortSignal }, p: Proy
   const r = await paso(
     ctx,
     "voz.sintetizar",
-    { archivos: [], params: { texto, motor, voz, velocidad }, motor: motor === "mpt" ? "mpt-api-audio+kokoro-82m" : `hyperframes@${HYPERFRAMES_VERSION}+kokoro-82m` },
+    { archivos: [], params: { texto, motor, voz, velocidad }, motor: motor === "mpt" ? "mpt-api-audio+kokoro-82m" : motor === "voxcpm" ? "voxcpm2+atempo" : `hyperframes@${HYPERFRAMES_VERSION}+kokoro-82m` },
     [path.join(ctx.dir, ruta)],
     async ([tmp]) => {
       if (motor === "mpt") {
@@ -38,6 +40,11 @@ async function sintetizarAsset(ctx: Contexto & { signal?: AbortSignal }, p: Proy
         await correr("docker", ["cp", `${MPT_CONTENEDOR}:${MPT_TAREAS}/${taskId}/audio.mp3`, tmp!], { log: ctx.log });
         return { id, tareaMpt: taskId };
       }
+      if (motor === "voxcpm") {
+        // Voz diseñada de la biblioteca (GPU, espera su turno en el gpu-lock).
+        await sintetizarVoxcpm(ctx, texto, voz, velocidad, tmp!);
+        return { id, tareaMpt: null };
+      }
       await sintetizar(texto, voz, velocidad, tmp!, ctx.log);
       return { id, tareaMpt: null };
     },
@@ -46,9 +53,9 @@ async function sintetizarAsset(ctx: Contexto & { signal?: AbortSignal }, p: Proy
     id,
     tipo: "audio",
     source: "tts",
-    licencia: LICENCIAS.kokoro!,
+    licencia: motor === "voxcpm" ? LICENCIA_VOXCPM : LICENCIAS.kokoro!,
     regenerar: {
-      motor, voz, velocidad, texto, modelo: "kokoro-82m", tareaMpt: r.resultado.tareaMpt,
+      motor, voz, velocidad, texto, modelo: motor === "voxcpm" ? "voxcpm2" : "kokoro-82m", tareaMpt: r.resultado.tareaMpt,
       // El Kokoro de MPT vive en su contenedor: sólo se conoce la huella de los pesos locales.
       pesos: motor === "kokoro" ? await huellaPesos("kokoro-82m-onnx") : null,
       alineacion: { modelo: `whisper-${MODELO_WHISPER}`, pesos: await huellaPesos(`whisper-${MODELO_WHISPER}`) },

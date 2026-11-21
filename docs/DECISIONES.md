@@ -335,3 +335,20 @@ casilla y la UX simple primero en clips (el resto de la app, después).
   del worktree la página se recarga en bucle (también `/trabajos`, que no se tocó): las pruebas de UI
   se hicieron con `next build` + `next start`, donde no pasa.
 
+## 24. Voz nueva: VoxCPM2 diseña una vez y después clona su propia muestra
+
+Comparativa en MODELOS.md («Comparativa de modelos locales»). VoxCPM2 (Apache 2.0) porque con **un solo
+modelo** diseña una voz desde una descripción y la repite clonando la muestra: el diseño cambia en cada
+corrida, la clonación no (Nemotron Omni: mismo hablante, 9/10). Sin eso cada escena regenerada sonaría
+a otra persona. Qwen3-TTS necesitaría dos modelos (VoiceDesign y Base).
+
+- La persona **elige escuchando**, no por el nombre del modelo: tarjetas con «▶ Escuchar» y «Usar esta
+  voz» (que ofrece poner la voz ya en todo el video). «Crear una voz nueva» propone 3 tomas; la elegida
+  se guarda con nombre en `~/geeper-data/voces/<id>/` (muestra + transcripción) y sirve para cualquier
+  proyecto (`motor: "voxcpm"` en `geeper.json`).
+- Sólo voces inventadas: no se ofrece clonar a una persona real (pediría su consentimiento escrito).
+- VoxCPM2 habla a 17–18 car./s: la velocidad del proyecto se aplica con `atempo` (conserva el tono).
+- `torch.compile` falla en la RTX 5080 bajo WSL («CUDA error: unknown error»): se apaga
+  (`TORCHDYNAMO_DISABLE=1`). Cargar el modelo tarda 60–95 s la primera vez, por eso regenerar el guion
+  completo (una carga) conviene más que escena por escena.
+- Toma el gpu-lock y espera su turno (~6 GB). Venv `~/dev/video-tools/venvs/voxcpm`.

@@ -72,6 +72,9 @@ function Contenido({ proyectoId, escena, numero, ocupado, animar, trabajo, base 
   const [segundos, setSegundos] = useState<number | null>(null);
   const [prompt, setPrompt] = useState("");
   const [lente, setLente] = useState<Camara["lente"]>();
+  const [plano, setPlano] = useState<Camara["plano"]>();
+  const [luz, setLuz] = useState<Camara["luz"]>();
+  const [look, setLook] = useState<Camara["look"]>();
   const [focal, setFocal] = useState<Camara["focal"]>();
   const [apertura, setApertura] = useState<Camara["apertura"]>();
   const [camara, setCamara] = useState<Camara["camara"]>();
@@ -79,7 +82,7 @@ function Contenido({ proyectoId, escena, numero, ocupado, animar, trabajo, base 
   const [semilla, setSemilla] = useState("");
 
   const opciones: OpcionesAnimar = useMemo(() => {
-    const cam: Camara = { movimiento: mov, lente, focal, apertura, camara };
+    const cam: Camara = { movimiento: mov, lente, focal, apertura, camara, plano, luz, look };
     const o: OpcionesAnimar = {};
     if (modelo) o.modelo = modelo;
     if (prompt.trim()) o.prompt = prompt.trim();
@@ -88,7 +91,7 @@ function Contenido({ proyectoId, escena, numero, ocupado, animar, trabajo, base 
     if (semilla.trim() && /^\d+$/.test(semilla.trim())) o.semilla = Number(semilla.trim());
     if (Object.values(cam).some((v) => v !== undefined)) o.camara = Object.fromEntries(Object.entries(cam).filter(([, v]) => v !== undefined)) as Camara;
     return o;
-  }, [modelo, mov, segundos, prompt, lente, focal, apertura, camara, sinImagen, semilla]);
+  }, [modelo, mov, segundos, prompt, lente, focal, apertura, camara, plano, luz, look, sinImagen, semilla]);
 
   // El plan se vuelve a pedir con las opciones elegidas (descripción final, avisos, duración real), sin
   // hacerlo en cada tecla.
@@ -186,6 +189,9 @@ function Contenido({ proyectoId, escena, numero, ocupado, animar, trabajo, base 
             </span>
           </label>
           <div className="grid gap-2 sm:grid-cols-2">
+            <Selector etiqueta="Plano" valor={plano} opciones={NOMBRES.plano} cambiar={setPlano} />
+            <Selector etiqueta="Luz" valor={luz} opciones={NOMBRES.luz} cambiar={setLuz} />
+            <Selector etiqueta="Look" valor={look} opciones={NOMBRES.look} cambiar={setLook} />
             <Selector etiqueta="Lente" valor={lente} opciones={NOMBRES.lente} cambiar={setLente} />
             <Selector etiqueta="Distancia focal" valor={focal === undefined ? undefined : String(focal)} opciones={NOMBRES.focal as Record<string, string>} cambiar={(v) => setFocal(v === undefined ? undefined : (Number(v) as Camara["focal"]))} />
             <Selector etiqueta="Desenfoque del fondo" valor={apertura} opciones={NOMBRES.apertura} cambiar={setApertura} />

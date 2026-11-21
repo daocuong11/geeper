@@ -176,9 +176,13 @@ export async function diagnosticar(): Promise<Chequeo[]> {
     arreglo: cv.codigo === 0 ? undefined : ESCRITORIO ? PREPARAR : "uv pip install --python ~/dev/video-tools/venvs/geeper-clips/bin/python opencv-python-headless  (o GEEPER_CARAS_PYTHON=<python con cv2>)",
   });
 
-  // GPU y VRAM.
-  const smi = SISTEMA === "mac" ? null : await intento("nvidia-smi", ["--query-gpu=name,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"]);
-  if (!smi) {
+  // GPU y VRAM. Con un trabajo pesado en la GPU no se pregunta a nvidia-smi: en WSL, consultarlo seguido
+  // mientras Wan2GP genera hizo fallar InfiniteTalk con «CUDA error: unknown error» (medido 2026-11-21).
+  const ocupada = SISTEMA === "mac" ? null : await db.trabajo.findFirst({ where: { usaGpu: true, estado: "corriendo" }, select: { tipo: true } }).catch(() => null);
+  const smi = SISTEMA === "mac" || ocupada ? null : await intento("nvidia-smi", ["--query-gpu=name,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"]);
+  if (ocupada) {
+    c.push({ nombre: "GPU", ok: true, detalle: "Ocupada por un trabajo: se revisa cuando termine" });
+  } else if (!smi) {
     c.push({ nombre: "GPU", ok: true, detalle: "Mac: render por CPU; voz y transcripción con CPU y Metal" });
   } else if (smi.codigo === 0) {
     const [nombre, usada, total, temp] = smi.stdout.trim().split(",").map((s) => s.trim());

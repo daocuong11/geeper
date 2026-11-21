@@ -8,6 +8,8 @@ import { ListaTrabajos } from "./lista-trabajos";
 import { ListaPublicaciones, PanelPublicar, type PublicacionV } from "./panel-publicar";
 import { PanelAnimar, type OpcionesAnimar } from "./panel-animar";
 import { PanelPortada } from "./panel-portada";
+import { ElegirVoz, type MotorVoz } from "./elegir-voz";
+import { PanelPresentador } from "./panel-presentador";
 import { SelectorEncuadre, type EncuadreV } from "./selector-encuadre";
 import { PanelOtroEditor } from "./panel-otro-editor";
 import { useAccionesProyecto } from "./acciones-proyecto";
@@ -63,7 +65,7 @@ interface Vista {
     lote: { nombre: string } | null;
     publicaciones: PublicacionV[];
   };
-  p: { voz: { voz: string; velocidad: number }; mostrar: { de: string; a: string }[]; formato: string; plantilla: string } | null;
+  p: { voz: { motor: string; voz: string; velocidad: number; idioma: string }; mostrar: { de: string; a: string }[]; formato: string; plantilla: string } | null;
   escenas: EscenaV[];
   total: number;
   extras: ExtrasV | null;
@@ -286,6 +288,11 @@ export function EditorProyecto({ id }: { id: string }) {
     "Animación en cola. Verás el avance en la escena y en «Trabajos»; al terminar queda como versión nueva (ya se ve en «En vivo»).");
   const regenerarVoz = (escena: string | null) => hacer(() => postJson(`/api/proyectos/${id}/voz`, { escena }),
     "Voz en cola (Kokoro y whisper en CPU). Al terminar se realinean los subtítulos y se vuelve a renderizar.");
+  /** Cambia la voz del proyecto y ofrece ponerla ya en el video (regenerar el guion completo). */
+  const usarVoz = async (motor: MotorVoz, voz: string, nombre: string) => {
+    await editar({ tipo: "cambiarVoz", motor, voz });
+    if (confirm(`Listo: la voz del video ahora es «${nombre}». ¿La ponemos ya? Se vuelve a decir todo el guion con esa voz, se acomodan los subtítulos y se renderiza (unos minutos).`)) await regenerarVoz(null);
+  };
   const renderizar = () => hacer(() => postJson(`/api/proyectos/${id}/render`, {}), "Render en cola: sólo compila y renderiza, no genera nada con la GPU.");
   const alinearMusica = () => hacer(async () => {
     const r = await postJson<{ cambio: boolean; motivo?: string }>(`/api/proyectos/${id}/musica`, {});
@@ -419,6 +426,11 @@ export function EditorProyecto({ id }: { id: string }) {
                 }).then(() => setMostrarTxt(null))}>Guardar reglas</button>
               )}
             </div>
+            {!v.extras?.clip && (
+              <div className="border-t border-borde pt-3">
+                <ElegirVoz actual={p.voz} idioma={p.voz.idioma} usar={usarVoz} ocupado={ocupado} />
+              </div>
+            )}
             <div className="flex flex-wrap items-end gap-2 border-t border-borde pt-3">
               <div>
                 <label className="etiqueta" htmlFor="vel">Velocidad de la voz (para la próxima regeneración)</label>
@@ -442,6 +454,8 @@ export function EditorProyecto({ id }: { id: string }) {
           <PanelAvanzado extras={v.extras} formato={p.formato} total={v.total} editar={editar} alinearMusica={alinearMusica} subirLibre={subirLibre} ocupado={ocupado} slug={fila.slug} />
         </>
       )}
+
+      {p && !v.extras?.clip && <PanelPresentador proyectoId={id} escenas={escenas.map((e) => ({ id: e.id, numero: e.indice + 1, texto: e.texto }))} ocupado={ocupado} alCambiar={() => void recargar()} usarVoz={usarVoz} />}
 
       {p && <PanelPortada proyectoId={id} nombre={fila.nombre} version={fila.versionActual} vertical={fila.formato === "9:16"} />}
 
