@@ -31,7 +31,7 @@ describe("mover el presentador sin generarlo otra vez", () => {
 
   it("sin burbuja, o pasando a/desde «recorte», hay que generarlo", () => {
     expect(motivoParaGenerar(proyectoDePrueba(), { esquina: "auto" })).toMatch(/generarlo/);
-    expect(() => reubicarPresentador(conBurbuja(), { forma: "recorte" } as Partial<Marco>)).toThrow(/recorte/);
+    expect(() => reubicarPresentador(conBurbuja(), { forma: "recorte" } as unknown as Partial<Marco>)).toThrow(/recorte/);
   });
 
   it("la nota de la versión dice qué cambió", () => {
