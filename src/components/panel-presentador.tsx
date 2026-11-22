@@ -51,10 +51,13 @@ const mismaVoz = (video: { motor: string; voz: string }, v: { motor: string; voz
 
 /** Vista previa a escala de dónde queda el avatar (la misma cuenta que el compilador). */
 function Vista({ formato, plataformas, zonas, modo, marco, retrato }: { formato: Formato; plataformas: Datos["plataformas"]; zonas: Zona[]; modo: Modo; marco: Marco; retrato?: string }) {
-  const m = metricas(formato, { plataformas });
+  const base = metricas(formato, { plataformas });
   const ancho = formato === "9:16" ? 108 : formato === "1:1" ? 150 : 192;
-  const k = ancho / m.W;
-  const c = cajaMarco(resolverMarco(marco, m, zonas), m);
+  const k = ancho / base.W;
+  const r = resolverMarco(marco, base, zonas);
+  const c = cajaMarco(r, base);
+  // Con la burbuja abajo, los subtítulos se corren a su lado (como en el video).
+  const m = modo === "burbuja" && r.esquina.startsWith("abajo") ? metricas(formato, { plataformas, burbuja: c }) : base;
   const px = (n: number) => `${Math.round(n * k)}px`;
   return (
     <div className="relative shrink-0 overflow-hidden rounded border border-borde bg-gradient-to-b from-slate-600 to-slate-800" style={{ width: px(m.W), height: px(m.H) }} aria-label="Vista previa de dónde aparece el avatar" role="img">

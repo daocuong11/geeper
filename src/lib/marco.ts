@@ -6,19 +6,25 @@ import type { Marco } from "./esquema";
 import type { Caja, Metricas } from "./formatos";
 
 export const MARGEN_MARCO = 24;
+/**
+ * En las esquinas de abajo la burbuja queda al lado de los subtítulos, que se corren y se angostan
+ * (`OpcionesFormato.burbuja`): no puede ocupar más que esto del ancho de la banda segura.
+ */
+export const MAX_ANCHO_ABAJO = 0.4;
 
 /** Alto del chip de la marca (texto + relleno + borde), como lo dibuja el compilador. */
 const altoMarca = (m: Metricas) => Math.round(m.marcaFs * 1.2) + 30 + 4;
 
 export function cajaMarco(marco: Marco, m: Metricas): Caja {
   const S = m.segura;
-  const w = Math.round(S.w * marco.tamano);
-  const h = marco.forma === "circulo" ? w : Math.round((w * 4) / 3);
   const arriba = marco.esquina.startsWith("arriba");
+  const w = Math.min(Math.round(S.w * marco.tamano), arriba ? Infinity : Math.round(S.w * MAX_ANCHO_ABAJO));
+  const h = marco.forma === "circulo" ? w : Math.round((w * 4) / 3);
   const izquierda = marco.esquina.endsWith("izquierda");
   const techo = Math.max(S.y, m.marcaTop + altoMarca(m)) + MARGEN_MARCO;
-  const piso = Math.min(S.y + S.h, m.subs.y) - MARGEN_MARCO;
-  // Si no cabe entre la marca y los subtítulos, se achica (nunca se sale de ese espacio).
+  // Arriba: debajo de la marca, sin bajar a los subtítulos. Abajo: en la esquina de abajo de la banda segura.
+  const piso = arriba ? Math.min(S.y + S.h, m.subs.y) - MARGEN_MARCO : S.y + S.h - MARGEN_MARCO;
+  // Si no cabe, se achica (nunca se sale de ese espacio).
   const alto = Math.max(0, Math.min(h, piso - techo));
   const ancho = marco.forma === "circulo" ? alto : Math.min(w, Math.round((alto * 3) / 4));
   return {

@@ -16,8 +16,9 @@ describe("burbuja del presentador en «auto»: la esquina que menos tapa las car
     expect(mejorEsquina(burbuja, m, [])).toBe("abajo-derecha");
   });
 
-  it("una cara a la derecha y arriba la manda a la izquierda", () => {
-    const zonas = [cara(700, 480)];
+  it("una cara abajo a la derecha la manda a la izquierda; una cara arriba no la mueve de abajo", () => {
+    expect(mejorEsquina(burbuja, m, [cara(700, 480)])).toBe("abajo-derecha");
+    const zonas = [cara(720, 1100)];
     const e = mejorEsquina(burbuja, m, zonas);
     expect(e.endsWith("izquierda")).toBe(true);
     const b = cajaMarco({ ...burbuja, esquina: e }, m);
@@ -41,15 +42,16 @@ describe("burbuja del presentador en «auto»: la esquina que menos tapa las car
 
   it("si en todas las esquinas tapa una cara, la achica lo justo (nunca menos que «Chica») y deja de tapar", () => {
     const grande = { ...burbuja, tamano: 0.45 };
-    const zonas = [cara(540, 620)];
+    const zonas = [cara(540, 620), cara(540, 1100)];
     expect(Math.min(...Object.values(puntajes(grande, m, zonas)))).toBeGreaterThan(0.03);
     const r = resolverMarco(grande, m, zonas);
     expect(r.tamano).toBeLessThan(0.45);
     expect(r.tamano).toBeGreaterThanOrEqual(0.26);
     expect(puntajes(r, m, zonas)[r.esquina]).toBeLessThanOrEqual(0.03);
-    // Si la franja libre entera está ocupada (ningún tamaño deja de tapar), queda el tamaño pedido.
-    const ancha: Zona = { caja: { x: 0, y: 300, w: 1080, h: 700 }, peso: 1 };
-    expect(resolverMarco(grande, m, [ancha]).tamano).toBe(0.45);
+    // Si hay caras por todo el cuadro (ningún tamaño deja de tapar), queda el tamaño pedido.
+    const llenas: Zona[] = [];
+    for (let x = 100; x < 1080; x += 150) for (let y = 150; y < 1920; y += 150) llenas.push(cara(x, y));
+    expect(resolverMarco(grande, m, llenas).tamano).toBe(0.45);
   });
 
   it("una esquina elegida a mano se respeta", () => {
