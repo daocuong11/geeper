@@ -1,19 +1,42 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { graficosNativos } from "@/lib/filmcraft-proyecto";
 import { pedir } from "./comun";
 
-interface Manifiesto { nombre: string; base: string; otio: string; srt: string | null; medios: { nombre: string; bytes: number; existe: boolean }[] }
+interface Manifiesto {
+  nombre: string; base: string; otio: string; srt: string | null; medios: { nombre: string; bytes: number; existe: boolean }[];
+  avisos?: string[]; graficos?: number;
+}
 interface EstadoApp { instalada: string | null; instalacion?: { fase?: string; detalle?: string } | null }
 
 const MAX = 512 * 1024 * 1024;
 const MB = (b: number) => `${Math.round(b / 1048576)} MB`;
 const EN_CURSO = ["descargando", "verificando", "descomprimiendo"];
+/** Intentos de pasar los gráficos a nativos (cada uno pide a FilmCraft que guarde). */
+const INTENTOS = 5;
+
+/**
+ * Le pide a FilmCraft que guarde (Ctrl+S, o ⌘S en Mac) con un evento de teclado en su lienzo: la página es
+ * del mismo origen y FilmCraft no tiene otra forma de pedírselo. Lo que guarda llega por `filmcraft:save`.
+ */
+function pedirGuardado(marco: HTMLIFrameElement | null) {
+  const w = marco?.contentWindow as (Window & typeof globalThis) | null | undefined;
+  const lienzo = w?.document.querySelector("canvas");
+  if (!w || !lienzo) return;
+  const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+  const o = { key: "s", code: "KeyS", keyCode: 83, which: 83, ctrlKey: !mac, metaKey: mac, bubbles: true, cancelable: true };
+  lienzo.dispatchEvent(new w.KeyboardEvent("keydown", o));
+  lienzo.dispatchEvent(new w.KeyboardEvent("keyup", o));
+}
 
 /**
  * «Abrir en FilmCraft»: FilmCraft (la de Media) a pantalla completa con el proyecto ya cargado. Le manda
- * cada medio y después la línea de tiempo y los subtítulos (filmcraft-host.ts); lo que guarda o exporta
- * queda en la carpeta del proyecto. Si FilmCraft no está, la instala aquí mismo.
+ * cada medio y después la línea de tiempo (filmcraft-host.ts), con cada texto, subtítulo, la marca y la
+ * tarjeta final como gráficos aparte. FilmCraft sólo los dibuja como gráficos nativos, que su .otio no
+ * crea: por eso, ya importado, se le pide que guarde, se pasan a nativos (filmcraft-proyecto.ts) y se abre
+ * ese proyecto. Lo que guarda o exporta después queda en la carpeta del proyecto. Si FilmCraft no está, la
+ * instala aquí mismo.
  */
 export function AbrirEnFilmcraft({ proyectoId }: { proyectoId: string }) {
   const marco = useRef<HTMLIFrameElement>(null);
@@ -24,6 +47,8 @@ export function AbrirEnFilmcraft({ proyectoId }: { proyectoId: string }) {
   const [error, setError] = useState<string | null>(null);
   const sucio = useRef(false);
   const enviado = useRef(false);
+  /** Mientras se pasan los gráficos a nativos: lo que FilmCraft guarda es para eso, no para la carpeta. */
+  const convirtiendo = useRef<{ m: Manifiesto; intentos: number; espera?: ReturnType<typeof setTimeout> } | null>(null);
 
   const revisar = useCallback(() => pedir<EstadoApp>("/api/media/filmcraft").then(setApp, (e: Error) => setError(e.message)), []);
   useEffect(() => void revisar(), [revisar]);
@@ -62,8 +87,34 @@ export function AbrirEnFilmcraft({ proyectoId }: { proyectoId: string }) {
       // La línea de tiempo va después de los medios: FilmCraft enlaza cada clip con el archivo de su nombre.
       mandar(`${m.base}.otio`, new TextEncoder().encode(m.otio).buffer as ArrayBuffer);
       if (m.srt) mandar(`${m.base}.srt`, new TextEncoder().encode(m.srt).buffer as ArrayBuffer);
-      setAvisos(faltan);
+      setAvisos([...faltan, ...(m.avisos ?? [])]);
+      if (m.graficos) {
+        setEstado("Armando los textos y gráficos para que se puedan editar…");
+        convirtiendo.current = { m, intentos: 0 };
+        otroIntento();
+      } else listo(m);
+    }
+
+    const listo = (m: Manifiesto) =>
       setEstado(`«${m.nombre}» está abierto en FilmCraft. Lo que guardes o exportes queda en la carpeta del proyecto (editor/).`);
+
+    /** Otro pedido de guardado, un poco después (la importación puede no haber terminado). */
+    function otroIntento() {
+      const c = convirtiendo.current;
+      if (!c) return;
+      clearTimeout(c.espera);
+      if (c.intentos >= INTENTOS) {
+        convirtiendo.current = null;
+        setAvisos((a) => [...a, "Los textos llegaron como capas pero FilmCraft no los dibuja así: guarda el proyecto (Ctrl+S) y vuelve a abrirlo con «Abrir en FilmCraft»."]);
+        listo(c.m);
+        return;
+      }
+      c.intentos++;
+      c.espera = setTimeout(() => {
+        pedirGuardado(marco.current);
+        // Si no contesta, se vuelve a pedir.
+        c.espera = setTimeout(otroIntento, 6000);
+      }, 1500 * c.intentos);
     }
 
     async function alMensaje(e: MessageEvent) {
@@ -76,6 +127,21 @@ export function AbrirEnFilmcraft({ proyectoId }: { proyectoId: string }) {
         sucio.current = Boolean(d.dirty);
       } else if (d.type === "filmcraft:failed") {
         setError(`FilmCraft no pudo arrancar: ${d.error ?? "error desconocido"}`);
+      } else if (d.type === "filmcraft:save" && d.bytes && convirtiendo.current) {
+        const c = convirtiendo.current;
+        clearTimeout(c.espera);
+        try {
+          const r = graficosNativos(new TextDecoder().decode(d.bytes), c.m.nombre);
+          // Si todavía no estaban todos, la importación no había terminado: otra vuelta.
+          if (r.graficos < (c.m.graficos ?? 0)) return otroIntento();
+          // Algún video todavía sin leer: se espera otra vuelta (en la última, se abre igual).
+          if (r.sinLeer > 0 && c.intentos < INTENTOS) return otroIntento();
+          convirtiendo.current = null;
+          mandar(`${c.m.base}.fcproj`, new TextEncoder().encode(r.proyecto).buffer as ArrayBuffer);
+          listo(c.m);
+        } catch {
+          otroIntento();
+        }
       } else if (d.type === "filmcraft:save" && d.name && d.bytes) {
         setEstado(`Guardando ${d.name}…`);
         try {
@@ -88,7 +154,10 @@ export function AbrirEnFilmcraft({ proyectoId }: { proyectoId: string }) {
       }
     }
     addEventListener("message", alMensaje);
-    return () => removeEventListener("message", alMensaje);
+    return () => {
+      removeEventListener("message", alMensaje);
+      clearTimeout(convirtiendo.current?.espera);
+    };
   }, [app?.instalada, proyectoId]);
 
   const instalar = () => {

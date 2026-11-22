@@ -13,9 +13,13 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { zonasDelVideo } from "./caras-zonas";
 import type { Proyecto } from "./esquema";
-import { aSrt, duracionEscenas, todosLosGrupos } from "./linea";
+import { capasFilmcraft } from "./filmcraft-capas";
+import { metricas } from "./formatos";
+import { aSrt, duracionEscenas, opcionesDe, todosLosGrupos } from "./linea";
 import { aOtio } from "./otio";
+import type { DatosPlantilla } from "./plantillas";
 
 type J = Record<string, unknown>;
 
@@ -79,11 +83,26 @@ export interface ManifiestoFilmcraft {
   otio: string;
   srt: string | null;
   medios: { nombre: string; bytes: number; existe: boolean }[];
+  /** Lo que no llega igual a FilmCraft (en palabras, para mostrarlo). */
+  avisos: string[];
+  /** Gráficos que la página pasa a nativos después de importar (filmcraft-proyecto.ts). */
+  graficos: number;
 }
 
-/** Lo que la página manda a FilmCraft. `sustitutos`: los SVG ya pasados a PNG. */
-export async function manifiestoFilmcraft(p: Proyecto, slug: string, dirProyecto: string, sustitutos: Record<string, string>): Promise<{ manifiesto: ManifiestoFilmcraft; medios: MedioFilmcraft[] }> {
-  const { otio, medios } = otioParaFilmcraft(aOtio(p, path.resolve(dirProyecto), sustitutos));
+/**
+ * Lo que la página manda a FilmCraft. `sustitutos`: los SVG ya pasados a PNG. Con la plantilla, cada texto,
+ * subtítulo, la marca y la tarjeta final van como gráficos editables y cada clip en su lugar
+ * (filmcraft-capas.ts); entonces los subtítulos ya están en la línea de tiempo y el .srt no se manda.
+ */
+export async function manifiestoFilmcraft(p: Proyecto, slug: string, dirProyecto: string, sustitutos: Record<string, string>, plantilla?: DatosPlantilla): Promise<{ manifiesto: ManifiestoFilmcraft; medios: MedioFilmcraft[] }> {
+  let base = aOtio(p, path.resolve(dirProyecto), sustitutos);
+  let avisos: string[] = [];
+  let graficos = 0;
+  if (plantilla) {
+    const { W, H } = metricas(p.formato, opcionesDe(p));
+    ({ otio: base, avisos, graficos } = capasFilmcraft(base, p, plantilla, zonasDelVideo(p, W, H)));
+  }
+  const { otio, medios } = otioParaFilmcraft(base);
   const tamanos = await Promise.all(medios.map((m) => fs.stat(m.abs).then((s) => s.size, () => -1)));
   const grupos = todosLosGrupos(p);
   return {
@@ -91,8 +110,10 @@ export async function manifiestoFilmcraft(p: Proyecto, slug: string, dirProyecto
       nombre: p.nombre,
       base: slug,
       otio: JSON.stringify(otio, null, 2),
-      srt: grupos.length ? aSrt(grupos, duracionEscenas(p)) : null,
+      srt: !plantilla && grupos.length ? aSrt(grupos, duracionEscenas(p)) : null,
       medios: medios.map((m, i) => ({ nombre: m.nombre, bytes: Math.max(0, tamanos[i]!), existe: tamanos[i]! >= 0 })),
+      avisos,
+      graficos,
     },
     medios,
   };

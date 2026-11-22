@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { manifiestoFilmcraft, nombreGuardado } from "@/lib/filmcraft-host";
 import { json, manejar } from "@/lib/http";
 import { pngsParaOtio } from "@/lib/otio-svg";
+import { obtenerPlantilla } from "@/lib/plantillas";
 import { dirProyecto } from "@/lib/rutas";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,13 @@ async function proyecto(id: string) {
   return { fila, p, dir: dirProyecto(fila.slug) };
 }
 
-/** Lo que «Abrir en FilmCraft» le manda al editor: la línea de tiempo, los subtítulos y la lista de medios. */
+/** Lo que «Abrir en FilmCraft» le manda al editor: la línea de tiempo (con textos y gráficos) y la lista de medios. */
 export async function GET(_req: Request, ctx: Ctx) {
   return manejar(async () => {
     const { fila, p, dir } = await proyecto((await ctx.params).id);
-    const { manifiesto } = await manifiestoFilmcraft(p, fila.slug, dir, await pngsParaOtio(p, dir));
+    // Sin la plantilla (borrada) igual se abre: sólo los medios, con los subtítulos en el .srt.
+    const plantilla = await obtenerPlantilla(fila.plantilla).then((x) => x.datos, () => undefined);
+    const { manifiesto } = await manifiestoFilmcraft(p, fila.slug, dir, await pngsParaOtio(p, dir), plantilla);
     return json(manifiesto);
   });
 }
