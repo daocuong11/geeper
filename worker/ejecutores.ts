@@ -19,6 +19,7 @@ import { correr } from "@/lib/proceso";
 import { generarPlanoEscena, type OpcionesPlano } from "@/lib/plano";
 import { generarPresentador, type OpcionesPresentador } from "@/lib/presentador";
 import { PedidoRehacer, rehacerEscena } from "@/lib/rehacer";
+import { animarEscenasDelVideo } from "@/lib/animar-escenas";
 import { actuarEscena, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, proponerEscenas, streamerAvatar } from "@/lib/actuar";
 import { correrWorkflow, PedidoWorkflow } from "@/lib/workflows";
 import { disenarVoz } from "@/lib/voces";
@@ -334,6 +335,16 @@ async function avatarEscenas(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: { escenas: hechas }, siguiente: siguienteDe(t.payload) };
 }
 
+/** Video nuevo «Equilibrado» o «Lo más real posible»: cada escena de MPT pasa a video (animar-escenas.ts). */
+async function escenasAnimar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const fila = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
+  const r = await animarEscenasDelVideo(conAvance(h, "Animando"), t.proyectoId!, fila.slug, async (a) => {
+    await h.etapa(`Animando la escena ${a.numero} (${a.indice + 1} de ${a.total})`, a.indice / Math.max(1, a.total));
+  });
+  h.log(r.hechas.length ? `Escenas animadas: ${r.hechas.join(", ")}` : "No había escenas para animar");
+  return { resultado: r, siguiente: siguienteDe(t.payload) };
+}
+
 async function escenaRehacer(t: Trabajo, h: Herramientas): Promise<Salida> {
   const pedido = PedidoRehacer.parse(t.payload.pedido);
   await h.etapa(pedido.tipo === "persona" ? "Buscando a la persona en cada cuadro" : "Preparando la toma", 0.01);
@@ -388,6 +399,7 @@ export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Pr
   "avatar.actuar": avatarActuar,
   "avatar.streamer": avatarStreamer,
   "avatar.escenas": avatarEscenas,
+  "escenas.animar": escenasAnimar,
   "escena.rehacer": escenaRehacer,
   "workflow.correr": workflowCorrer,
   "voz.regenerar": vozRegenerar,

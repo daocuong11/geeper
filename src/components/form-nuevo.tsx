@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SugerenciasBusqueda, cambiarUltimaLinea, ultimaLinea } from "./sugerencias-busqueda";
 import { Aviso, postJson, useSondeo } from "./comun";
+import { ESTILOS_GENERACION, tiempoEstimado, type EstiloGeneracion } from "@/lib/estilos-generacion";
 
 interface Plantilla {
   slug: string;
@@ -22,6 +23,8 @@ export function FormNuevo() {
   // Tu avatar en el video (actuar.ts): Geeper lo pone en las escenas que más ganan con él.
   const { datos: lib } = useSondeo<{ avatares: { id: string; nombre: string; retrato: string }[] }>("/api/avatares", 60_000);
   const [avatar, setAvatar] = useState<string | null>(null);
+  // Qué tan real (estilos-generacion.ts): «Lo más real posible» anima cada escena con Wan.
+  const [estilo, setEstilo] = useState<EstiloGeneracion>("rapido");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lista = temas.split("\n").map((t) => t.trim()).filter(Boolean);
@@ -33,7 +36,7 @@ export function FormNuevo() {
     setEnviando(true);
     setError(null);
     try {
-      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz, avatar: !importa && avatar ? avatar : undefined });
+      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz, avatar: !importa && avatar ? avatar : undefined, estilo: importa ? undefined : estilo });
       router.push(r.proyectos.length === 1 ? `/proyectos/${r.proyectos[0]!.id}` : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -89,6 +92,21 @@ export function FormNuevo() {
         </fieldset>
       )}
       </div>
+      {!importa && (
+        <fieldset className="space-y-2">
+          <legend className="etiqueta">¿Qué tan real?</legend>
+          <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="¿Qué tan real?">
+            {Object.values(ESTILOS_GENERACION).map((d) => (
+              <button key={d.id} type="button" role="radio" aria-checked={estilo === d.id} onClick={() => setEstilo(d.id)}
+                className={`tarjeta p-3 text-left ${estilo === d.id ? "ring-2 ring-cyan-600" : "hover:bg-white/5"}`}>
+                <span className="block text-sm font-medium">{d.nombre}</span>
+                <span className="block text-xs text-tenue">{d.descripcion}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-tenue">{tiempoEstimado(estilo)}</p>
+        </fieldset>
+      )}
       <details className="tarjeta p-3">
         <summary className="cursor-pointer text-sm">Importar un short que MPT ya generó (sin usar la GPU)</summary>
         <label className="etiqueta mt-3" htmlFor="mpt">task_id de MoneyPrinterTurbo</label>

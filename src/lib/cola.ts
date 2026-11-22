@@ -39,6 +39,8 @@ export const TIPOS = {
   "avatar.streamer": { motor: "mpt", usaGpu: true, nombre: "Tu avatar como streamer" },
   // Después de importar un video nuevo con avatar: lo pone en las escenas propuestas (actuar.ts).
   "avatar.escenas": { motor: "mpt", usaGpu: true, nombre: "Tu avatar en el video nuevo" },
+  // Video nuevo «Equilibrado» o «Lo más real posible»: anima cada escena con Wan (animar-escenas.ts).
+  "escenas.animar": { motor: "mpt", usaGpu: true, nombre: "Animando las escenas" },
 } as const;
 export type TipoTrabajo = keyof typeof TIPOS;
 export const MOTORES = ["mpt", "voz", "render", "red"] as const;
