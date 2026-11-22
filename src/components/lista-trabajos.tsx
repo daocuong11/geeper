@@ -105,6 +105,7 @@ export function ListaTrabajos({ proyectoId }: { proyectoId?: string }) {
                     <button type="button" className="boton" onClick={() => void accion(t.id, "relanzar")}>Relanzar</button>
                   )}
                   {vivo && <button type="button" className="boton boton-peligro" onClick={() => void accion(t.id, "cancelar")}>Cancelar</button>}
+                  {t.estado === "interrumpido" && <button type="button" className="boton" title="No lo relanza: queda cerrado" onClick={() => void accion(t.id, "cancelar")}>Cerrar</button>}
                   <button type="button" className="boton" aria-expanded={abierto === t.id} onClick={() => setAbierto(abierto === t.id ? null : t.id)}>
                     {abierto === t.id ? "Ocultar log" : "Log"}
                   </button>

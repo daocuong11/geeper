@@ -12,6 +12,11 @@
  * - `reanudarPendientes`: al arrancar el worker, levanta lo que quedó parado por un corte.
  *
  * Nunca falla por Docker: si no está o no responde, Wan corre igual (como antes).
+ *
+ * Sólo en la app de escritorio (GEEPER_ESCRITORIO=1): en desarrollo y en las pruebas no se toca Docker. Una
+ * prueba que llegaba a Wan paraba los contenedores reales y anotaba la nota en su carpeta temporal, así que
+ * nadie los volvía a levantar (pasó el 2026-11-22). Las pruebas de este archivo lo prenden con
+ * GEEPER_LIBERAR_MPT=1 y un Docker simulado.
  */
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
@@ -24,6 +29,8 @@ export const CONTENEDORES_MPT_PESADOS = ["mpt-ollama", "mpt-image-server"] as co
 export const ESPERA_REANUDAR_MS = 3 * 60_000;
 
 const nota = () => path.join(dirDatos(), ".mpt-pausados.json");
+/** Se lee en cada llamada (no al importar): la carcasa y las pruebas fijan las variables antes. */
+export const liberarMptActivo = () => process.env.GEEPER_ESCRITORIO === "1" || process.env.GEEPER_LIBERAR_MPT === "1";
 
 interface Estado { timer?: ReturnType<typeof setTimeout> }
 const g = globalThis as typeof globalThis & { __liberarMpt?: Estado };
@@ -45,6 +52,7 @@ async function escribirNota(lista: string[]) {
 
 /** Para los contenedores pesados de MPT que estén corriendo. Devuelve los que paró. */
 export async function pausarParaWan(log?: (l: string) => void): Promise<string[]> {
+  if (!liberarMptActivo()) return [];
   clearTimeout(estado.timer);
   const pausados = await leerNota();
   for (const c of CONTENEDORES_MPT_PESADOS) {
@@ -64,6 +72,7 @@ export async function pausarParaWan(log?: (l: string) => void): Promise<string[]
  * parados para siempre y MPT falla sin guion ni imágenes.
  */
 export async function asegurarMpt(log?: (l: string) => void, { todos = false } = {}): Promise<void> {
+  if (!liberarMptActivo()) return;
   clearTimeout(estado.timer);
   const pausados = await leerNota();
   if (todos) {

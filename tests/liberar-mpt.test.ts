@@ -4,6 +4,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 process.env.GEEPER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "geeper-liberar-"));
+process.env.GEEPER_LIBERAR_MPT = "1";
 
 // Docker simulado: qué contenedores corren y qué órdenes llegan.
 const corriendo = new Set<string>();
@@ -67,5 +68,16 @@ describe("memoria para Wan2GP en la app de escritorio", () => {
     expect(corriendo.has("mpt-ollama")).toBe(false);
     await m.asegurarMpt(undefined, { todos: true });
     expect(corriendo.has("mpt-ollama") && corriendo.has("mpt-image-server")).toBe(true);
+  });
+
+  it("fuera de la app de escritorio no toca Docker (desarrollo y las demás pruebas)", async () => {
+    delete process.env.GEEPER_LIBERAR_MPT;
+    try {
+      expect(await m.pausarParaWan()).toEqual([]);
+      await m.asegurarMpt(undefined, { todos: true });
+      expect(ordenes).toEqual([]);
+    } finally {
+      process.env.GEEPER_LIBERAR_MPT = "1";
+    }
   });
 });
