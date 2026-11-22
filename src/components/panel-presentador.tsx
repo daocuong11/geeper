@@ -6,12 +6,15 @@ import type { MotorVoz } from "./elegir-voz";
 import { Marco, type Formato } from "@/lib/esquema";
 import { metricas } from "@/lib/formatos";
 import { cajaMarco } from "@/lib/marco";
+import { resolverMarco, type Zona } from "@/lib/marco-auto";
 
 interface PlanV { modo: string; escenas: { id: string; numero: number }[]; segundos: number; resolucion: string; notas: string[]; avisos: string[] }
 interface Datos {
   wan2gp: { listo: boolean; falta: string | null; instalando: boolean };
   avatares: AvatarV[];
   formato: Formato;
+  plataformas: NonNullable<Parameters<typeof metricas>[1]>["plataformas"];
+  zonas: Zona[];
   vozVideo: { motor: string; voz: string; idioma: string };
   maxSegundos: number;
   calidades: { id: string; nombre: string }[];
@@ -22,9 +25,10 @@ interface Datos {
 }
 
 type Modo = "burbuja" | "pantalla";
-type Esquina = "abajo-derecha" | "abajo-izquierda" | "arriba-derecha" | "arriba-izquierda";
+type Esquina = "auto" | "abajo-derecha" | "abajo-izquierda" | "arriba-derecha" | "arriba-izquierda";
 
 const ESQUINAS: { id: Esquina; nombre: string }[] = [
+  { id: "auto", nombre: "✦ Automático (donde no tape caras)" },
   { id: "arriba-izquierda", nombre: "↖ Arriba a la izquierda" },
   { id: "arriba-derecha", nombre: "↗ Arriba a la derecha" },
   { id: "abajo-izquierda", nombre: "↙ Abajo a la izquierda" },
@@ -44,11 +48,11 @@ const mismaVoz = (video: { motor: string; voz: string }, v: { motor: string; voz
   v.motor === "voxcpm" ? video.motor === "voxcpm" && video.voz === v.voz : video.motor !== "voxcpm" && video.voz.split(":").pop() === v.voz;
 
 /** Vista previa a escala de dónde queda el avatar (la misma cuenta que el compilador). */
-function Vista({ formato, modo, marco, retrato }: { formato: Formato; modo: Modo; marco: Marco; retrato?: string }) {
-  const m = metricas(formato);
+function Vista({ formato, plataformas, zonas, modo, marco, retrato }: { formato: Formato; plataformas: Datos["plataformas"]; zonas: Zona[]; modo: Modo; marco: Marco; retrato?: string }) {
+  const m = metricas(formato, { plataformas });
   const ancho = formato === "9:16" ? 108 : formato === "1:1" ? 150 : 192;
   const k = ancho / m.W;
-  const c = cajaMarco(marco, m);
+  const c = cajaMarco(resolverMarco(marco, m, zonas), m);
   const px = (n: number) => `${Math.round(n * k)}px`;
   return (
     <div className="relative shrink-0 overflow-hidden rounded border border-borde bg-gradient-to-b from-slate-600 to-slate-800" style={{ width: px(m.W), height: px(m.H) }} aria-label="Vista previa de dónde aparece el avatar" role="img">
@@ -90,7 +94,7 @@ export function PanelPresentador({ proyectoId, escenas, ocupado, alCambiar, usar
   const [avatar, setAvatar] = useState<string | null>(null);
   const [modo, setModo] = useState<Modo>("burbuja");
   const [elegidas, setElegidas] = useState<string[]>(() => escenas.slice(0, 1).map((e) => e.id));
-  const [esquina, setEsquina] = useState<Esquina>("abajo-derecha");
+  const [esquina, setEsquina] = useState<Esquina>("auto");
   const [forma, setForma] = useState<"circulo" | "redondeado">("circulo");
   const [tamano, setTamano] = useState(0.34);
   const [calidad, setCalidad] = useState("normal");
@@ -221,7 +225,7 @@ export function PanelPresentador({ proyectoId, escenas, ocupado, alCambiar, usar
                     </button>
                   </div>
                   <div className="flex flex-wrap items-start gap-4">
-                  <Vista formato={d.formato} modo={modo} marco={Marco.parse({ esquina, forma, tamano })} retrato={d.avatares.find((a) => a.id === elegido)?.retrato} />
+                  <Vista formato={d.formato} plataformas={d.plataformas} zonas={d.zonas} modo={modo} marco={Marco.parse({ esquina, forma, tamano })} retrato={d.avatares.find((a) => a.id === elegido)?.retrato} />
                   <div className="min-w-0 flex-1">
                   {modo === "burbuja" ? (
                     <div className="flex flex-wrap gap-3">
@@ -229,6 +233,11 @@ export function PanelPresentador({ proyectoId, escenas, ocupado, alCambiar, usar
                         <select className="campo w-auto" value={esquina} onChange={(ev) => setEsquina(ev.target.value as Esquina)}>
                           {ESQUINAS.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
                         </select>
+                        {esquina === "auto" && (
+                          <span className="block text-xs text-tenue">
+                            Queda {ESQUINAS.find((x) => x.id === resolverMarco(Marco.parse({ esquina, forma, tamano }), metricas(d.formato, { plataformas: d.plataformas }), d.zonas).esquina)?.nombre.slice(2).toLowerCase()}
+                          </span>
+                        )}
                       </label>
                       <label className="space-y-1"><span className="block text-xs text-tenue">Forma</span>
                         <select className="campo w-auto" value={forma} onChange={(ev) => setForma(ev.target.value as "circulo" | "redondeado")}>

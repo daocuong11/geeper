@@ -102,7 +102,8 @@ export type Color = z.infer<typeof Color>;
 /** Pistas libres de video: en un recuadro (la «burbuja» del presentador, marco.ts) en vez de llenar el cuadro. */
 export const Marco = z.object({
   forma: z.enum(["circulo", "redondeado"]).default("circulo"),
-  esquina: z.enum(["abajo-derecha", "abajo-izquierda", "arriba-derecha", "arriba-izquierda"]).default("abajo-derecha"),
+  /** «auto»: la esquina que menos tapa las caras de las escenas (marco-auto.ts). */
+  esquina: z.enum(["auto", "abajo-derecha", "abajo-izquierda", "arriba-derecha", "arriba-izquierda"]).default("auto"),
   /** Ancho del recuadro sobre el ancho de la banda segura (0,15–0,6). */
   tamano: z.number().min(0.15).max(0.6).default(0.34),
 });

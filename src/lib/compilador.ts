@@ -14,7 +14,9 @@ import { bezier, CURVAS, cssFusion, easeDe, esMascara, filtroEfectos, mascaraTra
 import { aplicarEstilo, pista, pistasLibres, type Asset, type Clip, type Encuadre, type Proyecto, type Texto, type Transicion } from "./esquema";
 import { ANCHO_CARACTER, caracteresPorLinea, dentro, metricas, PADDING_PASTILLA, type Caja, type Metricas } from "./formatos";
 import { duracionEscenas, escenasEnLinea, intervalos, opcionesDe, todosLosGrupos, type EscenaEnLinea, type Grupo } from "./linea";
+import { zonasDelVideo } from "./caras-zonas";
 import { cajaMarco, estiloMarco } from "./marco";
+import { resolverMarco, type Zona } from "./marco-auto";
 import type { DatosPlantilla } from "./plantillas";
 import { lineas, lineasDePalabras } from "./subtitulos";
 import { textoSobre } from "./colores-marca";
@@ -285,6 +287,8 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
 
   // ---- Superposiciones (pistas libres de video): encima del fondo, debajo de marca y subtítulos.
   const superpuestas: Pieza[] = [];
+  // Caras de las escenas, para la burbuja en «auto»: se calculan sólo si hay un clip con marco.
+  let zonas: Zona[] | undefined;
   pistasLibres(p)
     .filter((x) => x.tipo === "video")
     .forEach((pi, n) => {
@@ -295,7 +299,9 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
         const velocidad = c.velocidad ?? 1;
         const imagen = a.tipo === "imagen";
         const dur = Math.min(c.rango.duracion / velocidad, total - ini);
-        const caja = c.marco ? cajaMarco(c.marco, m) : null;
+        // «auto»: la esquina que menos tapa las caras (marco-auto.ts), resuelta antes de mirar la forma.
+        const marco = c.marco ? resolverMarco(c.marco, m, (zonas ??= zonasDelVideo(p, W, H))) : null;
+        const caja = marco ? cajaMarco(marco, m) : null;
         const ajuste = caja ? "cubrir" : ajusteDe(c, a, W, H);
         const id = `s-${pi.id}-${j}`;
         const opacidad = c.opacidad ?? 1;
@@ -304,7 +310,7 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
         const sp: Pieza = {
           id, src: enlazar(a), inicio: ini, dur, desde: c.rango.inicio, imagen, pista: 6 + n,
           clase: `superpuesta ${caja ? "marco" : ajuste === "contener" ? "contener" : cara ? "" : `ancla-${c.ancla ?? "centro"}`}`.trim(),
-          estilo: `z-index: ${20 + n}; opacity: ${opacidad}; ${caja ? estiloMarco(c.marco!, m) : ""} ${cara ?? ""} ${filtroColor(c)} ${cssFusion(c.fusion)}`.replace(/\s+/g, " ").trim(),
+          estilo: `z-index: ${20 + n}; opacity: ${opacidad}; ${caja ? estiloMarco(marco!, m) : ""} ${cara ?? ""} ${filtroColor(c)} ${cssFusion(c.fusion)}`.replace(/\s+/g, " ").trim(),
           velocidad: imagen ? undefined : velocidad,
         };
         superpuestas.push(sp);

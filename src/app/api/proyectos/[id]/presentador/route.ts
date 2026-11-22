@@ -4,6 +4,8 @@ import { encolar } from "@/lib/cola";
 import { db } from "@/lib/db";
 import { Marco } from "@/lib/esquema";
 import { json, manejar } from "@/lib/http";
+import { zonasDelVideo } from "@/lib/caras-zonas";
+import { metricas } from "@/lib/formatos";
 import { revisarWan2gp } from "@/lib/instalar-wan2gp";
 import { CALIDADES, estadoPresentador, MAX_SEGUNDOS, planearPresentador, type OpcionesPresentador } from "@/lib/presentador";
 import { versionDeProyecto } from "@/lib/render";
@@ -46,6 +48,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       wan2gp: { listo: !w.falta, falta: w.falta, instalando: w.corriendo },
       avatares: (await listarAvatares()).map(vistaAvatar),
       formato: p.formato,
+      // Para que la vista previa de la burbuja haga la misma cuenta que el video: banda segura de las
+      // redes elegidas y caras de las escenas (esquina «auto», marco-auto.ts).
+      plataformas: p.plataformas,
+      zonas: zonasDelVideo(p, metricas(p.formato).W, metricas(p.formato).H),
       vozVideo: { motor: p.voz.motor, voz: p.voz.voz, idioma: p.voz.idioma },
       maxSegundos: MAX_SEGUNDOS,
       calidades: Object.entries(CALIDADES).map(([k, c]) => ({ id: k, nombre: c.nombre })),
