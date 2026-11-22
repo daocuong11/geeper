@@ -1,5 +1,6 @@
 /** Operaciones de alto nivel que usan la web y los scripts. */
 import { randomBytes } from "node:crypto";
+import { guardarAvatarDelVideo } from "./actuar";
 import { crearCarpetas } from "./almacen";
 import { encolar, type TipoTrabajo } from "./cola";
 import { db } from "./db";
@@ -26,6 +27,8 @@ export interface NuevoProyecto {
   orden?: number;
   /** Guion exacto (lo que se dice). Si falta, MPT escribe uno a partir del tema. */
   guion?: string;
+  /** Avatar de la biblioteca: Geeper lo pone en las escenas que más ganan con él (actuar.ts). */
+  avatar?: string;
 }
 
 async function crearFila(n: NuevoProyecto) {
@@ -48,23 +51,27 @@ async function crearFila(n: NuevoProyecto) {
 }
 
 const CADENA_FABRICA: TipoTrabajo[] = ["proyecto.importar", "render.entregar"];
+/** Con avatar: después de importar, el avatar entra en las escenas propuestas y recién ahí se renderiza. */
+const CADENA_CON_AVATAR: TipoTrabajo[] = ["proyecto.importar", "avatar.escenas", "render.entregar"];
 
 /** Fábrica: MPT genera → se importa a geeper.json → render con la plantilla → QC. */
 export async function crearProyecto(n: NuevoProyecto) {
   const p = await crearFila(n);
-  await encolar(p.id, "mpt.generar", n.guion?.trim() ? { cadena: CADENA_FABRICA, guion: n.guion.trim() } : { cadena: CADENA_FABRICA });
+  const cadena = n.avatar ? CADENA_CON_AVATAR : CADENA_FABRICA;
+  if (n.avatar) await guardarAvatarDelVideo(p.slug, { avatar: n.avatar });
+  await encolar(p.id, "mpt.generar", n.guion?.trim() ? { cadena, guion: n.guion.trim() } : { cadena });
   return p;
 }
 
 /** Un tema por línea. Cada tema es un proyecto con su cadena; los terminados no se repiten. */
-export async function crearLote(temas: string[], formato: Formato, plantilla: string, nombre?: string) {
+export async function crearLote(temas: string[], formato: Formato, plantilla: string, nombre?: string, avatar?: string) {
   const limpios = temas.map((t) => t.trim()).filter(Boolean);
   if (!limpios.length) throw new Error("El lote no tiene temas");
   const lote = await db.lote.create({
     data: { nombre: nombre ?? `Lote de ${limpios.length} temas`, formato, plantilla, temas: limpios },
   });
   const proyectos = [];
-  for (const [i, tema] of limpios.entries()) proyectos.push(await crearProyecto({ tema, formato, plantilla, loteId: lote.id, orden: i }));
+  for (const [i, tema] of limpios.entries()) proyectos.push(await crearProyecto({ tema, formato, plantilla, loteId: lote.id, orden: i, avatar }));
   return { lote, proyectos };
 }
 

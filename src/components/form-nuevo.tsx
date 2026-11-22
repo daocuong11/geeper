@@ -19,6 +19,9 @@ export function FormNuevo() {
   const [mptTaskId, setMpt] = useState("");
   const [rehacerVoz, setRehacerVoz] = useState(true);
   const [aceptoGpu, setAcepto] = useState(false);
+  // Tu avatar en el video (actuar.ts): Geeper lo pone en las escenas que más ganan con él.
+  const { datos: lib } = useSondeo<{ avatares: { id: string; nombre: string; retrato: string }[] }>("/api/avatares", 60_000);
+  const [avatar, setAvatar] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lista = temas.split("\n").map((t) => t.trim()).filter(Boolean);
@@ -30,7 +33,7 @@ export function FormNuevo() {
     setEnviando(true);
     setError(null);
     try {
-      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz });
+      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz, avatar: !importa && avatar ? avatar : undefined });
       router.push(r.proyectos.length === 1 ? `/proyectos/${r.proyectos[0]!.id}` : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -67,6 +70,24 @@ export function FormNuevo() {
           </select>
           <p className="mt-1 text-xs text-tenue">{datos?.plantillas.find((p) => p.slug === plantilla)?.datos.descripcion}</p>
         </div>
+      {!!lib?.avatares.length && !importa && (
+        <fieldset className="space-y-2">
+          <legend className="etiqueta">¿Sale tu avatar? (opcional)</legend>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" aria-pressed={!avatar} onClick={() => setAvatar(null)}
+              className={`flex h-24 w-20 items-center justify-center rounded border text-center text-xs ${!avatar ? "border-acento ring-2 ring-acento" : "border-borde"}`}>Sin avatar</button>
+            {lib.avatares.map((a) => (
+              <button key={a.id} type="button" aria-pressed={avatar === a.id} onClick={() => setAvatar(a.id)}
+                className={`w-20 overflow-hidden rounded border text-left ${avatar === a.id ? "border-acento ring-2 ring-acento" : "border-borde"}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={a.retrato} alt="" className="h-[4.5rem] w-full object-cover" />
+                <span className="block truncate px-1 text-xs">{a.nombre}</span>
+              </button>
+            ))}
+          </div>
+          {avatar && <p className="text-xs text-tenue">Geeper lo pone hablando en el gancho y en el cierre, y actuando en las escenas que hablan de personas. Suma unos 10 minutos por escena en la tarjeta de video; después puedes cambiarlo escena por escena.</p>}
+        </fieldset>
+      )}
       </div>
       <details className="tarjeta p-3">
         <summary className="cursor-pointer text-sm">Importar un short que MPT ya generó (sin usar la GPU)</summary>

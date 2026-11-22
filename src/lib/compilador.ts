@@ -306,7 +306,7 @@ export function compilar(original: Proyecto, plantilla: DatosPlantilla, rutaMezc
         const id = `s-${pi.id}-${j}`;
         const opacidad = c.opacidad ?? 1;
         // En la burbuja, la cara se busca dentro del recuadro; sin cara detectada, el tercio de arriba.
-        const cara = caja ? (sigueCara(c, a) ? posicionCara(a, caja.w, caja.h) : "object-position: 50% 30%;") : ajuste === "cubrir" && sigueCara(c, a) ? posicionCara(a, W, H) : null;
+        const cara = caja ? (marco!.forma === "recorte" ? null : sigueCara(c, a) ? posicionCara(a, caja.w, caja.h) : "object-position: 50% 30%;") : ajuste === "cubrir" && sigueCara(c, a) ? posicionCara(a, W, H) : null;
         const sp: Pieza = {
           id, src: enlazar(a), inicio: ini, dur, desde: c.rango.inicio, imagen, pista: 6 + n,
           clase: `superpuesta ${caja ? "marco" : ajuste === "contener" ? "contener" : cara ? "" : `ancla-${c.ancla ?? "centro"}`}`.trim(),
