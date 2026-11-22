@@ -86,24 +86,24 @@ function SubirProducto({ proyectoId, producto, cambiar }: { proyectoId: string; 
 }
 
 /**
- * «Tu avatar en el video» (nivel proyecto): que Geeper lo ponga en las escenas que más ganan con él, o
- * encima de todo el video como un streamer (gameplay). Decisiones del dueño, 2026-11-21.
+ * «Tu avatar en el video» (nivel proyecto): el avatar protagoniza el video, sale en todas las escenas
+ * hablando a cámara o actuando lo que se cuenta. Comentar en una ventana encima del video es el
+ * «Presentador» (panel-presentador.tsx). Decisiones del dueño, 2026-11-21 y 2026-11-22.
  */
 export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; ocupado: boolean }) {
-  const { datos, recargar } = useSondeo<Datos>(`/api/proyectos/${proyectoId}/avatar`, 5000);
-  const [avatar, setAvatar] = useState<string | null>(null);
-  const [modo, setModo] = useState<"escenas" | "streamer">("escenas");
-  const [producto, setProducto] = useState<string | null>(null);
   const [encuadre, setEncuadre] = useState<"medio" | "completo">("medio");
-  const [lado, setLado] = useState<"derecha" | "izquierda">("derecha");
-  const [tamano, setTamano] = useState(0.4);
+  const { datos, recargar } = useSondeo<Datos>(`/api/proyectos/${proyectoId}/avatar?cuerpo=${encuadre}`, 5000);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [producto, setProducto] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
   if (!datos) return null;
   const elegido = avatar ?? datos.delVideo?.avatar ?? datos.avatares[0]?.id ?? null;
   const nombre = datos.avatares.find((a) => a.id === elegido)?.nombre ?? "tu avatar";
-  const enCurso = datos.trabajos.filter((t) => t.tipo !== "avatar.actuar");
+  // El streamer lo sigue el «Presentador»; aquí, lo que pone al avatar en las escenas.
+  const enCurso = datos.trabajos.filter((t) => t.tipo === "avatar.escenas");
+  const n = datos.propuesta.length;
 
   async function enviar() {
     if (!elegido) return;
@@ -111,9 +111,8 @@ export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; 
     setOk(null);
     setEnviando(true);
     try {
-      if (modo === "escenas") await postJson(`/api/proyectos/${proyectoId}/avatar`, { accion: "proponer", avatar: elegido, ...(producto ? { producto } : {}) });
-      else await postJson(`/api/proyectos/${proyectoId}/avatar`, { accion: "streamer", pedido: { avatar: elegido, encuadre, lado, tamano } });
-      setOk(modo === "escenas" ? `Listo: ${nombre} va entrando escena por escena. Cada una queda como versión nueva.` : `Listo: ${nombre} va a aparecer recortado sobre todo el video.`);
+      await postJson(`/api/proyectos/${proyectoId}/avatar`, { accion: "proponer", avatar: elegido, cuerpo: encuadre, ...(producto ? { producto } : {}) });
+      setOk(`Listo: ${nombre} va entrando escena por escena. Cada una queda como versión nueva.`);
       await recargar();
     } catch (e) {
       setError((e as Error).message);
@@ -125,8 +124,8 @@ export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; 
   return (
     <section className="tarjeta space-y-4 p-4" aria-label="Tu avatar en el video">
       <div>
-        <h2 className="text-lg font-semibold">Tu avatar en el video</h2>
-        <p className="text-sm text-tenue">Tu avatar actúa en el video como una persona: habla a cámara, hace cosas, muestra tu producto o comenta encima de un gameplay. En cada escena puedes cambiar lo que hace («Tu avatar en esta escena»).</p>
+        <h2 className="text-lg font-semibold">Tu avatar en el video <span className="text-sm font-normal text-tenue">(protagonista)</span></h2>
+        <p className="text-sm text-tenue">Tu avatar es el protagonista: sale en <b>todas las escenas</b>, en lugar de las imágenes, hablando a cámara, gesticulando o mostrando tu producto. ¿Prefieres que salga en una ventana comentando encima del video? Eso es el <b>Presentador</b>, más abajo.</p>
       </div>
       {!datos.wan2gp.listo && <Aviso tipo="alerta">Para esto hace falta Wan2GP: instálalo desde <Link className="underline" href="/sistema">Sistema</Link>.</Aviso>}
       {enCurso.map((t) => (
@@ -142,46 +141,26 @@ export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; 
       {elegido && (
         <>
           <fieldset className="space-y-2">
-            <legend className="font-medium">2. ¿Cómo aparece?</legend>
-            <Opciones valor={modo} cambiar={setModo} opciones={[
-              { id: "escenas", titulo: "Geeper elige dónde (recomendado)", texto: "Habla en el gancho y en el cierre, y actúa en las escenas que hablan de personas." },
-              { id: "streamer", titulo: "Como streamer, todo el video", texto: "Recortado encima del video (ideal para gameplay), hablando y gesticulando." },
+            <legend className="font-medium">2. ¿Cuánto se le ve?</legend>
+            <Opciones valor={encuadre} cambiar={setEncuadre} opciones={[
+              { id: "medio", titulo: "Medio cuerpo", texto: DESCRIPCION_ENCUADRE.medio },
+              { id: "completo", titulo: "Cuerpo completo", texto: "De pies a cabeza, gesticulando con todo el cuerpo (tarda más)." },
             ]} />
           </fieldset>
-          {modo === "escenas" ? (
-            <div className="space-y-2 text-sm">
-              <p className="font-medium">3. Esto propone Geeper</p>
-              <ul className="space-y-1 text-xs">
-                {datos.propuesta.map((p) => (
-                  <li key={p.escena}>Escena {p.numero}: {p.tipo === "habla" ? "habla a cámara" : p.que} · {datos.encuadres[p.encuadre].toLowerCase()} <span className="text-tenue">({p.porque})</span></li>
-                ))}
-              </ul>
-              <SubirProducto proyectoId={proyectoId} producto={producto} cambiar={setProducto} />
-              <p className="text-xs text-tenue">Cada escena tarda entre 5 y 15 minutos en la tarjeta de video. La primera vez baja los modelos (varios GB).</p>
-            </div>
-          ) : (
-            <div className="space-y-3 text-sm">
-              <fieldset className="space-y-2">
-                <legend className="font-medium">3. ¿Cuánto se le ve?</legend>
-                <Opciones valor={encuadre} cambiar={setEncuadre} opciones={[
-                  { id: "medio", titulo: "Medio cuerpo", texto: DESCRIPCION_ENCUADRE.medio },
-                  { id: "completo", titulo: "Cuerpo completo", texto: DESCRIPCION_ENCUADRE.completo },
-                ]} />
-              </fieldset>
-              <fieldset className="flex flex-wrap items-center gap-3">
-                <legend className="mb-1 font-medium">4. ¿Dónde?</legend>
-                <Opciones valor={lado} cambiar={setLado} opciones={[{ id: "izquierda", titulo: "↙ Abajo a la izquierda" }, { id: "derecha", titulo: "↘ Abajo a la derecha" }]} />
-                <label className="flex items-center gap-2 text-xs">Tamaño
-                  <input type="range" min={0.25} max={0.6} step={0.05} value={tamano} onChange={(e) => setTamano(Number(e.target.value))} />
-                </label>
-              </fieldset>
-              <p className="text-xs text-tenue">Habla con la voz de todo el video. Tarda unos 7 minutos más ~20 s por cada segundo de voz. Para que tu avatar salga <b>dentro</b> del juego, usa en la escena «Rehacer la toma» → «Cambiar la persona».</p>
-            </div>
-          )}
+          <div className="space-y-2 text-sm">
+            <p className="font-medium">3. Lo que hace en cada escena</p>
+            <ul className="space-y-1 text-xs">
+              {datos.propuesta.map((p) => (
+                <li key={p.escena}>Escena {p.numero}: {p.tipo === "habla" ? "habla a cámara" : p.que} · {datos.encuadres[p.encuadre].toLowerCase()} <span className="text-tenue">({p.porque})</span></li>
+              ))}
+            </ul>
+            <SubirProducto proyectoId={proyectoId} producto={producto} cambiar={setProducto} />
+            <p className="text-xs text-tenue">Cada escena tarda entre 5 y 15 minutos en la tarjeta de video{n > 1 ? ` (este video tiene ${n}: entre ${n * 5} y ${n * 15} minutos)` : ""}. La primera vez baja los modelos (varios GB). Después puedes cambiar cada escena («Tu avatar en esta escena»).</p>
+          </div>
           {error && <Aviso tipo="error">{error}</Aviso>}
           {ok && <Aviso tipo="ok">{ok}</Aviso>}
-          <button type="button" className="boton boton-primario" disabled={enviando || ocupado || !datos.wan2gp.listo || enCurso.length > 0} onClick={() => void enviar()}>
-            {enviando ? "Enviando…" : modo === "escenas" ? `Poner a ${nombre} en esas escenas` : `Poner a ${nombre} como streamer`}
+          <button type="button" className="boton boton-primario" disabled={enviando || ocupado || !datos.wan2gp.listo || enCurso.length > 0 || !n} onClick={() => void enviar()}>
+            {enviando ? "Enviando…" : `Poner a ${nombre} en todo el video`}
           </button>
         </>
       )}

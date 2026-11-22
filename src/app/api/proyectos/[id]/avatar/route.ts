@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { EJEMPLOS_ACCION, ENCUADRES, guardarAvatarDelVideo, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, proponerEscenas } from "@/lib/actuar";
+import { CuerpoAvatar, EJEMPLOS_ACCION, ENCUADRES, guardarAvatarDelVideo, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, proponerEscenas } from "@/lib/actuar";
 import { leerAvatar, listarAvatares, vistaAvatar } from "@/lib/avatares";
 import { encolar } from "@/lib/cola";
 import { db } from "@/lib/db";
@@ -19,15 +19,17 @@ const activos = (id: string) =>
   db.trabajo.findMany({ where: { proyectoId: id, tipo: { in: [...TIPOS] }, estado: { in: ["pendiente", "corriendo"] } }, select: { id: true, tipo: true, estado: true, etapa: true, progreso: true, payload: true } });
 
 /** Lo que necesitan los paneles del avatar: la biblioteca, el avatar del video, la propuesta y lo que está en curso. */
-export async function GET(_: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
   return manejar(async () => {
     const { id } = await ctx.params;
     const fila = await db.proyecto.findUniqueOrThrow({ where: { id } });
     const avatares = (await listarAvatares()).map(vistaAvatar);
     const delVideo = await leerAvatarDelVideo(fila.slug);
     const elegido = delVideo?.avatar ?? avatares[0]?.id ?? null;
+    // ?cuerpo= : lo que eligió en el panel (sin elegir, lo del video nuevo o medio cuerpo).
+    const cuerpo = CuerpoAvatar.safeParse(new URL(req.url).searchParams.get("cuerpo")).data ?? delVideo?.cuerpo;
     let propuesta: ReturnType<typeof proponerEscenas> = [];
-    if (elegido && fila.versionActual > 0) propuesta = proponerEscenas((await versionDeProyecto(id)).p, elegido, { producto: delVideo?.producto });
+    if (elegido && fila.versionActual > 0) propuesta = proponerEscenas((await versionDeProyecto(id)).p, elegido, { producto: delVideo?.producto, cuerpo });
     const w = revisarWan2gp();
     return json({
       wan2gp: { listo: !w.falta, falta: w.falta },
@@ -44,13 +46,13 @@ export async function GET(_: Request, ctx: Ctx) {
 const Accion = z.discriminatedUnion("accion", [
   z.object({ accion: z.literal("escena"), escena: z.string().min(1).max(64), pedido: PedidoActuar }),
   z.object({ accion: z.literal("streamer"), pedido: PedidoStreamer }),
-  z.object({ accion: z.literal("proponer"), avatar: z.string().regex(/^[a-z0-9-]+$/), producto: z.string().regex(/^assets\/[\w.-]+$/).optional() }),
+  z.object({ accion: z.literal("proponer"), avatar: z.string().regex(/^[a-z0-9-]+$/), producto: z.string().regex(/^assets\/[\w.-]+$/).optional(), cuerpo: CuerpoAvatar.optional() }),
 ]);
 
 const IMAGEN = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
 /**
- * JSON: encola el avatar en una escena, como streamer o en las escenas que propone Geeper.
+ * JSON: encola el avatar en una escena, como streamer (lo pide el «Presentador») o en todo el video.
  * Multipart con `producto`: guarda la foto del producto en el proyecto y devuelve su ruta.
  */
 export async function POST(req: Request, ctx: Ctx) {
@@ -84,7 +86,7 @@ export async function POST(req: Request, ctx: Ctx) {
       return json({ trabajo: await encolar(id, "avatar.streamer", { pedido: d.pedido, cadena: [] }) }, 201);
     }
     if (enCurso.some((t) => t.tipo === "avatar.escenas")) throw new Error("Geeper ya está poniendo a tu avatar en el video.");
-    await guardarAvatarDelVideo(fila.slug, { avatar: d.avatar, producto: d.producto });
+    await guardarAvatarDelVideo(fila.slug, { avatar: d.avatar, producto: d.producto, cuerpo: d.cuerpo });
     return json({ trabajo: await encolar(id, "avatar.escenas", { cadena: [] }) }, 201);
   });
 }

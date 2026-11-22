@@ -268,28 +268,30 @@ export interface Propuesta {
 const PERSONA = /\b(yo|t[uú]|nosotros|gente|persona|personas|quien|alguien|cliente|usuario|jugador|creador|imagina|mira|te |tu |vos|ustedes)\b/i;
 
 /**
- * Escenas donde más gana el avatar (función pura): habla en el gancho y en el cierre; hace algo en las que
- * hablan de personas o le hablan a quien mira (como mucho `maxAccion`). La persona ajusta en el editor.
+ * «Tu avatar en el video» (función pura): el avatar protagoniza el video entero, sale en todas las escenas
+ * (pedido del dueño, 2026-11-22; lo de comentar en una ventana encima es el «Presentador»). Habla a cámara
+ * en el gancho, en el cierre (con el producto, si hay) y en las escenas que cuentan algo; en las que hablan
+ * de personas o le hablan a quien mira, lo actúa (gesticula o muestra el producto) mientras sigue la voz.
+ * La persona ajusta cada escena en el editor.
  */
-export function proponerEscenas(p: Proyecto, avatar: string, o: { producto?: string; maxAccion?: number; cuerpo?: CuerpoAvatar } = {}): Propuesta[] {
+export function proponerEscenas(p: Proyecto, avatar: string, o: { producto?: string; cuerpo?: CuerpoAvatar } = {}): Propuesta[] {
   const cuerpo = o.cuerpo ?? "medio";
   const es = escenasEnLinea(p);
-  if (!es.length) return [];
-  const out: Propuesta[] = [];
   const base = { avatar, lugar: "escena" as const, donde: "" };
-  out.push({ escena: es[0]!.escena.id, numero: 1, porque: "el gancho: una cara que habla retiene más", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo, que: "" }) });
-  if (es.length > 1) {
-    const u = es.at(-1)!;
-    out.push({ escena: u.escena.id, numero: u.indice + 1, porque: "el cierre: pide la acción mirando a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: o.cuerpo === "completo" ? "completo" : "cara", que: "", producto: o.producto }) });
-  }
-  const medio = es.slice(1, -1).filter((e) => PERSONA.test(e.escena.texto)).slice(0, o.maxAccion ?? 1);
-  for (const e of medio) {
-    out.push({
-      escena: e.escena.id, numero: e.indice + 1, porque: "habla de personas: el avatar lo actúa",
-      pedido: PedidoActuar.parse({ ...base, tipo: "accion", encuadre: cuerpo, que: o.producto ? "muestra el producto a la cámara con entusiasmo" : "gesticula con naturalidad mientras explica", producto: o.producto }),
-    });
-  }
-  return out.sort((x, y) => x.numero - y.numero);
+  return es.map((e, i): Propuesta => {
+    const numero = e.indice + 1;
+    if (i === 0) return { escena: e.escena.id, numero, porque: "el gancho: una cara que habla retiene más", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo, que: "" }) };
+    if (i === es.length - 1) {
+      return { escena: e.escena.id, numero, porque: "el cierre: pide la acción mirando a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo === "completo" ? "completo" : "cara", que: "", producto: o.producto }) };
+    }
+    if (PERSONA.test(e.escena.texto)) {
+      return {
+        escena: e.escena.id, numero, porque: "habla de personas: el avatar lo actúa",
+        pedido: PedidoActuar.parse({ ...base, tipo: "accion", encuadre: cuerpo, que: o.producto ? "muestra el producto a la cámara con entusiasmo" : "gesticula con naturalidad mientras explica", producto: o.producto }),
+      };
+    }
+    return { escena: e.escena.id, numero, porque: "lo cuenta a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo, que: "" }) };
+  });
 }
 
 /** Cómo sale el avatar en un video nuevo: de la cintura para arriba o de cuerpo entero. */

@@ -20,7 +20,7 @@ export function FormNuevo() {
   const [mptTaskId, setMpt] = useState("");
   const [rehacerVoz, setRehacerVoz] = useState(true);
   const [aceptoGpu, setAcepto] = useState(false);
-  // Tu avatar en el video (actuar.ts): Geeper lo pone en las escenas que más ganan con él.
+  // Tu avatar en el video (actuar.ts): protagoniza el video, sale en todas las escenas.
   const { datos: lib } = useSondeo<{ avatares: { id: string; nombre: string; retrato: string }[] }>("/api/avatares", 60_000);
   const [avatar, setAvatar] = useState<string | null>(null);
   // Qué tan real (estilos-generacion.ts): «Lo más real posible» anima cada escena con Wan.
@@ -76,7 +76,7 @@ export function FormNuevo() {
         </div>
       {!!lib?.avatares.length && !importa && (
         <fieldset className="space-y-2">
-          <legend className="etiqueta">¿Sale tu avatar? (opcional)</legend>
+          <legend className="etiqueta">¿Tu avatar protagoniza el video? (opcional)</legend>
           <div className="flex flex-wrap gap-2">
             <button type="button" aria-pressed={!avatar} onClick={() => setAvatar(null)}
               className={`flex h-24 w-20 items-center justify-center rounded border text-center text-xs ${!avatar ? "border-acento ring-2 ring-acento" : "border-borde"}`}>Sin avatar</button>
@@ -99,7 +99,7 @@ export function FormNuevo() {
             </div>
           )}
           {avatar && cuerpo === "completo" && <p className="text-xs text-tenue">De cuerpo entero habla gesticulando como una persona frente a la cámara, a 720p para que la cara no pierda detalle (tarda más).</p>}
-          {avatar && <p className="text-xs text-tenue">Geeper lo pone hablando en el gancho y en el cierre, y actuando en las escenas que hablan de personas. Suma unos 10 minutos por escena en la tarjeta de video; después puedes cambiarlo escena por escena.</p>}
+          {avatar && <p className="text-xs text-tenue">Sale en todas las escenas, en lugar de las imágenes: habla a cámara y actúa lo que se cuenta. Suma unos 10 minutos por escena en la tarjeta de video; después puedes cambiarlo escena por escena. Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
         </fieldset>
       )}
       </div>

@@ -10,13 +10,13 @@ describe("avatar de cuerpo completo que habla como una persona frente a la cáma
     expect(promptHabla("completo", "con entusiasmo.")).toMatch(/^con entusiasmo\. The person/);
   });
 
-  it("con «cuerpo completo», Geeper lo propone de cuerpo entero en el gancho, el cierre y la escena del medio", () => {
+  it("con «cuerpo completo», Geeper lo propone de cuerpo entero en todas las escenas", () => {
     const p = proyectoDePrueba();
     const enteras = proponerEscenas(p, "a", { cuerpo: "completo" });
     expect(enteras.every((x) => x.pedido.encuadre === "completo")).toBe(true);
-    // Por defecto, como antes: medio cuerpo en el gancho y la cara en el cierre.
+    // Por defecto: medio cuerpo, y la cara en el cierre.
     const normales = proponerEscenas(p, "a");
-    expect(normales.map((x) => x.pedido.encuadre)).toEqual(["medio", "cara"]);
+    expect(normales.map((x) => x.pedido.encuadre)).toEqual(["medio", "medio", "cara"]);
   });
 
   it("lo guardado antes (sin «cuerpo») se sigue leyendo, como medio cuerpo", () => {

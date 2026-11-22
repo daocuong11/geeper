@@ -66,13 +66,13 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   como miniatura al publicar en YouTube. Ver `docs/PHOTOCRAFT.md`.
 - **Avatares** (`/avatares`): crea un personaje realista o animado describiéndolo o desde una foto (con
   consentimiento), elige entre varias opciones y retócalo con una frase («ponle lentes»). Cada avatar tiene
-  su voz. En cada proyecto, **Presentador** lo hace hablar con la voz del video, en una burbuja todo el video
-  o a pantalla completa en las escenas que elijas (InfiniteTalk en Wan2GP; ver HEREDADO.md «ComfyUI»).
+  su voz. En cada proyecto, **Presentador** lo pone en una ventana comentando encima de todo el video: en una
+  burbuja o recortado sin fondo, como un streamer (InfiniteTalk en Wan2GP; ver HEREDADO.md «ComfyUI»).
   En cada escena con video, **Rehacer la toma** cambia a la persona por uno de tus avatares (copia sus gestos
   y su boca) o vuelve a filmarla con otro movimiento de cámara, elegido viéndolo sobre tu propia escena.
-  **Tu avatar en el video**: elígelo en «Nuevo» y Geeper lo pone hablando en el gancho y el cierre y actuando
-  donde se habla de personas; o encima de todo el video como un streamer (gameplay), de medio cuerpo o
-  completo. En cada escena: que hable, que haga algo (caminar, jugar, celebrar…) o que muestre tu producto.
+  **Tu avatar en el video**: el protagonista. Elígelo en «Nuevo» (o en el editor) y sale en todas las escenas,
+  en lugar de las imágenes: habla a cámara y actúa donde se habla de personas, de medio cuerpo o completo.
+  En cada escena: que hable, que haga algo (caminar, jugar, celebrar…) o que muestre tu producto.
 - **Workflows** (`/workflows`): las 776 recetas del hub de ComfyUI (imágenes, video, música, voces, 3D) para usar
   sin saber de nodos: buscar, subir tu archivo o escribir lo que quieres, y «Crear». ComfyUI se instala con un
   clic en la misma página; cada receta baja sus modelos al usarla. Las de pago aparecen bloqueadas; las que

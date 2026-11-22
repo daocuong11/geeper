@@ -43,7 +43,7 @@ describe("tu avatar en el video: instrucciones para la IA", () => {
 });
 
 describe("Geeper propone dónde sale", () => {
-  it("habla en el gancho y en el cierre; actúa en las del medio que hablan de personas", () => {
+  it("protagoniza todo el video: habla en el gancho, el cierre y las que cuentan algo; actúa las que hablan de personas", () => {
     const p = proyectoDePrueba();
     p.escenas.e02!.texto = "Imagina que eres el jugador que llega primero.";
     const pr = proponerEscenas(validarProyecto(p), "sofia-1", { producto: "assets/producto-abc.png" });
@@ -51,8 +51,9 @@ describe("Geeper propone dónde sale", () => {
     expect(pr[1]!.pedido).toMatchObject({ producto: "assets/producto-abc.png", que: expect.stringMatching(/producto/) });
     expect(pr[2]!.pedido.producto).toBe("assets/producto-abc.png");
   });
-  it("sin personas en el medio, sólo gancho y cierre; con una escena, sólo el gancho", () => {
-    expect(proponerEscenas(proyectoDePrueba(), "a").map((x) => x.numero)).toEqual([1, 3]);
+  it("sale en todas las escenas aunque no hablen de personas; con una escena, sólo esa", () => {
+    const pr = proponerEscenas(proyectoDePrueba(), "a");
+    expect(pr.map((x) => [x.numero, x.pedido.tipo])).toEqual([[1, "habla"], [2, "habla"], [3, "habla"]]);
     const una = proyectoDePrueba();
     pista(una, "visual").clips.splice(1);
     pista(una, "voz").clips.splice(1);
