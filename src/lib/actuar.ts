@@ -153,7 +153,11 @@ export async function poseAvatar(ctx: ContextoActuar, avatarId: string, encuadre
   const [img] = await generarImagenes({ instalacion: instalacionWan2gp(), ajustes, dirCorrida: corrida, signal: ctx.signal, log: ctx.log, alAvanzar: ctx.alAvanzar });
   if (!img) throw new Error("Wan2GP no devolvió la imagen del encuadre.");
   await fs.mkdir(dir, { recursive: true });
-  await correr(FFMPEG, ["-v", "error", "-y", "-i", img, destino]);
+  // Primero a un archivo aparte y después se renombra: si la PC se apaga a mitad, no queda un encuadre
+  // cortado que se reusaría para siempre (el caché sólo mira si el archivo existe).
+  const parcial = destino.replace(/\.png$/, ".parcial.png");
+  await correr(FFMPEG, ["-v", "error", "-y", "-i", img, parcial]);
+  await fs.rename(parcial, destino);
   return destino;
 }
 
@@ -288,11 +292,11 @@ export function proponerEscenas(p: Proyecto, avatar: string, o: { producto?: str
   return out.sort((x, y) => x.numero - y.numero);
 }
 
-/** El avatar elegido en «Nuevo» (y, si hay, la foto del producto), para el paso `avatar.escenas`. */
 /** Cómo sale el avatar en un video nuevo: de la cintura para arriba o de cuerpo entero. */
 export const CuerpoAvatar = z.enum(["medio", "completo"]);
 export type CuerpoAvatar = z.infer<typeof CuerpoAvatar>;
 
+/** El avatar elegido en «Nuevo» (y, si hay, la foto del producto), para el paso `avatar.escenas`. */
 export const AvatarDelVideo = z.object({
   avatar: z.string().regex(/^[a-z0-9-]+$/),
   producto: z.string().regex(/^assets\/[\w.-]+$/).optional(),
@@ -303,7 +307,10 @@ const rutaAvatarDelVideo = (slug: string) => path.join(dirProyecto(slug), "avata
 
 export async function guardarAvatarDelVideo(slug: string, a: z.input<typeof AvatarDelVideo>) {
   await fs.mkdir(dirProyecto(slug), { recursive: true });
-  await fs.writeFile(rutaAvatarDelVideo(slug), JSON.stringify(AvatarDelVideo.parse(a), null, 2));
+  // Mismo cuidado que con los encuadres: un avatar.json cortado haría que el video saliera sin avatar.
+  const ruta = rutaAvatarDelVideo(slug);
+  await fs.writeFile(`${ruta}.parcial`, JSON.stringify(AvatarDelVideo.parse(a), null, 2));
+  await fs.rename(`${ruta}.parcial`, ruta);
 }
 
 export async function leerAvatarDelVideo(slug: string): Promise<AvatarDelVideo | null> {

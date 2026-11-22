@@ -70,6 +70,9 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   o a pantalla completa en las escenas que elijas (InfiniteTalk en Wan2GP; ver HEREDADO.md «ComfyUI»).
   En cada escena con video, **Rehacer la toma** cambia a la persona por uno de tus avatares (copia sus gestos
   y su boca) o vuelve a filmarla con otro movimiento de cámara, elegido viéndolo sobre tu propia escena.
+  **Tu avatar en el video**: elígelo en «Nuevo» y Geeper lo pone hablando en el gancho y el cierre y actuando
+  donde se habla de personas; o encima de todo el video como un streamer (gameplay), de medio cuerpo o
+  completo. En cada escena: que hable, que haga algo (caminar, jugar, celebrar…) o que muestre tu producto.
 - **Workflows** (`/workflows`): las 776 recetas del hub de ComfyUI (imágenes, video, música, voces, 3D) para usar
   sin saber de nodos: buscar, subir tu archivo o escribir lo que quieres, y «Crear». ComfyUI se instala con un
   clic en la misma página; cada receta baja sus modelos al usarla. Las de pago aparecen bloqueadas; las que

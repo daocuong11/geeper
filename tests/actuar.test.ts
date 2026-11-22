@@ -1,5 +1,8 @@
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { LIGHTNING_I2V, PedidoActuar, PedidoStreamer, promptAccion, promptComponer, promptPose, proponerEscenas } from "@/lib/actuar";
+import { guardarAvatarDelVideo, leerAvatarDelVideo, LIGHTNING_I2V, PedidoActuar, PedidoStreamer, promptAccion, promptComponer, promptPose, proponerEscenas } from "@/lib/actuar";
 import { Marco, pista, validarProyecto } from "@/lib/esquema";
 import { metricas } from "@/lib/formatos";
 import { cajaMarco, estiloMarco, MARGEN_MARCO } from "@/lib/marco";
@@ -78,5 +81,23 @@ describe("streamer: el avatar recortado sobre el video", () => {
   });
   it("pedido por defecto: medio cuerpo, abajo a la derecha", () => {
     expect(PedidoStreamer.parse({ avatar: "sofia-1" })).toMatchObject({ encuadre: "medio", lado: "derecha", tamano: 0.4 });
+  });
+});
+
+describe("el avatar elegido en «Nuevo»", () => {
+  it("se guarda sin dejar archivos a medias y se lee igual", async () => {
+    const antes = process.env.GEEPER_DATA;
+    const dir = await mkdtemp(path.join(os.tmpdir(), "geeper-avatar-"));
+    process.env.GEEPER_DATA = dir;
+    try {
+      await guardarAvatarDelVideo("video-1", { avatar: "sofia-1", cuerpo: "completo" });
+      expect(await leerAvatarDelVideo("video-1")).toEqual({ avatar: "sofia-1", cuerpo: "completo" });
+      expect(await readdir(path.join(dir, "video-1"))).toEqual(["avatar.json"]);
+      expect(await leerAvatarDelVideo("otro")).toBeNull();
+    } finally {
+      if (antes === undefined) delete process.env.GEEPER_DATA;
+      else process.env.GEEPER_DATA = antes;
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });
