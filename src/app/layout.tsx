@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Paleta } from "@/components/paleta";
+import { TrabajosFlotantes } from "@/components/trabajos-flotantes";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Geeper", description: "Estudio de video local de Dimerso" };
@@ -29,6 +30,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+        <TrabajosFlotantes />
       </body>
     </html>
   );
