@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
-import { CuerpoAvatar, EJEMPLOS_ACCION, ENCUADRES, guardarAvatarDelVideo, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, proponerEscenas } from "@/lib/actuar";
+import { CuerpoAvatar, EJEMPLOS_ACCION, ENCUADRES, guardarAvatarDelVideo, leerAvatarDelVideo, PedidoActuar, PedidoStreamer } from "@/lib/actuar";
 import { leerAvatar, listarAvatares, vistaAvatar } from "@/lib/avatares";
+import { estadoPresentador } from "@/lib/presentador";
+import { hablaConSuVoz, minutosProtagonista, segundosDeTomas } from "@/lib/protagonista";
 import { encolar } from "@/lib/cola";
 import { db } from "@/lib/db";
 import { json, manejar } from "@/lib/http";
@@ -18,18 +20,33 @@ const TIPOS = ["avatar.actuar", "avatar.streamer", "avatar.escenas"] as const;
 const activos = (id: string) =>
   db.trabajo.findMany({ where: { proyectoId: id, tipo: { in: [...TIPOS] }, estado: { in: ["pendiente", "corriendo"] } }, select: { id: true, tipo: true, estado: true, etapa: true, progreso: true, payload: true } });
 
-/** Lo que necesitan los paneles del avatar: la biblioteca, el avatar del video, la propuesta y lo que está en curso. */
+/** Lo que necesitan los paneles del avatar: la biblioteca, el avatar del video, el plan de protagonista y lo que está en curso. */
 export async function GET(req: Request, ctx: Ctx) {
   return manejar(async () => {
     const { id } = await ctx.params;
     const fila = await db.proyecto.findUniqueOrThrow({ where: { id } });
     const avatares = (await listarAvatares()).map(vistaAvatar);
     const delVideo = await leerAvatarDelVideo(fila.slug);
-    const elegido = delVideo?.avatar ?? avatares[0]?.id ?? null;
+    const q = new URL(req.url).searchParams;
+    const elegido = q.get("avatar") ?? delVideo?.avatar ?? avatares[0]?.id ?? null;
     // ?cuerpo= : lo que eligió en el panel (sin elegir, lo del video nuevo o medio cuerpo).
-    const cuerpo = CuerpoAvatar.safeParse(new URL(req.url).searchParams.get("cuerpo")).data ?? delVideo?.cuerpo;
-    let propuesta: ReturnType<typeof proponerEscenas> = [];
-    if (elegido && fila.versionActual > 0) propuesta = proponerEscenas((await versionDeProyecto(id)).p, elegido, { producto: delVideo?.producto, cuerpo });
+    const cuerpo = CuerpoAvatar.safeParse(q.get("cuerpo")).data ?? delVideo?.cuerpo ?? "medio";
+    // Protagonista (protagonista.ts): cuántas tomas, cuánto tarda y si antes cambia la voz.
+    let plan: { escenas: number; tomas: number; segundos: number; minutos: number; voz: string | null; error: string | null } | null = null;
+    // Ya es protagonista y después cambió lo que se dice: la boca quedó desfasada.
+    let desfasado = false;
+    if (elegido && fila.versionActual > 0) {
+      const { p } = await versionDeProyecto(id);
+      desfasado = estadoPresentador(p).viejoPantalla;
+      const a = avatares.find((x) => x.id === elegido);
+      const voz = a?.voz && !hablaConSuVoz(p.voz, a.voz) ? a.voz.nombre : null;
+      try {
+        const s = segundosDeTomas(p);
+        plan = { escenas: Object.keys(p.escenas).length, tomas: s.length, segundos: Math.round(s.reduce((x, y) => x + y, 0)), minutos: minutosProtagonista(s, cuerpo) + (voz ? 3 : 0), voz, error: null };
+      } catch (e) {
+        plan = { escenas: Object.keys(p.escenas).length, tomas: 0, segundos: 0, minutos: 0, voz, error: (e as Error).message };
+      }
+    }
     const w = revisarWan2gp();
     return json({
       wan2gp: { listo: !w.falta, falta: w.falta },
@@ -37,7 +54,8 @@ export async function GET(req: Request, ctx: Ctx) {
       delVideo,
       encuadres: Object.fromEntries(Object.entries(ENCUADRES).map(([k, v]) => [k, v.nombre])),
       ejemplos: EJEMPLOS_ACCION,
-      propuesta: propuesta.map((x) => ({ escena: x.escena, numero: x.numero, tipo: x.pedido.tipo, encuadre: x.pedido.encuadre, que: x.pedido.que, porque: x.porque })),
+      plan,
+      desfasado,
       trabajos: (await activos(id)).map((t) => ({ id: t.id, tipo: t.tipo, estado: t.estado, etapa: t.etapa, progreso: t.progreso, escena: (t.payload as { escena?: string }).escena ?? null })),
     });
   });

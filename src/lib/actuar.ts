@@ -256,43 +256,7 @@ export async function streamerAvatar(ctx: ContextoActuar, proyectoId: string, p:
 }
 
 // ---------------------------------------------------------------------------------------------------
-// «Geeper propone»: dónde sale el avatar en un video nuevo
-
-export interface Propuesta {
-  escena: string;
-  numero: number;
-  pedido: PedidoActuar;
-  porque: string;
-}
-
-const PERSONA = /\b(yo|t[uú]|nosotros|gente|persona|personas|quien|alguien|cliente|usuario|jugador|creador|imagina|mira|te |tu |vos|ustedes)\b/i;
-
-/**
- * «Tu avatar en el video» (función pura): el avatar protagoniza el video entero, sale en todas las escenas
- * (pedido del dueño, 2026-11-22; lo de comentar en una ventana encima es el «Presentador»). Habla a cámara
- * en el gancho, en el cierre (con el producto, si hay) y en las escenas que cuentan algo; en las que hablan
- * de personas o le hablan a quien mira, lo actúa (gesticula o muestra el producto) mientras sigue la voz.
- * La persona ajusta cada escena en el editor.
- */
-export function proponerEscenas(p: Proyecto, avatar: string, o: { producto?: string; cuerpo?: CuerpoAvatar } = {}): Propuesta[] {
-  const cuerpo = o.cuerpo ?? "medio";
-  const es = escenasEnLinea(p);
-  const base = { avatar, lugar: "escena" as const, donde: "" };
-  return es.map((e, i): Propuesta => {
-    const numero = e.indice + 1;
-    if (i === 0) return { escena: e.escena.id, numero, porque: "el gancho: una cara que habla retiene más", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo, que: "" }) };
-    if (i === es.length - 1) {
-      return { escena: e.escena.id, numero, porque: "el cierre: pide la acción mirando a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo === "completo" ? "completo" : "cara", que: "", producto: o.producto }) };
-    }
-    if (PERSONA.test(e.escena.texto)) {
-      return {
-        escena: e.escena.id, numero, porque: "habla de personas: el avatar lo actúa",
-        pedido: PedidoActuar.parse({ ...base, tipo: "accion", encuadre: cuerpo, que: o.producto ? "muestra el producto a la cámara con entusiasmo" : "gesticula con naturalidad mientras explica", producto: o.producto }),
-      };
-    }
-    return { escena: e.escena.id, numero, porque: "lo cuenta a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo, que: "" }) };
-  });
-}
+// «Tu avatar en el video» (protagonista, protagonista.ts): lo elegido para el video
 
 /** Cómo sale el avatar en un video nuevo: de la cintura para arriba o de cuerpo entero. */
 export const CuerpoAvatar = z.enum(["medio", "completo"]);

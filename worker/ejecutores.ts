@@ -20,7 +20,8 @@ import { generarPlanoEscena, type OpcionesPlano } from "@/lib/plano";
 import { generarPresentador, type OpcionesPresentador } from "@/lib/presentador";
 import { PedidoRehacer, rehacerEscena } from "@/lib/rehacer";
 import { animarEscenasDelVideo } from "@/lib/animar-escenas";
-import { actuarEscena, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, proponerEscenas, streamerAvatar } from "@/lib/actuar";
+import { actuarEscena, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, streamerAvatar } from "@/lib/actuar";
+import { protagonizarVideo } from "@/lib/protagonista";
 import { correrWorkflow, PedidoWorkflow } from "@/lib/workflows";
 import { disenarVoz } from "@/lib/voces";
 import { regenerarVoz } from "@/lib/regenerar";
@@ -311,28 +312,14 @@ async function avatarStreamer(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
-/** Video nuevo con avatar: lo pone en las escenas que propone Geeper, una por una (la persona ajusta después). */
+/** «Tu avatar en el video»: protagoniza todo el video en un solo set, de corrido (protagonista.ts). */
 async function avatarEscenas(t: Trabajo, h: Herramientas): Promise<Salida> {
   const fila = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
   const elegido = await leerAvatarDelVideo(fila.slug);
-  if (!elegido) return { resultado: { escenas: 0 }, siguiente: siguienteDe(t.payload) };
-  let { p } = await versionDeProyecto(t.proyectoId!);
-  const propuestas = proponerEscenas(p, elegido.avatar, { producto: elegido.producto, cuerpo: elegido.cuerpo });
-  const hechas: number[] = [];
-  for (const [i, pr] of propuestas.entries()) {
-    await h.etapa(`Tu avatar en la escena ${pr.numero} (${i + 1} de ${propuestas.length}): ${pr.porque}`, i / propuestas.length);
-    try {
-      const r = await actuarEscena(conAvance(h, `Escena ${pr.numero}`), t.proyectoId!, p, pr.escena, pr.pedido);
-      hechas.push(pr.numero);
-      h.log(`Escena ${pr.numero} con avatar → versión ${r.version}`);
-      ({ p } = await versionDeProyecto(t.proyectoId!));
-    } catch (e) {
-      // Una escena que falla no tumba el video: queda como estaba y se puede reintentar desde el editor.
-      if (h.signal?.aborted) throw e;
-      h.log(`Escena ${pr.numero}: no se pudo (${e instanceof Error ? e.message.split("\n")[0] : e}); queda como estaba.`);
-    }
-  }
-  return { resultado: { escenas: hechas }, siguiente: siguienteDe(t.payload) };
+  if (!elegido) return { resultado: { escenas: [] }, siguiente: siguienteDe(t.payload) };
+  const r = await protagonizarVideo(conAvance(h, "Tu avatar"), t.proyectoId!, elegido, (a) => h.etapa(a.etapa, a.avance));
+  h.log(r.escenas.length ? `Tu avatar protagoniza las escenas ${r.escenas.join(", ")} (${r.tomas === 1 ? "una toma" : `${r.tomas} tomas`})` : "Tu avatar no pudo entrar en el video: queda con las imágenes");
+  return { resultado: r, siguiente: siguienteDe(t.payload) };
 }
 
 /** Video nuevo «Equilibrado» o «Lo más real posible»: cada escena de MPT pasa a video (animar-escenas.ts). */

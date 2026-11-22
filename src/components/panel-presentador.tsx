@@ -18,7 +18,7 @@ interface Datos {
   vozVideo: { motor: string; voz: string; idioma: string };
   maxSegundos: number;
   calidades: { id: string; nombre: string }[];
-  estado: { burbuja: boolean; escenas: string[]; viejo: boolean; avatar: string | null };
+  estado: { burbuja: boolean; escenas: string[]; viejoBurbuja: boolean; avatar: string | null };
   /** Dónde está ahora la burbuja ya generada (null si no hay). */
   marcoActual: Marco | null;
   plan: PlanV | null;
@@ -207,7 +207,7 @@ export function PanelPresentador({ proyectoId, ocupado, alCambiar, usarVoz }: {
     }
   }
 
-  const resumen = trabajo ? ` · ${trabajo.estado === "pendiente" ? "en espera" : trabajo.etapa || "generando"}` : d?.estado.viejo ? " · hay que actualizarlo" : d?.estado.burbuja || d?.estado.escenas.length ? " · en el video" : "";
+  const resumen = trabajo ? ` · ${trabajo.estado === "pendiente" ? "en espera" : trabajo.etapa || "generando"}` : d?.estado.viejoBurbuja ? " · hay que actualizarlo" : d?.estado.burbuja ? " · en el video" : "";
   return (
     <section className="tarjeta p-4">
       <details open={abierto} onToggle={(ev) => setAbierto((ev.target as HTMLDetailsElement).open)}>
@@ -242,7 +242,7 @@ export function PanelPresentador({ proyectoId, ocupado, alCambiar, usarVoz }: {
                     </Aviso>
                   );
                 })()}
-                {d.estado.viejo && <Aviso tipo="alerta">Cambiaste lo que se dice después de poner el presentador: genéralo otra vez para que la boca siga a la voz.</Aviso>}
+                {d.estado.viejoBurbuja && <Aviso tipo="alerta">Cambiaste lo que se dice después de poner el presentador: genéralo otra vez para que la boca siga a la voz.</Aviso>}
                 <fieldset className="space-y-2">
                   <legend className="font-medium">1. ¿Quién presenta?</legend>
                   <div className="flex flex-wrap gap-3">

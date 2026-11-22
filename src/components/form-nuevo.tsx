@@ -20,7 +20,7 @@ export function FormNuevo() {
   const [mptTaskId, setMpt] = useState("");
   const [rehacerVoz, setRehacerVoz] = useState(true);
   const [aceptoGpu, setAcepto] = useState(false);
-  // Tu avatar en el video (actuar.ts): protagoniza el video, sale en todas las escenas.
+  // Tu avatar en el video (protagonista.ts): protagoniza todo el video en un solo set, de corrido.
   const { datos: lib } = useSondeo<{ avatares: { id: string; nombre: string; retrato: string }[] }>("/api/avatares", 60_000);
   const [avatar, setAvatar] = useState<string | null>(null);
   // Qué tan real (estilos-generacion.ts): «Lo más real posible» anima cada escena con Wan.
@@ -99,7 +99,7 @@ export function FormNuevo() {
             </div>
           )}
           {avatar && cuerpo === "completo" && <p className="text-xs text-tenue">De cuerpo entero habla gesticulando como una persona frente a la cámara, a 720p para que la cara no pierda detalle (tarda más).</p>}
-          {avatar && <p className="text-xs text-tenue">Sale en todas las escenas, en lugar de las imágenes: habla a cámara y actúa lo que se cuenta. Suma unos 10 minutos por escena en la tarjeta de video; después puedes cambiarlo escena por escena. Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
+          {avatar && <p className="text-xs text-tenue">Sale todo el video en su set, hablando a cámara con su voz y gesticulando como un creador real; las imágenes del tema quedan en una ventana a su lado. Suma unos 25 minutos en un short de un minuto (de cuerpo completo, el doble). Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
         </fieldset>
       )}
       </div>
@@ -115,7 +115,7 @@ export function FormNuevo() {
               </button>
             ))}
           </div>
-          <p className="text-xs text-tenue">{tiempoEstimado(estilo)}</p>
+          <p className="text-xs text-tenue">{avatar ? "Con tu avatar de protagonista el video ya es video de verdad: esto sólo cambia el acabado («Lo más real posible» suma un grano fino de cámara) y no suma tiempo." : tiempoEstimado(estilo)}</p>
         </fieldset>
       )}
       <details className="tarjeta p-3">

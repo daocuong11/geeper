@@ -264,20 +264,24 @@ export function aplicarPresentador(original: Proyecto, plan: PlanPresentador, as
 }
 
 /** ¿Hay un presentador en el proyecto y sigue al día con la voz? (para el panel). */
-export function estadoPresentador(p: Proyecto): { burbuja: boolean; escenas: string[]; viejo: boolean; avatar: string | null } {
+/**
+ * `viejoBurbuja`: la burbuja (o el streamer) del Presentador; `viejoPantalla`: las escenas donde habla a
+ * pantalla completa (el protagonista de protagonista.ts). Cada panel avisa sólo de lo suyo.
+ */
+export function estadoPresentador(p: Proyecto): { burbuja: boolean; escenas: string[]; viejo: boolean; viejoBurbuja: boolean; viejoPantalla: boolean; avatar: string | null } {
   const todas = escenasEnLinea(p);
   const esPresentador = (id: string) => p.assets[id]?.regenerar.motor === MODELO_HABLAR;
   const enPantalla = todas.filter((e) => esPresentador(e.visual.asset));
   const burbuja = p.pistas.find((x) => x.id === PISTA_PRESENTADOR)?.clips.find((c) => esPresentador(c.asset));
-  let viejo = false;
-  if (burbuja) viejo = p.assets[burbuja.asset]!.regenerar.huella !== huellaVoz(todas);
+  const viejoBurbuja = !!burbuja && p.assets[burbuja.asset]!.regenerar.huella !== huellaVoz(todas);
+  let viejoPantalla = false;
   // Pantalla: la boca sigue al audio de cada escena tal como estaba al generarlo (otra voz la desfasa).
   for (const e of enPantalla) {
     const porEscena = p.assets[e.visual.asset]!.regenerar.voces as Record<string, unknown> | undefined;
-    if (porEscena && porEscena[e.escena.id] !== huellaAudioEscena(e)) viejo = true;
+    if (porEscena && porEscena[e.escena.id] !== huellaAudioEscena(e)) viejoPantalla = true;
   }
   const avatar = (burbuja ? p.assets[burbuja.asset] : enPantalla[0] ? p.assets[enPantalla[0].visual.asset] : null)?.regenerar.avatar;
-  return { burbuja: !!burbuja, escenas: enPantalla.map((e) => e.escena.id), viejo, avatar: typeof avatar === "string" ? avatar : null };
+  return { burbuja: !!burbuja, escenas: enPantalla.map((e) => e.escena.id), viejo: viejoBurbuja || viejoPantalla, viejoBurbuja, viejoPantalla, avatar: typeof avatar === "string" ? avatar : null };
 }
 
 export interface ContextoPresentador extends Contexto {

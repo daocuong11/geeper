@@ -2,12 +2,11 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { guardarAvatarDelVideo, leerAvatarDelVideo, LIGHTNING_I2V, PedidoActuar, PedidoStreamer, promptAccion, promptComponer, promptPose, proponerEscenas } from "@/lib/actuar";
-import { Marco, pista, validarProyecto } from "@/lib/esquema";
+import { guardarAvatarDelVideo, leerAvatarDelVideo, LIGHTNING_I2V, PedidoActuar, PedidoStreamer, promptAccion, promptComponer, promptPose } from "@/lib/actuar";
+import { Marco } from "@/lib/esquema";
 import { metricas } from "@/lib/formatos";
 import { cajaMarco, estiloMarco, MARGEN_MARCO } from "@/lib/marco";
 import { argsRecorte } from "@/lib/presentador";
-import { proyectoDePrueba } from "./fixtures";
 
 const realista = { estilo: "realista" as const };
 
@@ -39,27 +38,6 @@ describe("tu avatar en el video: instrucciones para la IA", () => {
   it("Wan 2.2 I2V con Lightning: 4 pasos, dos fases y sus dos aceleradores", () => {
     expect(LIGHTNING_I2V).toMatchObject({ num_inference_steps: 4, guidance_phases: 2, loras_multipliers: "1;0 0;1" });
     expect(LIGHTNING_I2V.activated_loras).toHaveLength(2);
-  });
-});
-
-describe("Geeper propone dónde sale", () => {
-  it("protagoniza todo el video: habla en el gancho, el cierre y las que cuentan algo; actúa las que hablan de personas", () => {
-    const p = proyectoDePrueba();
-    p.escenas.e02!.texto = "Imagina que eres el jugador que llega primero.";
-    const pr = proponerEscenas(validarProyecto(p), "sofia-1", { producto: "assets/producto-abc.png" });
-    expect(pr.map((x) => [x.numero, x.pedido.tipo, x.pedido.encuadre])).toEqual([[1, "habla", "medio"], [2, "accion", "medio"], [3, "habla", "cara"]]);
-    expect(pr[1]!.pedido).toMatchObject({ producto: "assets/producto-abc.png", que: expect.stringMatching(/producto/) });
-    expect(pr[2]!.pedido.producto).toBe("assets/producto-abc.png");
-  });
-  it("sale en todas las escenas aunque no hablen de personas; con una escena, sólo esa", () => {
-    const pr = proponerEscenas(proyectoDePrueba(), "a");
-    expect(pr.map((x) => [x.numero, x.pedido.tipo])).toEqual([[1, "habla"], [2, "habla"], [3, "habla"]]);
-    const una = proyectoDePrueba();
-    pista(una, "visual").clips.splice(1);
-    pista(una, "voz").clips.splice(1);
-    delete una.escenas.e02;
-    delete una.escenas.e03;
-    expect(proponerEscenas(validarProyecto(una), "a").map((x) => x.numero)).toEqual([1]);
   });
 });
 
