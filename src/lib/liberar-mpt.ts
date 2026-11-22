@@ -58,10 +58,21 @@ export async function pausarParaWan(log?: (l: string) => void): Promise<string[]
   return pausados;
 }
 
-/** Levanta ya lo que se paró. */
-export async function asegurarMpt(log?: (l: string) => void): Promise<void> {
+/**
+ * Levanta ya lo que se paró. Con `todos` (antes de pedirle un video a MPT, que los necesita), también los
+ * que estén parados por otra cosa: un `docker stop` a mano o un corte con `unless-stopped` los deja
+ * parados para siempre y MPT falla sin guion ni imágenes.
+ */
+export async function asegurarMpt(log?: (l: string) => void, { todos = false } = {}): Promise<void> {
   clearTimeout(estado.timer);
   const pausados = await leerNota();
+  if (todos) {
+    for (const c of CONTENEDORES_MPT_PESADOS) {
+      if (pausados.includes(c)) continue;
+      const r = await docker(["inspect", "-f", "{{.State.Running}}", c]);
+      if (r?.codigo === 0 && r.salida.includes("false")) pausados.push(c);
+    }
+  }
   if (!pausados.length) return;
   const quedan: string[] = [];
   for (const c of pausados) {

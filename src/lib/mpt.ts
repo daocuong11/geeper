@@ -51,8 +51,8 @@ export function cuerpoVideo(tema: string, formato: Formato, mpt: DatosPlantilla[
 }
 
 export async function crearVideo(cuerpo: ReturnType<typeof cuerpoVideo>): Promise<string> {
-  // Si Wan los pausó (liberar-mpt.ts), Ollama y el servidor de imágenes vuelven antes de pedir el video.
-  await asegurarMpt();
+  // Ollama y el servidor de imágenes vuelven antes de pedir el video: si Wan los pausó o si quedaron parados.
+  await asegurarMpt(undefined, { todos: true });
   const r = await pedir("/videos", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(cuerpo) });
   const id = (r.json as { data?: { task_id?: string } } | null)?.data?.task_id;
   if (r.status !== 200 || !id) throw new Error(`MPT rechazó el pedido (${r.status}): ${JSON.stringify(r.json).slice(0, 500)}`);

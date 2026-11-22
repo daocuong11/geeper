@@ -59,4 +59,13 @@ describe("memoria para Wan2GP en la app de escritorio", () => {
     expect(corriendo.has("mpt-image-server")).toBe(true);
     expect(corriendo.has("mpt-ollama")).toBe(false);
   });
+
+  it("antes de un video de MPT levanta también los que estaban parados por otra cosa (no los que no existen)", async () => {
+    corriendo.delete("mpt-ollama");
+    corriendo.delete("mpt-image-server");
+    await m.asegurarMpt();
+    expect(corriendo.has("mpt-ollama")).toBe(false);
+    await m.asegurarMpt(undefined, { todos: true });
+    expect(corriendo.has("mpt-ollama") && corriendo.has("mpt-image-server")).toBe(true);
+  });
 });
