@@ -8,6 +8,8 @@ import { zonasDelVideo } from "@/lib/caras-zonas";
 import { metricas } from "@/lib/formatos";
 import { revisarWan2gp } from "@/lib/instalar-wan2gp";
 import { CALIDADES, estadoPresentador, MAX_SEGUNDOS, planearPresentador, type OpcionesPresentador } from "@/lib/presentador";
+import { guardarProyecto } from "@/lib/almacen";
+import { clipBurbuja, notaReubicar, reubicarPresentador } from "@/lib/presentador-ubicar";
 import { versionDeProyecto } from "@/lib/render";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +58,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       maxSegundos: MAX_SEGUNDOS,
       calidades: Object.entries(CALIDADES).map(([k, c]) => ({ id: k, nombre: c.nombre })),
       estado: estadoPresentador(p),
+      // Dónde está ahora la burbuja: si sólo cambia esto, se mueve al instante (PATCH) sin generar.
+      marcoActual: clipBurbuja(p)?.marco ?? null,
       plan,
       error,
       trabajos: await activos(id),
@@ -79,5 +83,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     if (voz) throw new Error("Se está diciendo la voz del video de nuevo: espera a que termine y después pon el presentador (si no, la boca seguiría a la voz vieja).");
     const t = await encolar(id, "presentador.generar", { opciones, cadena: [] });
     return json({ trabajo: t }, 201);
+  });
+}
+
+/** Mueve la burbuja ya generada (esquina, tamaño o forma): versión nueva al instante, sin GPU. */
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  return manejar(async () => {
+    const { id } = await ctx.params;
+    const { marco } = z.object({ marco: Marco.partial() }).strict().parse(await req.json());
+    const { p } = await versionDeProyecto(id);
+    const antes = clipBurbuja(p)?.marco;
+    const nuevo = reubicarPresentador(p, marco);
+    const version = await guardarProyecto(id, nuevo, notaReubicar(Marco.parse(antes ?? {}), clipBurbuja(nuevo)!.marco!));
+    return json({ version, marco: clipBurbuja(nuevo)!.marco });
   });
 }
