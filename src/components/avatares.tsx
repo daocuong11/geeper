@@ -317,7 +317,7 @@ function Crear({ datos, cerrar }: { datos: Datos; cerrar: () => void }) {
           </label>
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">¿Con qué voz habla? <span className="font-normal text-tenue">(escúchalas; se puede cambiar después)</span></legend>
-            <ElegirVozAvatar valor={voz} cambiar={setVoz} />
+            <ElegirVozAvatar valor={voz} cambiar={setVoz} nombreAvatar={nombre} />
           </fieldset>
           <div className="flex flex-wrap gap-2">
             <button className="boton" onClick={() => setPaso(2)}>← Elegir otro</button>
@@ -374,7 +374,7 @@ function Tarjeta({ avatar: a, listo, trabajo, cambio }: { avatar: AvatarV; listo
         )}
         {editando === "voz" && (
           <div className="space-y-2">
-            <ElegirVozAvatar valor={a.voz ?? null} cambiar={(v) => void hacer(async () => { await patch({ voz: v }); setEditando(null); })} />
+            <ElegirVozAvatar valor={a.voz ?? null} nombreAvatar={a.nombre} cambiar={(v) => void hacer(async () => { await patch({ voz: v }); setEditando(null); })} />
             <button className="boton" onClick={() => setEditando(null)}>Cerrar</button>
           </div>
         )}
