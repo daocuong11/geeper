@@ -89,6 +89,20 @@ export type PedidoActuar = z.infer<typeof PedidoActuar>;
 
 const estiloDe = (a: Pick<Avatar, "estilo">) => (a.estilo === "realista" ? "photorealistic" : ESTILOS[a.estilo].prompt);
 
+/**
+ * Cómo habla a cámara según el encuadre (función pura): de la cara para abajo, como una persona real que
+ * presenta, con las manos acompañando lo que dice; sólo la cara, gestos de la cabeza. InfiniteTalk mueve
+ * todo el cuadro con la voz, así que el prompt decide si el cuerpo acompaña o queda quieto.
+ */
+export function promptHabla(encuadre: Encuadre, que = ""): string {
+  const extra = que.trim().replace(/[.\s]+$/, "");
+  const cuerpo = encuadre === "cara"
+    ? "talks to the camera with natural facial expressions"
+    : "talks to the camera like a real person presenting, natural hand gestures that follow the words, relaxed shoulders, small natural weight shifts, expressive face" +
+      (encuadre === "completo" ? ", the whole body visible and moving naturally, feet on the ground" : "");
+  return extra ? `${extra}. The person ${cuerpo}` : `The person ${cuerpo}`;
+}
+
 /** Instrucción para el encuadre del avatar (función pura). */
 export function promptPose(a: Pick<Avatar, "estilo">, encuadre: Encuadre, fondo: FondoPose): string {
   return [
@@ -198,7 +212,9 @@ export async function actuarEscena(ctx: ContextoActuar, proyectoId: string, p: P
       modo: "pantalla",
       escenas: [es.escena.id],
       imagen: cuadro,
-      prompt: pedido.que || undefined,
+      prompt: promptHabla(pedido.encuadre, pedido.que),
+      // De cuerpo entero la cara queda chica: a 480p la boca pierde detalle; a 720p no.
+      calidad: pedido.encuadre === "completo" ? "alta" : undefined,
       semilla: pedido.semilla,
     });
   }
@@ -251,32 +267,41 @@ const PERSONA = /\b(yo|t[uú]|nosotros|gente|persona|personas|quien|alguien|clie
  * Escenas donde más gana el avatar (función pura): habla en el gancho y en el cierre; hace algo en las que
  * hablan de personas o le hablan a quien mira (como mucho `maxAccion`). La persona ajusta en el editor.
  */
-export function proponerEscenas(p: Proyecto, avatar: string, o: { producto?: string; maxAccion?: number } = {}): Propuesta[] {
+export function proponerEscenas(p: Proyecto, avatar: string, o: { producto?: string; maxAccion?: number; cuerpo?: CuerpoAvatar } = {}): Propuesta[] {
+  const cuerpo = o.cuerpo ?? "medio";
   const es = escenasEnLinea(p);
   if (!es.length) return [];
   const out: Propuesta[] = [];
   const base = { avatar, lugar: "escena" as const, donde: "" };
-  out.push({ escena: es[0]!.escena.id, numero: 1, porque: "el gancho: una cara que habla retiene más", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: "medio", que: "" }) });
+  out.push({ escena: es[0]!.escena.id, numero: 1, porque: "el gancho: una cara que habla retiene más", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: cuerpo, que: "" }) });
   if (es.length > 1) {
     const u = es.at(-1)!;
-    out.push({ escena: u.escena.id, numero: u.indice + 1, porque: "el cierre: pide la acción mirando a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: "cara", que: "", producto: o.producto }) });
+    out.push({ escena: u.escena.id, numero: u.indice + 1, porque: "el cierre: pide la acción mirando a cámara", pedido: PedidoActuar.parse({ ...base, tipo: "habla", encuadre: o.cuerpo === "completo" ? "completo" : "cara", que: "", producto: o.producto }) });
   }
   const medio = es.slice(1, -1).filter((e) => PERSONA.test(e.escena.texto)).slice(0, o.maxAccion ?? 1);
   for (const e of medio) {
     out.push({
       escena: e.escena.id, numero: e.indice + 1, porque: "habla de personas: el avatar lo actúa",
-      pedido: PedidoActuar.parse({ ...base, tipo: "accion", encuadre: "medio", que: o.producto ? "muestra el producto a la cámara con entusiasmo" : "gesticula con naturalidad mientras explica", producto: o.producto }),
+      pedido: PedidoActuar.parse({ ...base, tipo: "accion", encuadre: cuerpo, que: o.producto ? "muestra el producto a la cámara con entusiasmo" : "gesticula con naturalidad mientras explica", producto: o.producto }),
     });
   }
   return out.sort((x, y) => x.numero - y.numero);
 }
 
 /** El avatar elegido en «Nuevo» (y, si hay, la foto del producto), para el paso `avatar.escenas`. */
-export const AvatarDelVideo = z.object({ avatar: z.string().regex(/^[a-z0-9-]+$/), producto: z.string().regex(/^assets\/[\w.-]+$/).optional() });
+/** Cómo sale el avatar en un video nuevo: de la cintura para arriba o de cuerpo entero. */
+export const CuerpoAvatar = z.enum(["medio", "completo"]);
+export type CuerpoAvatar = z.infer<typeof CuerpoAvatar>;
+
+export const AvatarDelVideo = z.object({
+  avatar: z.string().regex(/^[a-z0-9-]+$/),
+  producto: z.string().regex(/^assets\/[\w.-]+$/).optional(),
+  cuerpo: CuerpoAvatar.default("medio"),
+});
 export type AvatarDelVideo = z.infer<typeof AvatarDelVideo>;
 const rutaAvatarDelVideo = (slug: string) => path.join(dirProyecto(slug), "avatar.json");
 
-export async function guardarAvatarDelVideo(slug: string, a: AvatarDelVideo) {
+export async function guardarAvatarDelVideo(slug: string, a: z.input<typeof AvatarDelVideo>) {
   await fs.mkdir(dirProyecto(slug), { recursive: true });
   await fs.writeFile(rutaAvatarDelVideo(slug), JSON.stringify(AvatarDelVideo.parse(a), null, 2));
 }

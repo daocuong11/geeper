@@ -25,6 +25,7 @@ export function FormNuevo() {
   const [avatar, setAvatar] = useState<string | null>(null);
   // Qué tan real (estilos-generacion.ts): «Lo más real posible» anima cada escena con Wan.
   const [estilo, setEstilo] = useState<EstiloGeneracion>("rapido");
+  const [cuerpo, setCuerpo] = useState<"medio" | "completo">("medio");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lista = temas.split("\n").map((t) => t.trim()).filter(Boolean);
@@ -36,7 +37,7 @@ export function FormNuevo() {
     setEnviando(true);
     setError(null);
     try {
-      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz, avatar: !importa && avatar ? avatar : undefined, estilo: importa ? undefined : estilo });
+      const r = await postJson<{ proyectos: { id: string }[] }>("/api/proyectos", { temas, formato, plantilla, mptTaskId: mptTaskId || undefined, rehacerVoz, avatar: !importa && avatar ? avatar : undefined, estilo: importa ? undefined : estilo, cuerpo: !importa && avatar ? cuerpo : undefined });
       router.push(r.proyectos.length === 1 ? `/proyectos/${r.proyectos[0]!.id}` : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -88,6 +89,16 @@ export function FormNuevo() {
               </button>
             ))}
           </div>
+          {avatar && (
+            <div className="flex flex-wrap items-center gap-2 text-sm" role="radiogroup" aria-label="¿Cómo sale tu avatar?">
+              <span className="text-xs text-tenue">¿Cómo sale?</span>
+              {([["medio", "De la cintura para arriba"], ["completo", "Cuerpo completo"]] as const).map(([id, nombre]) => (
+                <button key={id} type="button" role="radio" aria-checked={cuerpo === id} onClick={() => setCuerpo(id)}
+                  className={`boton ${cuerpo === id ? "boton-primario" : ""}`}>{nombre}</button>
+              ))}
+            </div>
+          )}
+          {avatar && cuerpo === "completo" && <p className="text-xs text-tenue">De cuerpo entero habla gesticulando como una persona frente a la cámara, a 720p para que la cara no pierda detalle (tarda más).</p>}
           {avatar && <p className="text-xs text-tenue">Geeper lo pone hablando en el gancho y en el cierre, y actuando en las escenas que hablan de personas. Suma unos 10 minutos por escena en la tarjeta de video; después puedes cambiarlo escena por escena.</p>}
         </fieldset>
       )}

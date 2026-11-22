@@ -317,7 +317,7 @@ async function avatarEscenas(t: Trabajo, h: Herramientas): Promise<Salida> {
   const elegido = await leerAvatarDelVideo(fila.slug);
   if (!elegido) return { resultado: { escenas: 0 }, siguiente: siguienteDe(t.payload) };
   let { p } = await versionDeProyecto(t.proyectoId!);
-  const propuestas = proponerEscenas(p, elegido.avatar, { producto: elegido.producto });
+  const propuestas = proponerEscenas(p, elegido.avatar, { producto: elegido.producto, cuerpo: elegido.cuerpo });
   const hechas: number[] = [];
   for (const [i, pr] of propuestas.entries()) {
     await h.etapa(`Tu avatar en la escena ${pr.numero} (${i + 1} de ${propuestas.length}): ${pr.porque}`, i / propuestas.length);

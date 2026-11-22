@@ -12,6 +12,7 @@ import { db, prepararDb } from "@/lib/db";
 import { tapar } from "@/lib/redes/secretos";
 import { dirProyecto } from "@/lib/rutas";
 import { EJECUTORES, rutaLog } from "./ejecutores";
+import { reanudarPendientes } from "@/lib/liberar-mpt";
 
 const workerId = nuevoWorkerId();
 let apagando = false;
@@ -109,6 +110,8 @@ async function main() {
   avisar(`id ${workerId}. ${r.reinicio.hubo ? "REINICIO DETECTADO: " + r.reinicio.motivo : "Sin reinicio desde la última corrida"}.`);
   if (r.interrumpidos || r.reencolados) avisar(`Recuperación: ${r.interrumpidos} interrumpidos (esperan que los relances), ${r.reencolados} devueltos a la cola`);
   await guardarLatidoWorker();
+  // Lo de MPT que Wan dejó parado (liberar-mpt.ts) si el worker se cortó a mitad.
+  void reanudarPendientes();
   const latidoSistema = setInterval(() => {
     void guardarLatidoWorker();
     void recuperarVencidos().then((n) => n && avisar(`${n} trabajo(s) con lease vencido recuperados`));
