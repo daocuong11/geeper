@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SugerenciasBusqueda, cambiarUltimaLinea, ultimaLinea } from "./sugerencias-busqueda";
 import { Aviso, postJson, useSondeo } from "./comun";
-import { ESTILOS_GENERACION, tiempoEstimado, type EstiloGeneracion } from "@/lib/estilos-generacion";
+import { ESTILOS_GENERACION, pasosDe, tiempoEstimado, type EstiloGeneracion } from "@/lib/estilos-generacion";
 
 interface Plantilla {
   slug: string;
@@ -110,8 +110,20 @@ export function FormNuevo() {
             {Object.values(ESTILOS_GENERACION).map((d) => (
               <button key={d.id} type="button" role="radio" aria-checked={estilo === d.id} onClick={() => setEstilo(d.id)}
                 className={`tarjeta p-3 text-left ${estilo === d.id ? "ring-2 ring-cyan-600" : "hover:bg-white/5"}`}>
-                <span className="block text-sm font-medium">{d.nombre}</span>
+                <span className="block text-sm font-medium">
+                  {d.nombre}
+                  {d.recomendado && <span className="ml-1 rounded bg-cyan-900/60 px-1.5 py-0.5 text-[10px] font-normal text-cyan-200">Recomendado</span>}
+                </span>
                 <span className="block text-xs text-tenue">{d.descripcion}</span>
+                {/* Los workflows de cada paso (estilos-generacion.ts): qué usa, sin jerga de nodos. */}
+                <dl className="mt-2 space-y-0.5 border-t border-borde pt-2 text-[11px] leading-snug">
+                  {pasosDe(d.id, !!avatar).map((x) => (
+                    <div key={x.paso} className="flex gap-1">
+                      <dt className="shrink-0 text-tenue">{x.paso}:</dt>
+                      <dd className="min-w-0">{x.workflow}</dd>
+                    </div>
+                  ))}
+                </dl>
               </button>
             ))}
           </div>

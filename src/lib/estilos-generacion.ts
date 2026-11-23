@@ -36,7 +36,24 @@ export interface DefinicionEstilo {
   animar: { modelo: string; camara?: Camara; realista: boolean; extra?: AjustesWan2gp } | null;
   /** Estilo del video que se guarda en el proyecto (lo heredan todas las escenas). */
   estilo?: EstiloVideo;
+  /** Los workflows que usa en cada paso, para mostrarlos en «Nuevo» (paso → qué lo hace). */
+  pasos: { paso: string; workflow: string }[];
+  /** La opción que se recomienda para el mejor resultado. */
+  recomendado?: boolean;
 }
+
+/** Lo que comparten todos: el guion y las imágenes de MPT, y la voz. */
+const BASE: DefinicionEstilo["pasos"] = [
+  { paso: "Guion", workflow: "IA local de MoneyPrinterTurbo" },
+  { paso: "Imágenes", workflow: "Z-Image Turbo" },
+  { paso: "Voz", workflow: "Kokoro (o la voz de tu avatar)" },
+];
+
+/** Lo que se suma con tu avatar de protagonista (protagonista.ts), muestre el preset que muestre. */
+export const PASOS_AVATAR: DefinicionEstilo["pasos"] = [
+  { paso: "Avatar en cada fondo", workflow: "Qwen Image Edit" },
+  { paso: "Avatar que habla", workflow: "InfiniteTalk (Wan 2.1 14B)" },
+];
 
 export const ESTILOS_GENERACION: Record<EstiloGeneracion, DefinicionEstilo> = {
   rapido: {
@@ -46,6 +63,7 @@ export const ESTILOS_GENERACION: Record<EstiloGeneracion, DefinicionEstilo> = {
     minutosPorEscena: null,
     medido: true,
     animar: null,
+    pasos: [...BASE, { paso: "Movimiento", workflow: "Zoom suave sobre cada imagen" }],
   },
   equilibrado: {
     id: "equilibrado",
@@ -54,6 +72,7 @@ export const ESTILOS_GENERACION: Record<EstiloGeneracion, DefinicionEstilo> = {
     minutosPorEscena: 2,
     medido: true,
     animar: { modelo: "rapido", camara: { movimiento: "mano" }, realista: true },
+    pasos: [...BASE, { paso: "Video", workflow: "Wan 2.2 TI2V-5B + FastWan (3 pasos)" }],
   },
   real: {
     id: "real",
@@ -63,6 +82,13 @@ export const ESTILOS_GENERACION: Record<EstiloGeneracion, DefinicionEstilo> = {
     medido: false,
     animar: { modelo: "i2v", camara: { movimiento: "mano", look: "documental" }, realista: true, extra: { ...LIGHTNING_I2V, ...FLUIDO_X2 } },
     estilo: { efectos: [{ tipo: "grano", cantidad: 0.06, color: false, semilla: 7 }] },
+    pasos: [
+      ...BASE,
+      { paso: "Video", workflow: "Wan 2.2 I2V 14B + Lightning (4 pasos)" },
+      { paso: "Fluidez", workflow: "RIFE → 32 cuadros por segundo" },
+      { paso: "Acabado", workflow: "Cámara real y grano fino" },
+    ],
+    recomendado: true,
   },
 };
 
@@ -97,4 +123,14 @@ export function tiempoEstimado(estilo: EstiloGeneracion, escenas = 6): string {
   const total = 3 + d.minutosPorEscena * escenas;
   const texto = total >= 90 ? `unas ${Math.round(total / 60)} horas` : total >= 60 ? "una hora" : `unos ${Math.round(total / 5) * 5} minutos`;
   return `${d.medido ? "" : "Estimado: "}${d.minutosPorEscena} minutos por escena, ${texto} en un video de ${escenas} escenas.`;
+}
+
+/**
+ * Los workflows de cada paso, como se muestran en «Nuevo». Con tu avatar de protagonista no se anima cada
+ * imagen (el avatar ya es video en cada escena): se muestran sus pasos en lugar de los de video.
+ */
+export function pasosDe(estilo: EstiloGeneracion, conAvatar: boolean): DefinicionEstilo["pasos"] {
+  const d = ESTILOS_GENERACION[estilo];
+  if (!conAvatar) return d.pasos;
+  return [...d.pasos.filter((x) => !["Video", "Fluidez", "Movimiento"].includes(x.paso)), ...PASOS_AVATAR];
 }

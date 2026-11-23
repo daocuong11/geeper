@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { EstiloVideo } from "@/lib/esquema";
-import { ESTILO_POR_DEFECTO, ESTILOS_GENERACION, NEGATIVO_REALISTA, promptEstilo, tiempoEstimado } from "@/lib/estilos-generacion";
+import { ESTILO_POR_DEFECTO, ESTILOS_GENERACION, NEGATIVO_REALISTA, pasosDe, promptEstilo, tiempoEstimado } from "@/lib/estilos-generacion";
 import { modeloPlano } from "@/lib/wan2gp";
 
 describe("estilos de generación de «Nuevo»", () => {
@@ -31,6 +31,17 @@ describe("estilos de generación de «Nuevo»", () => {
     expect(r.negativo).toMatch(/plastic skin/);
     expect(promptEstilo("rapido", "x.")).toEqual({ prompt: "x" });
     expect(promptEstilo("real", "  ").prompt).toMatch(/^real footage/);
+  });
+
+  it("cada preset muestra sus workflows por paso; «Máxima calidad» es la recomendada", () => {
+    for (const d of Object.values(ESTILOS_GENERACION)) expect(d.pasos.map((x) => x.paso)).toEqual(expect.arrayContaining(["Guion", "Imágenes", "Voz"]));
+    expect(Object.values(ESTILOS_GENERACION).filter((d) => d.recomendado).map((d) => d.id)).toEqual(["real"]);
+    expect(pasosDe("real", false).find((x) => x.paso === "Video")?.workflow).toMatch(/Wan 2\.2 I2V 14B/);
+    expect(pasosDe("real", false).find((x) => x.paso === "Fluidez")?.workflow).toMatch(/RIFE/);
+    // Con avatar no se anima cada imagen: se ven los pasos del avatar en lugar de los de video.
+    const conAvatar = pasosDe("real", true).map((x) => x.paso);
+    expect(conAvatar).not.toContain("Video");
+    expect(conAvatar).toEqual(expect.arrayContaining(["Avatar en cada fondo", "Avatar que habla", "Acabado"]));
   });
 
   it("dice cuánto tarda, y si es estimado", () => {
