@@ -195,6 +195,12 @@ export interface Avance {
   paso?: number;
   pasos?: number;
   bytes?: number;
+  /**
+   * Videos largos (InfiniteTalk, el presentador y el protagonista): Wan2GP los genera por partes
+   * («Sliding Window 3/10») y cada parte repite codificar → pasos → armar. Ésta es la parte y cuántas son.
+   */
+  ventana?: number;
+  ventanas?: number;
 }
 
 const FASES: Record<Exclude<Fase, "guardando" | "descargando">, [number, number]> = {
@@ -229,8 +235,20 @@ export function crearLectorAvance(): (trozo: string) => Avance[] {
     for (const linea of lineas) {
       let e: Avance | null = null;
       const m = linea.match(/\[(\d+)\/(\d+)\]\s+([A-Za-z][^|[]*)/);
-      const fase = m ? faseDe(m[3]!.trim()) : null;
-      if (m && fase) {
+      // «[2/4] Sliding Window 3/10 - Denoising»: la fase va después del guion, y el avance es de todo el video.
+      const v = m?.[3]!.match(/^Sliding Window (\d+)\/(\d+)\s*-\s*(.+)$/);
+      const fase = m ? faseDe((v ? v[3]! : m[3]!).trim()) : null;
+      if (m && v && fase) {
+        const paso = Number(m[1]);
+        const pasos = Number(m[2]);
+        const ventana = Number(v[1]);
+        const ventanas = Math.max(1, Number(v[2]));
+        // Dentro de cada parte: codificar es el comienzo, los pasos el grueso y armar el final.
+        const dentro = fase === "generando" ? (pasos > 0 ? Math.min(1, paso / pasos) * 0.85 : 0) : fase === "decodificando" ? 0.85 + 0.15 * (pasos > 0 ? Math.min(1, paso / pasos) : 0) : 0;
+        const [de, a] = [FASES.generando[0], FASES.decodificando[1]];
+        e = { fase: "generando", paso, pasos, ventana, ventanas, avance: de + (a - de) * ((ventana - 1 + dentro) / ventanas) };
+        if (fase !== "generando") e = { ...e, paso: undefined, pasos: undefined };
+      } else if (m && fase) {
         const paso = Number(m[1]);
         const pasos = Number(m[2]);
         const [de, a] = FASES[fase];
@@ -241,7 +259,7 @@ export function crearLectorAvance(): (trozo: string) => Avance[] {
         e = { fase: "guardando", avance: 0.99 };
       }
       if (!e) continue;
-      const clave = `${e.fase}:${e.paso ?? ""}/${e.pasos ?? ""}`;
+      const clave = `${e.fase}:${e.ventana ?? ""}:${e.paso ?? ""}/${e.pasos ?? ""}`;
       if (clave === ultimo) continue;
       ultimo = clave;
       maximo = Math.max(maximo, e.avance);

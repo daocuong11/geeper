@@ -237,6 +237,7 @@ export function etapaDePlano(a: Avance): string {
     case "codificando":
       return "Preparando la imagen";
     case "generando":
+      if (a.ventanas && a.ventanas > 1) return `Generando: parte ${a.ventana} de ${a.ventanas}${a.pasos ? `, paso ${a.paso} de ${a.pasos}` : ""}`;
       return a.pasos ? `Animando: paso ${a.paso} de ${a.pasos}` : "Animando";
     case "decodificando":
       return "Armando el video";
@@ -268,7 +269,9 @@ function conAvance(h: Herramientas, verbo: string) {
   return {
     ...h,
     alAvanzar: (a: Avance) => {
-      const e = a.fase === "generando" ? (a.pasos ? `${verbo}: paso ${a.paso} de ${a.pasos}` : verbo) : etapaDePlano(a).replace("Guardando el plano", "Guardando");
+      const e = a.fase === "generando"
+        ? a.ventanas && a.ventanas > 1 ? `${verbo}: parte ${a.ventana} de ${a.ventanas}` : a.pasos ? `${verbo}: paso ${a.paso} de ${a.pasos}` : verbo
+        : etapaDePlano(a).replace("Guardando el plano", "Guardando");
       if (e !== ultima) void h.etapa((ultima = e), a.avance);
     },
   };
