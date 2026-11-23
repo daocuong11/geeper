@@ -189,7 +189,21 @@ async function main() {
   }, null, 2));
   // --legacy-peer-deps: @prisma/client pide `prisma` (la CLI con sus motores) como par; en la app no hace falta.
   correr("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--legacy-peer-deps"], { cwd: APP });
-  correr("pnpm", ["exec", "electron-rebuild", "--version", ELECTRON, "--module-dir", APP, "--only", "better-sqlite3", "--force"]);
+  // better-sqlite3 no publica binarios para Electron 44: hay que compilarlo (Python + compilador de C++). En la
+  // PC del dueño no hay compilador; ahí se reusa uno ya compilado para exactamente estas versiones
+  // (GEEPER_SQLITE_ARMADO: carpeta con better-sqlite3-<versión>-electron-<versión>-<sistema>-<arq>.node,
+  // sacado de una instalación armada en GitHub). Si no está el de estas versiones, se compila como siempre.
+  const sqlite = path.join(APP, "node_modules", "better-sqlite3");
+  const armado = process.env.GEEPER_SQLITE_ARMADO
+    ? path.join(process.env.GEEPER_SQLITE_ARMADO, `better-sqlite3-${versionDe(sqlite)}-electron-${ELECTRON}-${process.platform}-${process.arch}.node`)
+    : null;
+  if (armado && fs.existsSync(armado)) {
+    fs.mkdirSync(path.join(sqlite, "build", "Release"), { recursive: true });
+    fs.copyFileSync(armado, path.join(sqlite, "build", "Release", "better_sqlite3.node"));
+    console.log(`better-sqlite3 para Electron ${ELECTRON}: el ya compilado de ${armado}`);
+  } else {
+    correr("pnpm", ["exec", "electron-rebuild", "--version", ELECTRON, "--module-dir", APP, "--only", "better-sqlite3", "--force"]);
+  }
 
   // El servidor resuelve sus paquetes subiendo hasta escritorio-app/node_modules: su propio node_modules
   // (con enlaces absolutos de pnpm) sobra. Y no puede quedar ningún node_modules fuera de la raíz: el
