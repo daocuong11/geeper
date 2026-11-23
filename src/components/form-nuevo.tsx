@@ -20,7 +20,7 @@ export function FormNuevo() {
   const [mptTaskId, setMpt] = useState("");
   const [rehacerVoz, setRehacerVoz] = useState(true);
   const [aceptoGpu, setAcepto] = useState(false);
-  // Tu avatar en el video (protagonista.ts): protagoniza todo el video en un solo set, de corrido.
+  // Tu avatar en el video (protagonista.ts): protagoniza cada escena, dentro de su fondo, y es la única persona.
   const { datos: lib } = useSondeo<{ avatares: { id: string; nombre: string; retrato: string }[] }>("/api/avatares", 60_000);
   const [avatar, setAvatar] = useState<string | null>(null);
   // Qué tan real (estilos-generacion.ts): «Lo más real posible» anima cada escena con Wan.
@@ -99,7 +99,7 @@ export function FormNuevo() {
             </div>
           )}
           {avatar && cuerpo === "completo" && <p className="text-xs text-tenue">De cuerpo entero habla gesticulando con todo el cuerpo, como una persona frente a la cámara.</p>}
-          {avatar && <p className="text-xs text-tenue">Sale todo el video en su set, hablando a cámara con su voz y gesticulando como un creador real; las imágenes del tema quedan en una ventana a su lado. Suma unos 25 minutos en un short de 30 segundos y unos 45 en uno de un minuto. Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
+          {avatar && <p className="text-xs text-tenue">Sale en todas las escenas, dentro del fondo que se genera para cada una, y es la única persona del video: habla a cámara con su voz y gesticula como un humano. Suma unos 35 minutos en un short de 30 segundos y unos 55 en uno de un minuto. Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
         </fieldset>
       )}
       </div>

@@ -515,14 +515,42 @@ export async function generarPlano(op: OpcionesGenerar): Promise<string> {
 }
 
 /**
+ * Varios videos del mismo modelo en una sola corrida de Wan2GP: el modelo se carga una vez (~2,5 min con
+ * InfiniteTalk) y no una por video. Cada uno necesita su `seed` (distinta): el archivo se reconoce por ella.
+ * Devuelve la ruta de cada uno en el mismo orden, o null si ése falló (los demás sirven igual).
+ */
+export async function generarPlanos(op: Omit<OpcionesGenerar, "ajustes"> & { ajustes: AjustesWan2gp[] }): Promise<(string | null)[]> {
+  const semillas = op.ajustes.map((a) => Number(a.seed));
+  if (semillas.some((s) => !Number.isInteger(s) || s < 0) || new Set(semillas).size !== semillas.length) throw new Error("Cada video del lote necesita su propia semilla");
+  return correrWan2gp({ ...op, ajustes: op.ajustes[0]! }, "video", op.ajustes);
+}
+
+/**
+ * Lote: la ruta de cada semilla según lo que dijo wgp.py. Gana la última que existe (el posproceso, o el
+ * video sin posprocesar si ése falló). Si la línea no está (la salida guardada tiene tope), se busca en
+ * `out` el video con esa semilla en el nombre. `existe` se inyecta para las pruebas.
+ */
+export function rutasPorSemilla(salida: string, semillas: number[], out?: string, existe: (r: string) => boolean = existsSync): (string | null)[] {
+  const rutas = [...sinAnsi(salida).matchAll(/saved to Path:\s*(.+?)\s*$/gm)].map((m) => m[1]!);
+  // Del más viejo al más nuevo: gana el último con esa semilla.
+  const enCarpeta = out && existe(out) ? archivosDe(out, MEDIOS) : [];
+  return semillas.map((s) => {
+    const marca = `seed${s}_`;
+    return rutas.filter((r) => path.basename(r).includes(marca) && existe(r)).at(-1)
+      ?? enCarpeta.filter((r) => path.basename(r).includes(marca)).at(-1)
+      ?? null;
+  });
+}
+
+/**
  * Genera imágenes (modelos de imagen de Wan2GP con `image_mode: 1`, p. ej. Z-Image o Qwen Edit) y devuelve
  * sus rutas en el orden en que se guardaron (con `batch_size`, una por toma).
  */
 export async function generarImagenes(op: OpcionesGenerar): Promise<string[]> {
-  return correrWan2gp(op, "imagen");
+  return (await correrWan2gp(op, "imagen")) as string[];
 }
 
-async function correrWan2gp(op: OpcionesGenerar, tipo: "video" | "imagen"): Promise<string[]> {
+async function correrWan2gp(op: OpcionesGenerar, tipo: "video" | "imagen", lote?: AjustesWan2gp[]): Promise<(string | null)[]> {
   const { instalacion: i, ajustes, dirCorrida, signal } = op;
   const inicio = Date.now();
   const falta = faltaEnInstalacion(i);
@@ -531,7 +559,7 @@ async function correrWan2gp(op: OpcionesGenerar, tipo: "video" | "imagen"): Prom
   const out = path.join(dirCorrida, "out");
   await fs.mkdir(out, { recursive: true });
   const archivo = path.join(dirCorrida, "ajustes.json");
-  await fs.writeFile(archivo, JSON.stringify(conValoresDelModelo(i.dir, ajustes), null, 2));
+  await fs.writeFile(archivo, JSON.stringify(lote ? lote.map((a) => conValoresDelModelo(i.dir, a)) : conValoresDelModelo(i.dir, ajustes), null, 2));
 
   const conGpuSolo = op.gpuSolo ?? existsSync(GPU_SOLO_BIN);
   const candado = conGpuSolo ? null : await tomarGpu("wan2gp", { esperar: true, signal, alEsperar: (q) => op.log?.(`Esperando la GPU (la usa ${q})`) });
@@ -558,11 +586,17 @@ async function correrWan2gp(op: OpcionesGenerar, tipo: "video" | "imagen"): Prom
     const cancelar = () => matarArbol(hijo, i, conGpuSolo);
     signal?.addEventListener("abort", cancelar, { once: true });
     try {
-      return await new Promise<string[]>((ok, mal) => {
+      return await new Promise<(string | null)[]>((ok, mal) => {
         hijo.on("error", (e) => mal(new Error(`No arrancó Wan2GP (${i.python}): ${e.message}`)));
         hijo.on("close", (codigo, senal) => {
           void fs.writeFile(path.join(dirCorrida, "wgp.log"), salida()).catch(() => {});
           const r = resumirCorrida(codigo, senal, salida());
+          if (lote) {
+            // Un video que falla no tumba a los demás: se devuelve lo que salió (null en los que no).
+            const rutas = senal || signal?.aborted ? [] : rutasPorSemilla(salida(), lote.map((a) => Number(a.seed)), out);
+            if (!rutas.some(Boolean)) return mal(new Error(r.ok ? `Wan2GP dijo que terminó pero no hay videos en ${out}.\n\n${colaLog(salida())}` : r.error));
+            return ok(rutas);
+          }
           if (!r.ok) return mal(new Error(r.error));
           if (tipo === "imagen") {
             // Sólo las de esta corrida (si la carpeta se reusó, las viejas no cuentan).

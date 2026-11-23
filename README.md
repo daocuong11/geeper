@@ -70,9 +70,9 @@ pnpm run dev:up       # web en http://localhost:3300 + worker, en una terminal. 
   burbuja o recortado sin fondo, como un streamer (InfiniteTalk en Wan2GP; ver HEREDADO.md «ComfyUI»).
   En cada escena con video, **Rehacer la toma** cambia a la persona por uno de tus avatares (copia sus gestos
   y su boca) o vuelve a filmarla con otro movimiento de cámara, elegido viéndolo sobre tu propia escena.
-  **Tu avatar en el video**: el protagonista. Elígelo en «Nuevo» (o en el editor) y sale todo el video en un
-  solo set, de corrido, hablando a cámara con su voz (medio cuerpo o completo); las imágenes del tema quedan
-  en una ventana encima (`src/lib/protagonista.ts`).
+  **Tu avatar en el video**: el protagonista. Elígelo en «Nuevo» (o en el editor) y sale en todas las escenas,
+  dentro del fondo que se generó para cada una y como única persona del video, hablando a cámara con su voz
+  y gesticulando (medio cuerpo o completo; `src/lib/protagonista.ts`).
   En cada escena: que hable, que haga algo (caminar, jugar, celebrar…) o que muestre tu producto.
 - **Workflows** (`/workflows`): las 776 recetas del hub de ComfyUI (imágenes, video, música, voces, 3D) para usar
   sin saber de nodos: buscar, subir tu archivo o escribir lo que quieres, y «Crear». ComfyUI se instala con un

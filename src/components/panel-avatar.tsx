@@ -10,7 +10,7 @@ interface Datos {
   delVideo: { avatar: string; producto?: string } | null;
   encuadres: Record<Encuadre, string>;
   ejemplos: string[];
-  /** Protagonista (protagonista.ts): tomas de corrido, minutos estimados y si antes cambia la voz. */
+  /** Protagonista (protagonista.ts): una toma por escena, minutos estimados y si antes cambia la voz. */
   plan: { escenas: number; tomas: number; segundos: number; minutos: number; voz: string | null; error: string | null } | null;
   /** Ya es protagonista y después cambió lo que se dice: hay que ponerlo otra vez. */
   desfasado?: boolean;
@@ -89,9 +89,9 @@ function SubirProducto({ proyectoId, producto, cambiar }: { proyectoId: string; 
 }
 
 /**
- * «Tu avatar en el video» (nivel proyecto): el avatar protagoniza el video en un solo set, de corrido, como
- * un creador frente a su cámara; las imágenes del tema quedan en una ventana encima (protagonista.ts).
- * Comentar en una ventana encima del video es el «Presentador». Decisiones del dueño, 2026-11-21 y 22.
+ * «Tu avatar en el video» (nivel proyecto): el avatar protagoniza el video, en cada escena dentro del fondo
+ * del tema y como única persona (protagonista.ts). Comentar en una ventana encima del video es el
+ * «Presentador». Decisiones del dueño, 2026-11-21 a 23.
  */
 export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; ocupado: boolean }) {
   const [encuadre, setEncuadre] = useState<"medio" | "completo">("medio");
@@ -128,7 +128,7 @@ export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; 
     <section className="tarjeta space-y-4 p-4" aria-label="Tu avatar en el video">
       <div>
         <h2 className="text-lg font-semibold">Tu avatar en el video <span className="text-sm font-normal text-tenue">(protagonista)</span></h2>
-        <p className="text-sm text-tenue">Tu avatar es el protagonista: sale <b>todo el video</b> en su set, hablando a cámara y gesticulando como un creador real, con su voz. Las imágenes del tema quedan en una ventana a su lado. ¿Prefieres que salga en una ventana comentando encima del video? Eso es el <b>Presentador</b>, más abajo.</p>
+        <p className="text-sm text-tenue">Tu avatar es el protagonista: sale <b>en todas las escenas</b>, dentro del fondo de cada una (lo que generó el tema), y es <b>la única persona del video</b>: habla a cámara con su voz y gesticula como un humano. ¿Prefieres que salga en una ventana comentando encima del video? Eso es el <b>Presentador</b>, más abajo.</p>
       </div>
       {!datos.wan2gp.listo && <Aviso tipo="alerta">Para esto hace falta Wan2GP: instálalo desde <Link className="underline" href="/sistema">Sistema</Link>.</Aviso>}
       {datos.desfasado && !enCurso.length && <Aviso tipo="alerta">Cambiaste lo que se dice después de poner a tu avatar: ponlo otra vez para que la boca siga a la voz.</Aviso>}
@@ -159,7 +159,7 @@ export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; 
           {plan && !plan.error && (
             <div className="space-y-1 text-xs text-tenue">
               {plan.voz && <p>Primero pone la voz de {nombre} («{plan.voz}») en todo el video, para que la boca siga a su voz.</p>}
-              <p>{plan.tomas === 1 ? `Una sola toma de corrido de ${plan.segundos} s` : `${plan.tomas} tomas de corrido (${plan.segundos} s en total; cada toma llega hasta 2 minutos)`}: unos {plan.minutos} minutos en la tarjeta de video. La primera vez, más: baja los modelos (varios GB).</p>
+              <p>{plan.tomas === 1 ? `Una escena de ${plan.segundos} s` : `${plan.tomas} escenas (${plan.segundos} s de voz), todas en una sola corrida`}: unos {plan.minutos} minutos en la tarjeta de video. La primera vez, más: baja los modelos (varios GB).</p>
               <p>Después puedes cambiar una escena sola con «Tu avatar en esta escena».</p>
             </div>
           )}

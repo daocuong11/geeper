@@ -13,3 +13,12 @@ export function segundosHablar(segundosDeVoz: number): number {
 }
 
 export const minutosHablar = (segundosDeVoz: number) => Math.max(8, Math.ceil(segundosHablar(segundosDeVoz) / 60));
+
+/**
+ * Varias tomas en una sola corrida (protagonista.ts): el modelo se carga una vez (~2,5 min, medido en el
+ * log del 2026-11-22) y cada toma suma su preparación (~45 s: texto, imagen y armado) y sus partes (~41 s
+ * por segundo de voz: 2 min por parte de ~2,9 s).
+ */
+export function segundosTomasJuntas(segundosDeVoz: number[]): number {
+  return 150 + segundosDeVoz.reduce((s, v) => s + 45 + 41 * v, 0);
+}

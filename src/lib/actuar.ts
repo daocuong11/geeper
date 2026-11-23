@@ -118,7 +118,11 @@ export function promptPose(a: Pick<Avatar, "estilo">, encuadre: Encuadre, fondo:
 export function promptComponer(a: Pick<Avatar, "estilo">, p: Pick<PedidoActuar, "tipo" | "encuadre" | "que" | "lugar" | "donde">, refs: { escena: boolean; producto: boolean }): string {
   const n = { escena: refs.escena ? 2 : 0, producto: refs.producto ? (refs.escena ? 3 : 2) : 0 };
   const partes = [`The person from image 1 as a ${ENCUADRES[p.encuadre].prompt}`];
-  if (p.lugar === "escena" && refs.escena) partes.push(`placed naturally inside the place shown in image ${n.escena}, matching its lighting, perspective and colors, keeping that place recognizable`);
+  if (p.lugar === "escena" && refs.escena) {
+    partes.push(`placed naturally inside the place shown in image ${n.escena}, matching its lighting, perspective and colors, keeping that place recognizable`);
+    // Tu avatar es la única persona del video: la gente que traiga la imagen del tema sale.
+    partes.push(`remove every other person, face or human silhouette from that place, this person is the only human in the image`);
+  }
   else if (p.lugar === "describir" && p.donde) partes.push(`in this place: ${p.donde}`);
   else partes.push(`in a ${FONDOS_POSE.neutro}`);
   if (refs.producto) partes.push(`holding the product from image ${n.producto} clearly visible, keeping the product exactly as it is`);

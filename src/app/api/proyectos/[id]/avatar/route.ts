@@ -5,7 +5,7 @@ import { z } from "zod";
 import { CuerpoAvatar, EJEMPLOS_ACCION, ENCUADRES, guardarAvatarDelVideo, leerAvatarDelVideo, PedidoActuar, PedidoStreamer } from "@/lib/actuar";
 import { leerAvatar, listarAvatares, vistaAvatar } from "@/lib/avatares";
 import { estadoPresentador } from "@/lib/presentador";
-import { hablaConSuVoz, minutosProtagonista, segundosDeTomas } from "@/lib/protagonista";
+import { escenasProtagonista, hablaConSuVoz, minutosProtagonista } from "@/lib/protagonista";
 import { encolar } from "@/lib/cola";
 import { db } from "@/lib/db";
 import { json, manejar } from "@/lib/http";
@@ -39,7 +39,7 @@ export async function GET(req: Request, ctx: Ctx) {
       const a = avatares.find((x) => x.id === elegido);
       const voz = a?.voz && !hablaConSuVoz(p.voz, a.voz) ? a.voz.nombre : null;
       try {
-        const s = segundosDeTomas(p);
+        const s = escenasProtagonista(p).map((e) => e.segundos);
         plan = { escenas: Object.keys(p.escenas).length, tomas: s.length, segundos: Math.round(s.reduce((x, y) => x + y, 0)), minutos: minutosProtagonista(s) + (voz ? 3 : 0), voz, error: null };
       } catch (e) {
         plan = { escenas: Object.keys(p.escenas).length, tomas: 0, segundos: 0, minutos: 0, voz, error: (e as Error).message };
