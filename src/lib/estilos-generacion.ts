@@ -11,14 +11,19 @@
  *   (luz natural, piel con textura, cámara en mano leve) y un grano fino en todo el video, que esconde lo
  *   «demasiado limpio». LTX-2.3/2.5 no: su licencia no permite uso comercial sin revisarla.
  *
+ * Cada preset es un setup ya armado (setup-video.ts): modelo, fluidez, cámara y acabado. En «Nuevo» se
+ * puede partir de uno y personalizarlo.
+ *
  * Función pura: la usan el formulario (lo que tarda), el servidor (qué guarda en el proyecto) y el
  * trabajo que anima las escenas (qué le pide a plano.ts).
  */
 import { z } from "zod";
 import type { EstiloVideo } from "./esquema";
-import { FLUIDO_X2, LIGHTNING_I2V } from "./lightning";
 import type { Camara } from "./prompt-camara";
+import { animarDe, estiloVideoDe, minutosPorEscena, NEGATIVO_REALISTA, pasosSetup, PROMPT_REALISTA, promptSetup, type SetupVideo } from "./setup-video";
 import type { AjustesWan2gp } from "./wan2gp";
+
+export { NEGATIVO_REALISTA, PROMPT_REALISTA };
 
 export const EstiloGeneracion = z.enum(["rapido", "equilibrado", "real"]);
 export type EstiloGeneracion = z.infer<typeof EstiloGeneracion>;
@@ -28,6 +33,8 @@ export interface DefinicionEstilo {
   nombre: string;
   /** Para quien no sabe: qué gana, sin jerga. */
   descripcion: string;
+  /** El setup del preset (modelo, fluidez, cámara y acabado). */
+  setup: SetupVideo;
   /** Minutos de tarjeta de video por escena, aparte de los ~3 de MPT por tema. null: no anima. */
   minutosPorEscena: number | null;
   /** Si lo que tarda ya se midió en la RTX 5080 (si no, es una estimación y se dice). */
@@ -55,82 +62,66 @@ export const PASOS_AVATAR: DefinicionEstilo["pasos"] = [
   { paso: "Avatar que habla", workflow: "InfiniteTalk (Wan 2.1 14B)" },
 ];
 
+/** Todo lo que se deriva del setup (el preset sólo pone nombre, descripción y el setup). */
+function preset(d: { id: EstiloGeneracion; nombre: string; descripcion: string; setup: SetupVideo; recomendado?: boolean }): DefinicionEstilo {
+  const a = animarDe(d.setup);
+  const t = minutosPorEscena(d.setup);
+  return {
+    ...d,
+    minutosPorEscena: t.minutos,
+    medido: t.medido,
+    animar: a && { ...a, realista: d.setup.realista },
+    estilo: estiloVideoDe(d.setup),
+    pasos: [...BASE, ...pasosSetup(d.setup)],
+  };
+}
+
 export const ESTILOS_GENERACION: Record<EstiloGeneracion, DefinicionEstilo> = {
-  rapido: {
+  rapido: preset({
     id: "rapido",
     nombre: "Rápido",
     descripcion: "Fotos con un movimiento suave. Para probar ideas.",
-    minutosPorEscena: null,
-    medido: true,
-    animar: null,
-    pasos: [...BASE, { paso: "Movimiento", workflow: "Zoom suave sobre cada imagen" }],
-  },
-  equilibrado: {
+    setup: { modelo: "zoom", fluidez: false, camara: {}, desenfoqueMovimiento: false, grano: "no", vineta: false, realista: false },
+  }),
+  equilibrado: preset({
     id: "equilibrado",
     nombre: "Equilibrado",
     descripcion: "Cada escena pasa a video con movimiento real. Buena calidad en poco tiempo.",
-    minutosPorEscena: 2,
-    medido: true,
-    animar: { modelo: "rapido", camara: { movimiento: "mano" }, realista: true },
-    pasos: [...BASE, { paso: "Video", workflow: "Wan 2.2 TI2V-5B + FastWan (3 pasos)" }],
-  },
-  real: {
+    setup: { modelo: "rapido", fluidez: false, camara: { movimiento: "mano" }, desenfoqueMovimiento: false, grano: "no", vineta: false, realista: true },
+  }),
+  real: preset({
     id: "real",
     nombre: "Máxima calidad",
     descripcion: "Lo mejor que corre en tu PC: movimiento natural y fiel a la imagen, fluido (32 cuadros por segundo), luz y piel creíbles y grano de cámara. Es lo más lento.",
-    minutosPorEscena: 6,
-    medido: false,
-    animar: { modelo: "i2v", camara: { movimiento: "mano", look: "documental" }, realista: true, extra: { ...LIGHTNING_I2V, ...FLUIDO_X2 } },
-    estilo: { efectos: [{ tipo: "grano", cantidad: 0.06, color: false, semilla: 7 }] },
-    pasos: [
-      ...BASE,
-      { paso: "Video", workflow: "Wan 2.2 I2V 14B + Lightning (4 pasos)" },
-      { paso: "Fluidez", workflow: "RIFE → 32 cuadros por segundo" },
-      { paso: "Acabado", workflow: "Cámara real y grano fino" },
-    ],
+    setup: { modelo: "i2v", fluidez: true, camara: { movimiento: "mano", look: "documental" }, desenfoqueMovimiento: true, grano: "fino", vineta: false, realista: true },
     recomendado: true,
-  },
+  }),
 };
 
 export const ESTILO_POR_DEFECTO: EstiloGeneracion = "rapido";
 
-/**
- * Lo que se suma al prompt de cada escena para que parezca filmado: los modelos de video copian el
- * «aspecto IA» (piel lisa, luz perfecta, movimiento flotante) si no se les pide otra cosa.
- */
-export const PROMPT_REALISTA =
-  "real footage shot on a real camera, natural imperfect lighting, realistic skin texture with pores and fine details, " +
-  "natural human motion with real weight and timing, subtle handheld camera, true-to-life colors, no visual effects";
-
-/** Lo que delata a la IA (va como prompt negativo; Wan 2.2 completo lo respeta). */
-export const NEGATIVO_REALISTA =
-  "CGI, 3D render, video game, cartoon, illustration, painting, plastic skin, waxy skin, airbrushed, oversmoothed, " +
-  "overexposed, oversaturated, glowing, deformed hands, extra fingers, distorted face, morphing body, melting, " +
-  "floating motion, flicker, blurry, watermark, text, subtitles";
-
 /** El prompt de una escena con el estilo: el de la escena y, si es realista, lo que la hace parecer filmada. */
 export function promptEstilo(estilo: EstiloGeneracion, base: string): { prompt: string; negativo?: string } {
-  const d = ESTILOS_GENERACION[estilo];
-  const limpio = base.trim().replace(/[.\s]+$/, "");
-  if (!d.animar?.realista) return { prompt: limpio };
-  return { prompt: limpio ? `${limpio}. ${PROMPT_REALISTA}` : PROMPT_REALISTA, negativo: NEGATIVO_REALISTA };
+  return promptSetup(ESTILOS_GENERACION[estilo].setup, base);
 }
 
 /** Lo que tarda, dicho para el formulario («unos 45 minutos más», «estimado» si no se midió). */
-export function tiempoEstimado(estilo: EstiloGeneracion, escenas = 6): string {
-  const d = ESTILOS_GENERACION[estilo];
-  if (d.minutosPorEscena === null) return "Unos 3 minutos por tema.";
-  const total = 3 + d.minutosPorEscena * escenas;
+export function tiempoEstimado(estilo: EstiloGeneracion | SetupVideo, escenas = 6): string {
+  const t = minutosPorEscena(typeof estilo === "string" ? ESTILOS_GENERACION[estilo].setup : estilo);
+  if (t.minutos === null) return "Unos 3 minutos por tema.";
+  const total = 3 + t.minutos * escenas;
   const texto = total >= 90 ? `unas ${Math.round(total / 60)} horas` : total >= 60 ? "una hora" : `unos ${Math.round(total / 5) * 5} minutos`;
-  return `${d.medido ? "" : "Estimado: "}${d.minutosPorEscena} minutos por escena, ${texto} en un video de ${escenas} escenas.`;
+  return `${t.medido ? "" : "Estimado: "}${t.minutos} minutos por escena, ${texto} en un video de ${escenas} escenas.`;
 }
 
 /**
  * Los workflows de cada paso, como se muestran en «Nuevo». Con tu avatar de protagonista no se anima cada
- * imagen (el avatar ya es video en cada escena): se muestran sus pasos en lugar de los de video.
+ * imagen (el avatar ya es video en cada escena): se muestran sus pasos en lugar de los de video, y del
+ * acabado sólo lo que va encima del video (grano, viñeta).
  */
-export function pasosDe(estilo: EstiloGeneracion, conAvatar: boolean): DefinicionEstilo["pasos"] {
-  const d = ESTILOS_GENERACION[estilo];
-  if (!conAvatar) return d.pasos;
-  return [...d.pasos.filter((x) => !["Video", "Fluidez", "Movimiento"].includes(x.paso)), ...PASOS_AVATAR];
+export function pasosDe(estilo: EstiloGeneracion | SetupVideo, conAvatar: boolean): DefinicionEstilo["pasos"] {
+  const setup = typeof estilo === "string" ? ESTILOS_GENERACION[estilo].setup : estilo;
+  if (!conAvatar) return [...BASE, ...pasosSetup(setup)];
+  const encima = pasosSetup({ ...setup, modelo: "zoom", desenfoqueMovimiento: false }).filter((x) => x.paso === "Acabado");
+  return [...BASE, ...encima, ...PASOS_AVATAR];
 }

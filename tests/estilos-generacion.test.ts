@@ -25,12 +25,16 @@ describe("estilos de generación de «Nuevo»", () => {
   });
 
   it("el prompt realista suma lo de cámara real y un negativo contra el aspecto IA", () => {
-    const r = promptEstilo("real", "una mujer camina por el mercado. ");
+    const r = promptEstilo("equilibrado", "una mujer camina por el mercado. ");
     expect(r.prompt.startsWith("una mujer camina por el mercado. real footage")).toBe(true);
     expect(r.negativo).toBe(NEGATIVO_REALISTA);
     expect(r.negativo).toMatch(/plastic skin/);
     expect(promptEstilo("rapido", "x.")).toEqual({ prompt: "x" });
-    expect(promptEstilo("real", "  ").prompt).toMatch(/^real footage/);
+    expect(promptEstilo("equilibrado", "  ").prompt).toMatch(/^real footage/);
+    // «Máxima calidad» pide desenfoque de movimiento: «blurry» sale del negativo para no contradecirse.
+    const real = promptEstilo("real", "una mujer camina");
+    expect(real.prompt).toMatch(/^una mujer camina\. natural motion blur from a 180-degree shutter\. real footage/);
+    expect(real.negativo).not.toMatch(/blurry/);
   });
 
   it("cada preset muestra sus workflows por paso; «Máxima calidad» es la recomendada", () => {

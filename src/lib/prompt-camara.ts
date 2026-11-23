@@ -36,6 +36,7 @@ export const CAMARAS = {
   "cine-full-frame": "full-frame digital cinema camera",
   "pelicula-70mm": "grand format 70mm film camera",
   "super-35": "Super 35 studio digital camera",
+  "pelicula-35mm": "classic 35mm motion picture film camera",
   "pelicula-16mm": "classic 16mm film camera",
   "gran-formato": "premium large-format digital cinema camera",
 } as const;
@@ -166,6 +167,7 @@ export const NOMBRES = {
     "cine-full-frame": "Cine digital full frame",
     "pelicula-70mm": "Película 70 mm",
     "super-35": "Super 35",
+    "pelicula-35mm": "Película 35 mm",
     "pelicula-16mm": "Película 16 mm (con grano)",
     "gran-formato": "Gran formato digital",
   } satisfies Record<keyof typeof CAMARAS, string>,

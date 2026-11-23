@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { guardarAvatarDelVideo, type CuerpoAvatar } from "./actuar";
 import { guardarEstiloGeneracion } from "./animar-escenas";
 import { ESTILOS_GENERACION, type EstiloGeneracion } from "./estilos-generacion";
+import { necesitaPasoAnimar, type SetupVideo } from "./setup-video";
 import { crearCarpetas } from "./almacen";
 import { encolar, type TipoTrabajo } from "./cola";
 import { db } from "./db";
@@ -35,6 +36,8 @@ export interface NuevoProyecto {
   cuerpo?: CuerpoAvatar;
   /** Cuánto se trabaja cada escena (estilos-generacion.ts); sin él, «Rápido». */
   estilo?: EstiloGeneracion;
+  /** El setup del preset, personalizado en «Nuevo» (setup-video.ts); sin él, el del preset. */
+  setup?: SetupVideo;
 }
 
 async function crearFila(n: NuevoProyecto) {
@@ -64,24 +67,24 @@ const CADENA_CON_AVATAR: TipoTrabajo[] = ["proyecto.importar", "avatar.escenas",
 export async function crearProyecto(n: NuevoProyecto) {
   const p = await crearFila(n);
   const base = n.avatar ? CADENA_CON_AVATAR : CADENA_FABRICA;
-  // Con un estilo que anima, las escenas pasan a video antes del render (después del avatar).
-  const anima = !!(n.estilo && ESTILOS_GENERACION[n.estilo].animar);
+  // Con un setup que anima o suma acabado, las escenas pasan a video antes del render (después del avatar).
+  const anima = !!n.estilo && necesitaPasoAnimar(n.setup ?? ESTILOS_GENERACION[n.estilo].setup);
   const cadena: TipoTrabajo[] = anima ? [...base.slice(0, -1), "escenas.animar", base[base.length - 1]!] : base;
   if (n.avatar) await guardarAvatarDelVideo(p.slug, { avatar: n.avatar, cuerpo: n.cuerpo ?? "medio" });
-  if (anima) await guardarEstiloGeneracion(p.slug, n.estilo!);
+  if (anima) await guardarEstiloGeneracion(p.slug, n.estilo!, n.setup);
   await encolar(p.id, "mpt.generar", n.guion?.trim() ? { cadena, guion: n.guion.trim() } : { cadena });
   return p;
 }
 
 /** Un tema por línea. Cada tema es un proyecto con su cadena; los terminados no se repiten. */
-export async function crearLote(temas: string[], formato: Formato, plantilla: string, nombre?: string, avatar?: string, estilo?: EstiloGeneracion, cuerpo?: CuerpoAvatar) {
+export async function crearLote(temas: string[], formato: Formato, plantilla: string, nombre?: string, avatar?: string, estilo?: EstiloGeneracion, cuerpo?: CuerpoAvatar, setup?: SetupVideo) {
   const limpios = temas.map((t) => t.trim()).filter(Boolean);
   if (!limpios.length) throw new Error("El lote no tiene temas");
   const lote = await db.lote.create({
     data: { nombre: nombre ?? `Lote de ${limpios.length} temas`, formato, plantilla, temas: limpios },
   });
   const proyectos = [];
-  for (const [i, tema] of limpios.entries()) proyectos.push(await crearProyecto({ tema, formato, plantilla, loteId: lote.id, orden: i, avatar, estilo, cuerpo }));
+  for (const [i, tema] of limpios.entries()) proyectos.push(await crearProyecto({ tema, formato, plantilla, loteId: lote.id, orden: i, avatar, estilo, cuerpo, setup }));
   return { lote, proyectos };
 }
 

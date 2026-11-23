@@ -4,6 +4,7 @@ import { EstiloGeneracion } from "@/lib/estilos-generacion";
 import { db } from "@/lib/db";
 import { Formato } from "@/lib/esquema";
 import { json, manejar } from "@/lib/http";
+import { SetupVideo } from "@/lib/setup-video";
 import { crearLote, crearProyecto, importarTareaMpt } from "@/lib/servicios";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +34,8 @@ const Pedido = z.object({
   estilo: EstiloGeneracion.optional(),
   /** Con avatar: de la cintura para arriba o de cuerpo entero. */
   cuerpo: CuerpoAvatar.optional(),
+  /** El setup del preset personalizado (modelo, cámara, acabado); sin él, el del preset. */
+  setup: SetupVideo.optional(),
 });
 
 export async function POST(req: Request) {
@@ -43,8 +46,8 @@ export async function POST(req: Request) {
       const p = await importarTareaMpt(d.mptTaskId.trim(), { tema: temas[0]!, formato: d.formato, plantilla: d.plantilla }, d.rehacerVoz);
       return json({ proyectos: [p] }, 201);
     }
-    if (temas.length === 1) return json({ proyectos: [await crearProyecto({ tema: temas[0]!, formato: d.formato, plantilla: d.plantilla, avatar: d.avatar, estilo: d.estilo, cuerpo: d.cuerpo })] }, 201);
-    const r = await crearLote(temas, d.formato, d.plantilla, d.nombreLote, d.avatar, d.estilo, d.cuerpo);
+    if (temas.length === 1) return json({ proyectos: [await crearProyecto({ tema: temas[0]!, formato: d.formato, plantilla: d.plantilla, avatar: d.avatar, estilo: d.estilo, cuerpo: d.cuerpo, setup: d.estilo ? d.setup : undefined })] }, 201);
+    const r = await crearLote(temas, d.formato, d.plantilla, d.nombreLote, d.avatar, d.estilo, d.cuerpo, d.estilo ? d.setup : undefined);
     return json({ lote: r.lote, proyectos: r.proyectos }, 201);
   });
 }
