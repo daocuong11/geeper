@@ -12,7 +12,7 @@ import { importarMpt } from "@/lib/importador";
 import { buscarMomentos } from "@/lib/buscar-momentos";
 import { Campania } from "@/lib/clips";
 import { ENCUADRES, importarClip, type EncuadreClip } from "@/lib/importador-clip";
-import { apiViva, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/lib/mpt";
+import { asegurarApi, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/lib/mpt";
 import type { Contexto } from "@/lib/pasos";
 import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
@@ -90,7 +90,9 @@ async function mptGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const proyecto = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
   const dir = await crearCarpetas(proyecto.slug);
   const plantilla = await obtenerPlantilla(proyecto.plantilla);
-  if (!(await apiViva())) throw new Error("La API de MPT (127.0.0.1:8080) no responde. Corre `pnpm run doctor` para ver qué falta.");
+  if (!(await asegurarApi(h.log))) {
+    throw new Error("MoneyPrinterTurbo no responde: abre Docker Desktop, espera a que diga que está corriendo y relanza este trabajo (en Sistema ves qué falta).");
+  }
   await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "generando" } });
 
   let taskId = typeof t.payload.mptTaskId === "string" ? t.payload.mptTaskId : undefined;

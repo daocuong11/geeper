@@ -80,4 +80,14 @@ describe("memoria para Wan2GP en la app de escritorio", () => {
       process.env.GEEPER_LIBERAR_MPT = "1";
     }
   });
+
+  it("si WSL se reinició y tumbó la API de MPT, la levanta (con los pesados) y saca de la nota lo levantado", async () => {
+    corriendo.clear();
+    corriendo.add("mpt-kokoro");
+    const log: string[] = [];
+    expect(await m.levantarMptCaido((l) => log.push(l))).toEqual(["moneyprinterturbo-api", "moneyprinterturbo-webui", "mpt-ollama", "mpt-image-server"]);
+    expect(log[0]).toMatch(/estaba parado/);
+    // Ya están todos: no hace nada.
+    expect(await m.levantarMptCaido()).toEqual([]);
+  });
 });

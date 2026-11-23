@@ -92,6 +92,26 @@ export async function asegurarMpt(log?: (l: string) => void, { todos = false } =
   log?.(`MoneyPrinterTurbo de vuelta: ${pausados.filter((c) => !quedan.includes(c)).join(", ") || "nada"}.`);
 }
 
+/**
+ * La API de MPT (y su web) montan archivos de WSL: cuando WSL se reinicia, se caen (código 127) y Docker
+ * no las vuelve a levantar. Antes de pedirle algo a MPT se levantan las que estén paradas, junto con los
+ * contenedores pesados. Devuelve las que levantó.
+ */
+export const CONTENEDORES_MPT_API = ["moneyprinterturbo-api", "moneyprinterturbo-webui"] as const;
+export async function levantarMptCaido(log?: (l: string) => void): Promise<string[]> {
+  if (!liberarMptActivo()) return [];
+  const levantados: string[] = [];
+  for (const c of [...CONTENEDORES_MPT_API, ...CONTENEDORES_MPT_PESADOS]) {
+    const r = await docker(["inspect", "-f", "{{.State.Running}}", c]);
+    if (r?.codigo !== 0 || !r.salida.includes("false")) continue;
+    if ((await docker(["start", c]))?.codigo === 0) levantados.push(c);
+  }
+  // Lo que estaba anotado como pausado por Wan ya está arriba.
+  if (levantados.length) await escribirNota((await leerNota()).filter((c) => !levantados.includes(c))).catch(() => {});
+  if (levantados.length) log?.(`MoneyPrinterTurbo estaba parado: levanté ${levantados.join(", ")}.`);
+  return levantados;
+}
+
 /** Los levanta después de un rato sin Wan (si antes empieza otro paso de Wan, no). */
 export function reanudarLuego(ms = ESPERA_REANUDAR_MS) {
   clearTimeout(estado.timer);
