@@ -31,9 +31,10 @@ describe("protagonista: un solo set, de corrido", () => {
     expect(() => tomasProtagonista(conVoz([MAX_SEGUNDOS, 3, 3]))).toThrow(/escena 1.*pártela/);
   });
 
-  it("lo que tarda: ~7 min por toma más la voz; de cuerpo completo, el doble", () => {
-    expect(minutosProtagonista([60], "medio")).toBe(28);
-    expect(minutosProtagonista([60], "completo")).toBeGreaterThan(50);
+  it("lo que tarda (medido a 480p): un short de 29 s, ~25 min con las imágenes; dos tomas suman la carga dos veces", () => {
+    expect(minutosProtagonista([29])).toBe(25);
+    expect(minutosProtagonista([60])).toBe(46);
+    expect(minutosProtagonista([60, 60])).toBe(89);
   });
 
   it("la voz del avatar: Kokoro de MPT lleva «kokoro:» delante; VoxCPM tiene que ser la misma", () => {

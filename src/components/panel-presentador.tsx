@@ -7,6 +7,7 @@ import { Marco, type Formato } from "@/lib/esquema";
 import { metricas } from "@/lib/formatos";
 import { cajaMarco } from "@/lib/marco";
 import { resolverMarco, type Zona } from "@/lib/marco-auto";
+import { minutosHablar } from "@/lib/tiempo-hablar";
 
 interface PlanV { modo: string; escenas: { id: string; numero: number }[]; segundos: number; resolucion: string; notas: string[]; avisos: string[] }
 interface Datos {
@@ -85,11 +86,6 @@ const TAMANOS = [
  * burbuja o recortado sin fondo, como un streamer (actuar.ts). Que el avatar salga en las escenas, en lugar
  * de las imágenes, es «Tu avatar en el video» (pedido del dueño, 2026-11-22). Actitud en «Más opciones».
  */
-/**
- * Minutos que tarda en la RTX 5080 a 480p (medido 2026-11-21: 3,2 s de voz → 497 s; 10,4 s → 622 s, con
- * el modelo ya bajado): unos 7 minutos fijos más ~18 s por cada segundo de voz.
- */
-const minutosHablar = (segundos: number) => Math.max(8, Math.ceil((440 + 18 * segundos) / 60));
 
 export function PanelPresentador({ proyectoId, ocupado, alCambiar, usarVoz }: {
   proyectoId: string; escenas: { id: string; numero: number; texto: string }[]; ocupado: boolean; alCambiar: () => void;
@@ -341,7 +337,7 @@ export function PanelPresentador({ proyectoId, ocupado, alCambiar, usarVoz }: {
                 </details>
 
                 {d.error && <Aviso tipo="alerta">{d.error}</Aviso>}
-                {ventana === "streamer" && <p className="text-xs text-tenue">Habla con la voz de todo el video. Tarda unos 7 minutos más ~20 s por cada segundo de voz.</p>}
+                {ventana === "streamer" && <p className="text-xs text-tenue">Habla con la voz de todo el video. Tarda unos 7 minutos más ~40 s por cada segundo de voz (un short de 30 s, ~23 minutos).</p>}
                 {streamerOk && <Aviso tipo="ok">{streamerOk}</Aviso>}
                 {ventana === "burbuja" && d.plan && (
                   <div className="space-y-1 text-xs text-tenue">

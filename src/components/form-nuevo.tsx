@@ -98,8 +98,8 @@ export function FormNuevo() {
               ))}
             </div>
           )}
-          {avatar && cuerpo === "completo" && <p className="text-xs text-tenue">De cuerpo entero habla gesticulando como una persona frente a la cámara, a 720p para que la cara no pierda detalle (tarda más).</p>}
-          {avatar && <p className="text-xs text-tenue">Sale todo el video en su set, hablando a cámara con su voz y gesticulando como un creador real; las imágenes del tema quedan en una ventana a su lado. Suma unos 25 minutos en un short de un minuto (de cuerpo completo, el doble). Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
+          {avatar && cuerpo === "completo" && <p className="text-xs text-tenue">De cuerpo entero habla gesticulando con todo el cuerpo, como una persona frente a la cámara.</p>}
+          {avatar && <p className="text-xs text-tenue">Sale todo el video en su set, hablando a cámara con su voz y gesticulando como un creador real; las imágenes del tema quedan en una ventana a su lado. Suma unos 25 minutos en un short de 30 segundos y unos 45 en uno de un minuto. Para que comente en una ventana encima del video, usa «Presentador» en el editor.</p>}
         </fieldset>
       )}
       </div>

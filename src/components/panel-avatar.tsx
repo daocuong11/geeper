@@ -96,7 +96,7 @@ function SubirProducto({ proyectoId, producto, cambiar }: { proyectoId: string; 
 export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; ocupado: boolean }) {
   const [encuadre, setEncuadre] = useState<"medio" | "completo">("medio");
   const [avatar, setAvatar] = useState<string | null>(null);
-  const { datos, recargar } = useSondeo<Datos>(`/api/proyectos/${proyectoId}/avatar?cuerpo=${encuadre}${avatar ? `&avatar=${avatar}` : ""}`, 5000);
+  const { datos, recargar } = useSondeo<Datos>(`/api/proyectos/${proyectoId}/avatar${avatar ? `?avatar=${avatar}` : ""}`, 5000);
   const [producto, setProducto] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +148,7 @@ export function PanelAvatarVideo({ proyectoId, ocupado }: { proyectoId: string; 
             <legend className="font-medium">2. ¿Cuánto se le ve?</legend>
             <Opciones valor={encuadre} cambiar={setEncuadre} opciones={[
               { id: "medio", titulo: "Medio cuerpo", texto: DESCRIPCION_ENCUADRE.medio },
-              { id: "completo", titulo: "Cuerpo completo", texto: "De pies a cabeza, gesticulando con todo el cuerpo (a 720p: tarda el doble)." },
+              { id: "completo", titulo: "Cuerpo completo", texto: "De pies a cabeza, gesticulando con todo el cuerpo." },
             ]} />
           </fieldset>
           <div className="space-y-2 text-sm">

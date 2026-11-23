@@ -29,8 +29,6 @@ export async function GET(req: Request, ctx: Ctx) {
     const delVideo = await leerAvatarDelVideo(fila.slug);
     const q = new URL(req.url).searchParams;
     const elegido = q.get("avatar") ?? delVideo?.avatar ?? avatares[0]?.id ?? null;
-    // ?cuerpo= : lo que eligió en el panel (sin elegir, lo del video nuevo o medio cuerpo).
-    const cuerpo = CuerpoAvatar.safeParse(q.get("cuerpo")).data ?? delVideo?.cuerpo ?? "medio";
     // Protagonista (protagonista.ts): cuántas tomas, cuánto tarda y si antes cambia la voz.
     let plan: { escenas: number; tomas: number; segundos: number; minutos: number; voz: string | null; error: string | null } | null = null;
     // Ya es protagonista y después cambió lo que se dice: la boca quedó desfasada.
@@ -42,7 +40,7 @@ export async function GET(req: Request, ctx: Ctx) {
       const voz = a?.voz && !hablaConSuVoz(p.voz, a.voz) ? a.voz.nombre : null;
       try {
         const s = segundosDeTomas(p);
-        plan = { escenas: Object.keys(p.escenas).length, tomas: s.length, segundos: Math.round(s.reduce((x, y) => x + y, 0)), minutos: minutosProtagonista(s, cuerpo) + (voz ? 3 : 0), voz, error: null };
+        plan = { escenas: Object.keys(p.escenas).length, tomas: s.length, segundos: Math.round(s.reduce((x, y) => x + y, 0)), minutos: minutosProtagonista(s) + (voz ? 3 : 0), voz, error: null };
       } catch (e) {
         plan = { escenas: Object.keys(p.escenas).length, tomas: 0, segundos: 0, minutos: 0, voz, error: (e as Error).message };
       }

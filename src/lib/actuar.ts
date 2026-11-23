@@ -217,8 +217,7 @@ export async function actuarEscena(ctx: ContextoActuar, proyectoId: string, p: P
       escenas: [es.escena.id],
       imagen: cuadro,
       prompt: promptHabla(pedido.encuadre, pedido.que),
-      // De cuerpo entero la cara queda chica: a 480p la boca pierde detalle; a 720p no.
-      calidad: pedido.encuadre === "completo" ? "alta" : undefined,
+      // 480p siempre (tiempo-hablar.ts): a 720p tarda ~5 veces más con el mismo modelo de 480p.
       semilla: pedido.semilla,
     });
   }

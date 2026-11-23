@@ -23,6 +23,7 @@ import { ENTRADA, escenasEnLinea } from "./linea";
 import { generarPresentador, MAX_SEGUNDOS, MODELO_HABLAR, type ContextoPresentador } from "./presentador";
 import { regenerarVoz } from "./regenerar";
 import { versionDeProyecto } from "./render";
+import { segundosHablar } from "./tiempo-hablar";
 
 /** El set: el cuarto de un creador real, no un estudio de IA (luz de ventana, fondo desenfocado). */
 export const SET_PROTAGONISTA =
@@ -64,12 +65,11 @@ export function segundosDeTomas(p: Proyecto): number[] {
 }
 
 /**
- * Minutos estimados en la RTX 5080: la imagen en el set (~2) y cada toma (medido a 480p: ~7 min fijos +
- * ~18 s por segundo de voz; a 720p, de cuerpo completo, se estima el doble). Función pura.
+ * Minutos estimados en la RTX 5080: las dos imágenes (de cuerpo y en el set, ~2) y cada toma
+ * (tiempo-hablar.ts). Medio cuerpo y cuerpo completo tardan lo mismo: los dos van a 480p. Función pura.
  */
-export function minutosProtagonista(segundos: number[], cuerpo: CuerpoAvatar): number {
-  const factor = cuerpo === "completo" ? 2 : 1;
-  return Math.ceil(2 + segundos.reduce((m, s) => m + ((440 + 18 * s) / 60) * factor, 0));
+export function minutosProtagonista(segundos: number[]): number {
+  return Math.ceil(2 + segundos.reduce((m, s) => m + segundosHablar(s) / 60, 0));
 }
 
 /** ¿El video ya habla con la voz del avatar? (MPT antepone «kokoro:»). */
@@ -171,8 +171,7 @@ export async function protagonizarVideo(
         escenas,
         imagen: cuadro,
         prompt: promptHabla(o.cuerpo),
-        // De cuerpo entero la cara queda chica: a 480p la boca pierde detalle; a 720p no.
-        calidad: o.cuerpo === "completo" ? "alta" : undefined,
+        // 480p siempre (tiempo-hablar.ts): a 720p tarda ~5 veces más con el mismo modelo de 480p.
         semilla,
       });
       hechas.push(...nums);
