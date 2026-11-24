@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Aviso, Estado, postJson, useSondeo } from "./comun";
+import { Aviso, Estado, archivo, postJson, useSondeo } from "./comun";
 import type { CuentaInfo, DatosCuentas, RedInfo } from "./cuentas";
+import { arreglar, bloquea, LIMITES, revisarTexto, type Problema, type TextoPublicacion } from "@/lib/redes/revision-texto";
 
 export interface PublicacionV {
   id: string;
@@ -19,7 +20,10 @@ export interface PublicacionV {
 
 interface ReglaQc { id: string; nombre: string; ok: boolean; aviso?: boolean; detalle?: string }
 
-interface Campos { titulo: string; descripcion: string; privacidad: string; programada: string }
+interface Campos { titulo: string; descripcion: string; privacidad: string; programada: string; portada: boolean }
+
+/** Portada elegida del proyecto (panel «Portada del video»). */
+interface PortadaV { archivo: string; titulo: string; creada: string }
 
 const PRIVACIDAD: Record<string, string> = { publico: "Público", no_listado: "No listado", privado: "Privado", borrador: "Borrador" };
 const NOMBRE_RED: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok", instagram: "Instagram", facebook: "Facebook" };
@@ -27,6 +31,40 @@ const NOMBRE_RED: Record<string, string> = { youtube: "YouTube", tiktok: "TikTok
 const fecha = (s: string) => new Date(s).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
 /** «Público» para la red: Instagram no tiene privado, se publica al terminar. */
 const esPublico = (red: string, privacidad: string) => privacidad === "publico" || red === "instagram";
+/** Cada gravedad con palabra e ícono, no sólo color. */
+const GRAVEDAD: Record<Problema["gravedad"], { clase: string; icono: string; nombre: string }> = {
+  error: { clase: "text-red-300", icono: "✕", nombre: "Hay que arreglarlo" },
+  aviso: { clase: "text-amber-300", icono: "!", nombre: "Conviene revisarlo" },
+  info: { clase: "text-tenue", icono: "i", nombre: "Sugerencia" },
+};
+
+/** Títulos que ya se usaron en una cuenta: los de este proyecto y los de todos (`/api/cuentas/titulos`). */
+const titulosDe = (publicaciones: PublicacionV[], cuentaId: string, deTodos: Record<string, string[]> | undefined) => [
+  ...publicaciones.filter((p) => p.cuenta.id === cuentaId && !["cancelada", "fallida"].includes(p.estado)).map((p) => p.titulo),
+  ...(deTodos?.[cuentaId] ?? []),
+];
+
+/** Lo que revisa `revision-texto.ts`, con el botón de arreglo cuando Geeper lo puede hacer solo. */
+function RevisionTexto({ red, problemas, alArreglar }: { red: RedInfo; problemas: Problema[]; alArreglar: (id: string) => void }) {
+  if (problemas.length === 0) {
+    return <p className="text-xs text-emerald-300 sm:col-span-2" role="status">✓ Título y descripción listos para {red.nombre}.</p>;
+  }
+  return (
+    <ul className="space-y-1.5 text-xs sm:col-span-2" aria-label={`Revisión del texto para ${red.nombre}`}>
+      {problemas.map((x) => {
+        const g = GRAVEDAD[x.gravedad];
+        return (
+          <li key={x.id} className={`flex flex-wrap items-center gap-x-2 gap-y-1 ${g.clase}`}>
+            <span aria-hidden="true" className="inline-flex size-4 items-center justify-center rounded-full border border-current text-[10px] font-bold">{g.icono}</span>
+            <span className="sr-only">{g.nombre}:</span>
+            <span>{x.que} {x.hacer}</span>
+            {x.arreglo && <button type="button" className="boton py-0.5 text-xs" onClick={() => alArreglar(x.id)}>{x.arreglo}</button>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export function ListaPublicaciones({ publicaciones, alCambiar }: { publicaciones: PublicacionV[]; alCambiar: () => void }) {
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -71,12 +109,15 @@ export function ListaPublicaciones({ publicaciones, alCambiar }: { publicaciones
   );
 }
 
-function CamposDestino({ c, red, v, cambiar }: { c: CuentaInfo; red: RedInfo; v: Campos; cambiar: (v: Campos) => void }) {
+function CamposDestino({ c, red, v, cambiar, portada, perfil, texto, problemas }: { c: CuentaInfo; red: RedInfo; v: Campos; cambiar: (v: Campos) => void; portada: PortadaV | null; perfil: string; texto: TextoPublicacion; problemas: Problema[] }) {
   const pre = `pub-${c.id}`;
   return (
     <div className="grid gap-3 border-l-2 border-borde pl-3 sm:grid-cols-2">
       <div className="sm:col-span-2">
-        <label className="etiqueta" htmlFor={`${pre}-titulo`}>Título ({v.titulo.length}/100)</label>
+        <label className="etiqueta" htmlFor={`${pre}-titulo`}>
+          Título ({Array.from(v.titulo).length}/100)
+          {red.id === "youtube" && <span className="font-normal text-tenue"> · en el teléfono se ve completo hasta {LIMITES.youtube.tituloVisible}</span>}
+        </label>
         <input id={`${pre}-titulo`} className="campo" value={v.titulo} maxLength={100} required onChange={(e) => cambiar({ ...v, titulo: e.target.value })} />
       </div>
       <div className="sm:col-span-2">
@@ -95,6 +136,23 @@ function CamposDestino({ c, red, v, cambiar }: { c: CuentaInfo; red: RedInfo; v:
           <input id={`${pre}-prog`} type="datetime-local" className="campo" value={v.programada} onChange={(e) => cambiar({ ...v, programada: e.target.value })} />
         </div>
       )}
+      {red.id === "youtube" && (
+        <div className="sm:col-span-2">
+          {perfil !== "youtube-16x9" ? (
+            <p className="text-xs text-tenue">En los Shorts, YouTube elige la miniatura desde su app: la portada no se sube.</p>
+          ) : portada ? (
+            <label className="flex items-center gap-3 text-sm">
+              <input type="checkbox" checked={v.portada} onChange={(e) => cambiar({ ...v, portada: e.target.checked })} />
+              {/* eslint-disable-next-line @next/next/no-img-element -- archivo local */}
+              <img src={`${archivo(portada.archivo)}?v=${encodeURIComponent(portada.creada)}`} alt="" className="h-10 rounded" />
+              <span>Usar la portada del video como miniatura <span className="block text-xs text-tenue">YouTube la acepta si el canal está verificado por teléfono.</span></span>
+            </label>
+          ) : (
+            <p className="text-xs text-tenue">Sin portada: YouTube elegirá una imagen del video. Puedes crearla arriba, en «Portada del video».</p>
+          )}
+        </div>
+      )}
+      <RevisionTexto red={red} problemas={problemas} alArreglar={(id) => cambiar({ ...v, ...arreglar(texto, id) })} />
       <div className="space-y-1 text-xs sm:col-span-2">
         {red.id === "instagram" && <p className="text-amber-300">Instagram no tiene privado: el Reel se publica apenas termina la subida.</p>}
         {red.id === "tiktok" && v.privacidad === "borrador" && <p className="text-tenue">En borrador, el video llega a la bandeja de la app de TikTok y se publica desde el teléfono.</p>}
@@ -113,6 +171,9 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
   alCambiar: () => void;
 }) {
   const { datos, error } = useSondeo<DatosCuentas>("/api/cuentas", 60_000);
+  const { datos: dp } = useSondeo<{ elegida: PortadaV | null }>(`/api/proyectos/${proyectoId}/portada`, 60_000);
+  const portada = dp?.elegida ?? null;
+  const { datos: dt } = useSondeo<{ porCuenta: Record<string, string[]> }>("/api/cuentas/titulos", 60_000);
   const [marcadas, setMarcadas] = useState<Record<string, Campos>>({});
   const [enviando, setEnviando] = useState(false);
   const [msg, setMsg] = useState<{ tipo: "ok" | "error"; t: string } | null>(null);
@@ -134,7 +195,9 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
         return resto;
       }
       const red = redes.get(c.red)!;
-      return { ...m, [c.id]: { titulo: nombre.slice(0, 100), descripcion: tema.slice(0, 5000), privacidad: red.privacidades[0] ?? "privado", programada: "" } };
+      // El título de la portada elegida, si hay: es el que la persona eligió para este video.
+      const titulo = (portada?.titulo ?? nombre).slice(0, 100);
+      return { ...m, [c.id]: { titulo, descripcion: tema.slice(0, 5000), privacidad: red.privacidades[0] ?? "privado", programada: "", portada: red.id === "youtube" && render.perfil === "youtube-16x9" && !!portada } };
     });
   }
 
@@ -145,7 +208,7 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
     try {
       const destinos = elegidas.map((c) => {
         const v = marcadas[c.id]!;
-        return { cuentaId: c.id, titulo: v.titulo.trim(), descripcion: v.descripcion, privacidad: v.privacidad, programada: v.programada ? new Date(v.programada).toISOString() : null };
+        return { cuentaId: c.id, titulo: v.titulo.trim(), descripcion: v.descripcion, privacidad: v.privacidad, programada: v.programada ? new Date(v.programada).toISOString() : null, ...(v.portada ? { portada: true } : {}) };
       });
       await postJson(`/api/proyectos/${proyectoId}/publicar`, { renderId: render.id, destinos });
       setMsg({ tipo: "ok", t: `${destinos.length === 1 ? "1 publicación en cola" : `${destinos.length} publicaciones en cola`}. El avance se ve abajo y en Trabajos.` });
@@ -158,7 +221,12 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
     }
   }
 
-  const invalido = elegidas.some((c) => !marcadas[c.id]!.titulo.trim());
+  const textos = new Map(elegidas.map((c): [string, TextoPublicacion] => {
+    const v = marcadas[c.id]!;
+    return [c.id, { red: c.red, titulo: v.titulo, descripcion: v.descripcion, titulosPrevios: titulosDe(publicaciones, c.id, dt?.porCuenta), tituloSugerido: nombre, descripcionSugerida: tema }];
+  }));
+  const problemas = new Map([...textos].map(([id, t]) => [id, revisarTexto(t)]));
+  const invalido = elegidas.some((c) => bloquea(problemas.get(c.id) ?? []));
   return (
     <section className="tarjeta space-y-4 p-4" aria-labelledby="publicar-titulo">
       <h2 id="publicar-titulo" className="font-medium">Publicar en redes</h2>
@@ -190,7 +258,7 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
                   {c.alias && <span className="text-tenue">{c.usuario}</span>}
                   {publicada && <span className="text-xs text-tenue">(este render ya está en esta cuenta)</span>}
                 </label>
-                {marcadas[c.id] && <CamposDestino c={c} red={red} v={marcadas[c.id]!} cambiar={(v) => setMarcadas((m) => ({ ...m, [c.id]: v }))} />}
+                {marcadas[c.id] && <CamposDestino c={c} red={red} v={marcadas[c.id]!} cambiar={(v) => setMarcadas((m) => ({ ...m, [c.id]: v }))} portada={portada} perfil={render.perfil} texto={textos.get(c.id)!} problemas={problemas.get(c.id) ?? []} />}
               </div>
             );
           })}
@@ -211,6 +279,7 @@ export function PanelPublicar({ proyectoId, render, nombre, tema, publicaciones,
           {enviando ? "Encolando…" : `Publicar en ${elegidas.length} ${elegidas.length === 1 ? "cuenta" : "cuentas"}`}
         </button>
       )}
+      {invalido && <p className="text-xs text-red-300" role="status">Arregla lo marcado con ✕ para poder publicar.</p>}
       <div className="space-y-2 border-t border-borde pt-3">
         <h3 className="text-sm font-medium">Publicaciones de este proyecto</h3>
         <ListaPublicaciones publicaciones={publicaciones} alCambiar={alCambiar} />

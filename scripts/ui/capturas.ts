@@ -20,7 +20,7 @@ async function main() {
   fs.mkdirSync(salida, { recursive: true });
   const navegador = await chromium.launch({ executablePath: chrome() });
   const errores: string[] = [];
-  const rutas = ["/", "/nuevo", "/trabajos", "/plantillas", "/sistema", ...(proyecto ? [`/proyectos/${proyecto}`] : [])];
+  const rutas = ["/", "/nuevo", "/clips", "/anuncios", "/trabajos", "/plantillas", "/cuentas", "/sistema", ...(proyecto ? [`/proyectos/${proyecto}`] : [])];
   for (const [ancho, alto, nombre] of [[1440, 1000, "escritorio"], [390, 844, "telefono"]] as const) {
     const pagina = await navegador.newPage({ viewport: { width: ancho, height: alto }, deviceScaleFactor: 1 });
     pagina.on("console", (m) => m.type() === "error" && errores.push(`${nombre} ${pagina.url()}: ${m.text()}`));

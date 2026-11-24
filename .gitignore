@@ -12,3 +12,19 @@ geeper-data/
 coverage/
 test-results/
 playwright-report/
+
+# Worktrees de sesiones de Claude Code
+.claude/worktrees/
+
+# App de escritorio: carpeta de preparación y salidas del empaquetado
+escritorio-app/
+dist-escritorio/
+escritorio/dist/
+.next-escritorio/
+
+# Python
+__pycache__/
+*.pyc
+
+# Paquetes: salida de compilación
+packages/*/dist/

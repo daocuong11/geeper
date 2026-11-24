@@ -3,6 +3,7 @@ import path from "node:path";
 import { dentroDe, existe } from "@/lib/archivos";
 import { fotograma } from "@/lib/media";
 import { dirProyecto } from "@/lib/rutas";
+import { CSP_SVG } from "@/lib/svg";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,11 @@ export async function GET(req: Request) {
     const origen = dentroDe(dir, ruta);
     if (/\.(jpe?g|png|webp)$/i.test(origen)) {
       return new Response(new Uint8Array(await fs.readFile(origen)), { headers: { "content-type": "image/jpeg" } });
+    }
+    if (/\.svg$/i.test(origen)) {
+      return new Response(new Uint8Array(await fs.readFile(origen)), {
+        headers: { "content-type": "image/svg+xml", "content-security-policy": CSP_SVG },
+      });
     }
     const destino = path.join(dir, "assets", "miniaturas", `${path.parse(ruta).name}-${t.toFixed(1)}.jpg`);
     if (!(await existe(destino))) {

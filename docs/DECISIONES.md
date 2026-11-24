@@ -168,3 +168,187 @@ render (`scripts/ui/vista-en-vivo.ts`).
 Diferencias conocidas: el ajuste de línea de los subtítulos puede variar un poco por las fuentes del
 navegador, y los clips de MPT tienen un keyframe cada 6 s, así que un salto tarda un instante más en
 mostrar la imagen.
+
+## 15. Esquema v2: pistas libres y textos aparte, migración en la lectura
+
+**Decisión:** `geeper.json` pasa a `schemaVersion: 2` sin romper nada. Las pistas `visual`, `voz` y
+`musica` siguen reservadas (un clip por escena, en orden); cualquier otra pista es **libre** y sus
+clips llevan `inicio` en la línea final (superposiciones y efectos de sonido). Los textos superpuestos
+van en un arreglo `textos` propio y no como pistas, para que toda pista tenga clips con asset y el
+resto del código no cambie de tipos. `validarProyecto` migra v1 → v2 antes de validar, así las
+versiones viejas guardadas en la base se leen igual; al guardar quedan en v2.
+
+**Transiciones:** se montan sobre el final de la escena anterior (que se alarga lo que dura la
+transición) en vez de comerle tiempo a la escena nueva: la voz no cambia de lugar. Escenas pares e
+impares van en carriles distintos de Hyperframes. Sin transición propia ni movimiento, la escena
+conserva el golpe de zoom de la plantilla; `corte` lo quita.
+
+## 16. Edición por texto: recortes en tiempo del audio, no índices de palabras
+
+Un recorte guarda `{ inicio, fin, motivo }` en tiempo del asset de voz, no índices: así sirve igual
+para palabras, muletillas y silencios. Recortar palabras corta de la mitad del silencio anterior a la
+mitad del siguiente (nunca se come una palabra vecina). La mezcla arma la voz por tramos con fundidos
+de 15 ms; los subtítulos se recolocan en los tramos y una palabra cuyo centro cae en un recorte no se
+muestra. La imagen de la escena sigue corrida (no salta): el material de MPT es B-roll sobre la voz.
+
+Regenerar la voz descarta los recortes (sus tiempos eran de la voz anterior) pero **no** vuelve a decir
+lo recortado: se sintetiza el texto sin esas palabras. No se puede recortar una escena entera (para eso
+está «Quitar escena»).
+
+## 17. Confianza de la alineación sin probabilidades de whisper
+
+`hyperframes transcribe` (whisper.cpp) no da probabilidad por palabra (comprobado: sólo `text`,
+`start`, `end`, `id`). La confianza se calcula con el parecido entre la palabra del guion y lo que oyó
+whisper en ese tiempo, si cae dentro de un silencio (`silencedetect` −35 dB / 0,6 s) y si dura menos de
+30 ms o más de 2 s. Menos de 0,6 es «dudosa»; con más del 20 % dudosas el QC bloquea (transcripción
+fallida), si no, avisa. Los proyectos importados antes no tienen confianza («sin medir») hasta que se
+regenera su voz.
+
+## 18. Pulsos: se mueve la música, no los cortes
+
+Los cortes los decide la voz (pausas y fines de frase). Para cortar al ritmo se elige desde qué segundo
+empieza la música (hasta 30 s) para que más cortes caigan a ≤ 70 ms de un pulso. Los pulsos los da
+`hyperframes beats`, que devuelve vacío si la pista no tiene pulso estable (comprobado con la música
+actual de MPT: 0 pulsos; con un clic sintético a 120 BPM: 40 pulsos a 5 ms del real). El importador lo
+intenta solo; el QC lo informa como aviso.
+
+## 19. Licencias, plataformas, pico real, máster y pesos
+
+- **Uso comercial** (`comercial: true`): el QC bloquea todo asset cuya licencia no se reconozca como
+  comercial. Sin la marca sigue siendo aviso, como antes (la música de MPT, DECISIONES §2).
+- **Plataformas** en 9:16: la banda segura es la intersección de lo que no tapa la interfaz de cada
+  una (fracciones de explainroo, HEREDADO.md). Con TikTok la banda queda en x 119–864: los subtítulos
+  pasan a menos caracteres por línea y marca y tarjeta final se centran en esa banda. Sin plataformas,
+  todo queda como antes.
+- **Pico real:** tras codificar, si el archivo pasa de −1 dBTP se limita el audio a 192 kHz y se
+  recodifica sólo el audio (el video se copia), hasta 4 veces con un tope cada vez más bajo.
+- **Máster:** con `entrega.master`, un segundo render de Hyperframes en MOV calidad alta, en CPU.
+- **Pesos:** el sha256 de `ggml-medium.bin` y `kokoro-v1.0.onnx` entra en la huella de la alineación y
+  en `regenerar` de cada voz, con caché por tamaño y fecha en `~/geeper-data/modelos.json`. Los modelos
+  dentro del contenedor de MPT no se ven desde aquí.
+
+## 20. Un paso hecho con otra ruta de salida se reutiliza
+
+**Bug (venía de antes):** `paso()` daba por hecho un paso si las salidas *del manifiesto anterior*
+seguían intactas, sin mirar si eran las rutas pedidas ahora. El render de entrega lleva el número de
+versión en el nombre (`v<N>-<perfil>.mp4`): al renderizar una versión nueva con la misma imagen y el
+mismo sonido (p. ej. después de «Volver a esta» o de cambiar sólo «uso comercial»), `entrega.loudnorm`
+se saltaba y el QC fallaba porque `v<N>.mp4` no existía.
+
+**Arreglo:** si el resultado ya existe con otra ruta, se enlaza (o copia) a la ruta pedida y el paso
+sigue saltado. Medido: re-render de una versión sin cambios de imagen ni sonido en 6 s. Prueba en
+`tests/reanudar.test.ts`.
+
+## 21. Clips de material largo (G5 + E4), con lo útil de gtavi-claudecode
+
+Revisión del kit Bodila51/gtavi-claudecode (MIT, Python, commit dd95d39) el 2026-11-19. Qué se tomó,
+qué no y por qué (detalle de cada pieza en HEREDADO.md).
+
+- **Puntuar primero sin transcribir.** Su `moments.py` transcribe el VOD entero con faster-whisper;
+  aquí la sonoridad (dB por segundo menos su media móvil de 30 s), «lo más visto» de YouTube y el chat
+  dan los candidatos en segundos aunque el VOD dure horas, y **sólo los candidatos** se transcriben
+  (whisper `medium`) para ajustar los bordes a frases y sumar palabras de emoción en inglés y español.
+  Medido con un material de 60 s: 22 s en total, un candidato. Transcribir un VOD de 4 h entero en CPU
+  costaría ~1 h.
+- **El visual sigue a la voz (`sincro: "voz"`).** En un clip la imagen y el audio son la misma
+  grabación. Antes, el video de una escena corría seguido aunque se recortaran palabras: con stock da
+  igual, con la cara de un streamer se desincroniza la boca. El compilador emite un tramo de video por
+  cada tramo que suena, con el mismo desplazamiento sobre el asset; `velocidad` se ignora. No se guarda
+  la lista de tramos (se deriva de los recortes, como el audio), así no hay dos verdades.
+- **El reencuadre se hornea** como asset 1080×1920 con ffmpeg (paso con manifiesto). `regenerar`
+  guarda todo para rehacerlo igual sin volver a detectar: modo, caja de la cámara, bordes, seguimiento
+  de la cara, recorte, offset del juego, versión y sha256 de YuNet. Hacer la pantalla partida en el
+  compilador no compensa hoy.
+  - *react*: cara arriba (1080×730), juego abajo, corrido para no mostrar la cámara ni overlays fijos
+    (contadores, alertas). Si no hay cara estable o fuera de la cámara no hay juego, cae a «contener».
+  - *cara*: 9:16 a toda la altura siguiendo la cara (IRL o cámara a pantalla completa). Si la cara
+    está en una webcam sobre el juego, se niega y sugiere *react*.
+- **Tramo con 1 s de margen** a cada lado y un keyframe por segundo (vista en vivo, E1).
+- **La voz es la del creador:** no hay música por defecto y `voz.regenerar` se niega en un clip.
+- **Licencia «revisar»** salvo que se diga el permiso (`--permiso`, queda como «permiso del creador:
+  …»). Con `comercial: true`, el QC bloquea un clip sin permiso.
+- **Regla de QC «clip»** (bloquea): sin leaks, «jugar antes», piratería, trampas de dinero ni bots en
+  título y textos; nunca «oficial»; crédito del creador presente; duración dentro de la campaña si se
+  cargó (`--campania`). Los insultos racistas u homófobos se enmascaran en los subtítulos (vía
+  `mostrar`); el audio no se toca.
+- **Descartado:** grabar directos en vivo (`live.py`) y leer el chat de Twitch por IRC anónimo o su GQL
+  con el Client-Id de la web (zona gris de los términos; sólo VODs ya publicados o archivos propios);
+  traducir con Google Translate web y voces de edge-tts (servicios en línea: choca con «todo local»;
+  D3 irá con un LLM local y Kokoro); su `cut.py` (Geeper ya compila, normaliza y hace QC); buscadores
+  de campañas, trucos y secretos de GTA (contenido, no producto).
+- **Segunda opinión (Nemotron Ultra):** aceptado puntuar sin transcribir, guardar todos los parámetros
+  del recorte, contrato con versión y ping del puente Python, términos prohibidos en el QC y no grabar
+  directos. Descartado: guardar `mapaVoz[]` en el esquema (duplica lo que dan los recortes), marca de
+  agua obligatoria (decisión del dueño, no del producto) y portar su loudnorm (Geeper ya lo hace en
+  dos pasadas con reintento del pico).
+- **UI:** página Clips (buscar momentos como trabajo `clip.momentos`, radar de tendencias, «Hacer
+  clip»), origen del clip y crédito en el editor, y la descripción del post sale con crédito, mención y
+  hashtags de la campaña. «Seguir la cara» (trabajo `visual.reencuadrar`) sirve en cualquier proyecto
+  9:16 y cambia el video en todas las escenas que lo usan.
+- **Radar de tendencias** (de `trends.py`): YouTube por vistas por hora con yt-dlp, de a 6 pedidos en
+  paralelo, guardado una hora por consulta. Excluye directos en curso.
+- **Título legible:** el estilo `titulo` usaba la tinta de la plantilla (blanco) sobre el degradado de
+  acentos y daba 1,8:1 en GTA VI Shorts (el `hyperframes check` lo bloqueaba). Ahora el compilador elige
+  la tinta del título por contraste WCAG (≥ 4,5:1 con los dos acentos): casi negro en las dos
+  plantillas actuales.
+- **Verificado de punta a punta** (2026-11-19, base y datos aislados): clip react de 25 s de un material
+  de 60 s → importar 35 s (reencuadre 6 s, whisper 15 s) → render y QC. Pasan sonoridad, pico, color,
+  integridad, `hyperframes check`, alineación y la regla «clip»; la licencia avisa («revisar», sin
+  permiso). El ritmo de subtítulos daba 17,4–17,8 car./s y bloqueaba; con la decisión siguiente el
+  clip queda aprobado con ese aviso. También: búsqueda de momentos y creación de clip desde la API, reencuadre posterior
+  (cubrir → react en las 3 escenas) y capturas de la UI a 1440 px y 390 px sin errores.
+- **Ritmo de subtítulos en clips: aviso** (decisión del dueño, 2026-11-19). La voz es la del creador y
+  no se puede frenar como la de Kokoro (§3): en clips, pasarse de 17 car./s es la regla de aviso
+  «subtitulos-ritmo»; el largo de línea (≤ 42) y el número de líneas (≤ 2) siguen bloqueando. Los
+  shorts propios no cambian.
+
+## 22. Clips para quien no sabe nada de video (asistente de 3 pasos)
+
+Decisiones del dueño (2026-11-19): asistente guiado, ganchos sugeridos con el modelo local, permiso con
+casilla y la UX simple primero en clips (el resto de la app, después).
+
+- **Paso 1, elige tu video:** pegar un enlace o arrastrar un archivo. La subida va en flujo (el
+  cuerpo es el archivo, hasta 20 GB, sin cargarlo en memoria) a `~/geeper-data/_subidos/`. El idioma
+  se pregunta en palabras («¿En qué idioma hablan?»); la duración mínima y máxima quedan en «Más
+  opciones». El radar se ofrece como «¿No sabes qué video usar?».
+- **Paso 2, elige un momento:** cada candidato trae una vista previa liviana (480p, 10 s de aire a
+  cada lado) y una miniatura; el play reproduce sólo el momento. El puntaje se muestra como 1 a 3
+  estrellas (por tercios) y los motivos en palabras («El chat explotó»).
+- **Paso 3, ajusta y crea:** barras de inicio y fin sobre la vista previa, «Ver mi recorte», estilos
+  con dibujo, «✨ Sugerirme ideas» y permiso con casilla (campaña, autorización escrita o video propio).
+  El paso vive en la URL: recargar no saca del paso.
+- **Ganchos con Ollama local** (`gemma4:26b` del stack de MPT, vía `docker exec`, sin abrir puertos):
+  toma el candado de la GPU sin esperar (si está ocupada lo dice), descarga el modelo al terminar
+  (`--keepalive 0s`) y filtra lo que devuelve: sin comillas (serían palabras en boca del creador), sin
+  términos prohibidos, sin repetidos. Si Docker está apagado lo dice y el campo queda para escribir.
+- **Motor apagado:** la página avisa si el worker no late hace más de 60 s y cómo encenderlo.
+- **QC en palabras:** «¿Está listo para publicar?» con «Listo», «Listo, con cosas para mirar» o «Falta
+  arreglar N cosas», y por cada una qué se revisa y qué hacer (`src/lib/qc-explicado.ts`). La tabla
+  técnica queda plegada.
+- **Marca:** en react la etiqueta de arriba tapaba los ojos del streamer y abajo no cabe (quedan 20 px
+  entre los subtítulos y el borde de la banda segura; la etiqueta mide ~80). `marca: false` la quita
+  durante el video (la tarjeta final la muestra igual); los clips react nacen así y el editor la
+  enciende o apaga en «Destino».
+- **Verificado:** subida por API (y rechazo de lo que no es video), análisis con vistas previas,
+  sugerencias con Docker apagado (mensaje claro en 0,3 s), los 3 pasos a 1280 y 390 px, «Crear mi
+  clip» con clics reales, el QC en palabras y un render react sin marca aprobado. En `next dev` dentro
+  del worktree la página se recarga en bucle (también `/trabajos`, que no se tocó): las pruebas de UI
+  se hicieron con `next build` + `next start`, donde no pasa.
+
+## 24. Voz nueva: VoxCPM2 diseña una vez y después clona su propia muestra
+
+Comparativa en MODELOS.md («Comparativa de modelos locales»). VoxCPM2 (Apache 2.0) porque con **un solo
+modelo** diseña una voz desde una descripción y la repite clonando la muestra: el diseño cambia en cada
+corrida, la clonación no (Nemotron Omni: mismo hablante, 9/10). Sin eso cada escena regenerada sonaría
+a otra persona. Qwen3-TTS necesitaría dos modelos (VoiceDesign y Base).
+
+- La persona **elige escuchando**, no por el nombre del modelo: tarjetas con «▶ Escuchar» y «Usar esta
+  voz» (que ofrece poner la voz ya en todo el video). «Crear una voz nueva» propone 3 tomas; la elegida
+  se guarda con nombre en `~/geeper-data/voces/<id>/` (muestra + transcripción) y sirve para cualquier
+  proyecto (`motor: "voxcpm"` en `geeper.json`).
+- Sólo voces inventadas: no se ofrece clonar a una persona real (pediría su consentimiento escrito).
+- VoxCPM2 habla a 17–18 car./s: la velocidad del proyecto se aplica con `atempo` (conserva el tono).
+- `torch.compile` falla en la RTX 5080 bajo WSL («CUDA error: unknown error»): se apaga
+  (`TORCHDYNAMO_DISABLE=1`). Cargar el modelo tarda 60–95 s la primera vez, por eso regenerar el guion
+  completo (una carga) conviene más que escena por escena.
+- Toma el gpu-lock y espera su turno (~6 GB). Venv `~/dev/video-tools/venvs/voxcpm`.

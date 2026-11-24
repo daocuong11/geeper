@@ -3,9 +3,11 @@
  * reproducirla en el editor con <hyperframes-player>. Cuesta lo que la mezcla de audio (~0,5 s) más la
  * compilación; se reutiliza mientras no cambie la versión ni el compilador.
  */
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { compilar, escribirProyectoHf, VERSION_COMPILADOR } from "./compilador";
+import { prepararColor } from "./looks";
 import { db } from "./db";
 import { metricas } from "./formatos";
 import { duracionEscenas } from "./linea";
@@ -20,7 +22,18 @@ import { RAIZ_REPO, dirDatos, dirProyecto } from "./rutas";
  * tiempo: sin él se veía siempre el último clip. Se enlaza una copia local del runtime de la misma
  * versión (sin CDN). Sólo en la vista previa: el HTML del render no cambia.
  */
-const RUNTIME = path.join(RAIZ_REPO, "node_modules", "@hyperframes", "core", "dist", "hyperframe.runtime.iife.js");
+const RUNTIMES = [
+  path.join(RAIZ_REPO, "node_modules", "@hyperframes", "core", "dist", "hyperframe.runtime.iife.js"),
+  // En la app de escritorio @hyperframes/core no se empaqueta (sólo se usa en el navegador, ya compilado):
+  // el CLI `hyperframes` trae el mismo archivo, de la misma versión fijada.
+  path.join(RAIZ_REPO, "node_modules", "hyperframes", "dist", "hyperframe.runtime.iife.js"),
+];
+
+export const rutaRuntime = () => {
+  const r = RUNTIMES.find((x) => existsSync(x));
+  if (!r) throw new Error(`Falta el runtime de Hyperframes (hyperframe.runtime.iife.js); se buscó en: ${RUNTIMES.join(", ")}`);
+  return r;
+};
 
 export interface VistaPrevia {
   /** Ruta del index.html dentro de ~/geeper-data, para /api/archivos/<ruta>. */
@@ -68,9 +81,10 @@ async function preparar(proyectoId: string): Promise<VistaPrevia> {
   const rutaMezcla = path.join(dir, "build", "vista-mezcla.wav");
   await fs.mkdir(path.dirname(rutaMezcla), { recursive: true });
   await mezclar(p, dir, total, plantilla.datos.musica.ducking, rutaMezcla, () => {});
-  const comp = compilar(p, plantilla.datos, rutaMezcla, dir);
+  const sustitutos = await prepararColor(p, dir, plantilla.datos.color);
+  const comp = compilar(p, plantilla.datos, rutaMezcla, dir, sustitutos);
   await escribirProyectoHf(dirVista, { ...comp, html: comp.html.replace("</body>", '<script src="hyperframe.runtime.js"></script>\n</body>') });
-  await fs.copyFile(RUNTIME, path.join(dirVista, "hyperframe.runtime.js"));
+  await fs.copyFile(rutaRuntime(), path.join(dirVista, "hyperframe.runtime.js"));
   await fs.writeFile(sello, clave);
   return resultado;
 }

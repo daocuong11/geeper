@@ -204,3 +204,15 @@ model Publicacion {
   /// Evita subir el mismo render dos veces a la misma cuenta por un doble clic.
   @@unique([renderId, cuentaId])
 }
+
+/// Una campaña de anuncios: brief, conceptos, revisión y prueba (docs/ANUNCIOS.md). Los datos se
+/// validan con src/lib/anuncios/esquema.ts; cada concepto puede apuntar a un Proyecto (su video).
+model Campana {
+  id          String   @id @default(cuid())
+  nombre      String
+  /// borrador | en-revision | lista | activa | archivada
+  estado      String   @default("borrador")
+  datos       Json
+  creado      DateTime @default(now())
+  actualizado DateTime @updatedAt
+}

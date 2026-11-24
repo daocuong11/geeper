@@ -52,3 +52,22 @@ it("un trabajo matado (kill -9) a mitad se relanza sin repetir los pasos termina
   await new Promise((r) => cuarta.on("close", r));
   expect(fs.readFileSync(path.join(dir, "corridas.txt"), "utf8").trim().split("\n").slice(-1)).toEqual(["tres"]);
 });
+
+it("un paso ya hecho con otra ruta de salida no se repite: deja el mismo resultado en la ruta nueva", async () => {
+  const { paso } = await import("@/lib/pasos");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "geeper-paso-"));
+  const ctx = { dir, log: () => {} };
+  let corridas = 0;
+  const hacer = (salida: string) =>
+    paso(ctx, "entrega.prueba", { archivos: [], params: { x: 1 }, motor: "m" }, [path.join(dir, salida)], async ([tmp]) => {
+      corridas++;
+      fs.writeFileSync(tmp!, "contenido");
+      return { ok: true };
+    });
+  await hacer("renders/v1.mp4");
+  const r = await hacer("renders/v2.mp4"); // misma entrada, otra versión
+  expect(r.saltado).toBe(true);
+  expect(corridas).toBe(1);
+  expect(fs.readFileSync(path.join(dir, "renders", "v2.mp4"), "utf8")).toBe("contenido");
+  fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -68,7 +68,10 @@ nombres de scope de estas APIs cambian seguido. El `doctor` muestra lo que repor
    16:9 de página de Facebook quedan para después: la API de Reels sólo admite vertical.)
 3. Marca las cuentas. Por cada una ajusta el título (precargado con el nombre del proyecto), la
    descripción y los hashtags (precargados desde la plantilla), la privacidad y, opcionalmente, una
-   hora programada.
+   hora programada. Debajo, cada cuenta muestra «✓ Título y descripción listos» o lo que la red
+   recortaría o ignoraría (aviso) y lo que rechazaría (error: no deja publicar), con un botón para
+   arreglarlo cuando Geeper puede (`src/lib/redes/revision-texto.ts`). También avisa si el título ya
+   se usó en esa cuenta, en cualquier proyecto.
 4. Aprieta «Publicar». Se encola un trabajo `publicar.subir` por cuenta.
 5. En **Trabajos** se ve el progreso de la subida. Al terminar, el proyecto muestra el enlace al
    video en cada red.

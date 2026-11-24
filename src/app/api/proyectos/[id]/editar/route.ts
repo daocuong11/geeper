@@ -15,6 +15,23 @@ const NOTAS: Record<Edicion["tipo"], string> = {
   ajusteVisual: "Encuadre cambiado",
   renombrar: "Renombrado",
   cambiarVoz: "Voz cambiada",
+  recortarPalabras: "Palabras recortadas",
+  restaurarPalabras: "Palabras restauradas",
+  confirmarPalabras: "Palabras revisadas: suenan bien",
+  quitarSilencios: "Silencios largos acortados",
+  quitarMuletillas: "Muletillas quitadas",
+  quitarRecortes: "Recortes deshechos",
+  efectosVisual: "Efectos del plano cambiados",
+  agregarTexto: "Texto agregado",
+  editarTexto: "Texto editado",
+  quitarTexto: "Texto quitado",
+  agregarClipLibre: "Superposición o efecto agregado",
+  quitarClipLibre: "Superposición o efecto quitado",
+  editarClipLibre: "Superposición ajustada",
+  estiloVideo: "Estilo del video cambiado",
+  cambiarDestino: "Destino cambiado",
+  cambiarCta: "Botón final cambiado",
+  fijarMusica: "Música alineada",
 };
 
 /** Aplica una o varias ediciones (sólo geeper.json, sin GPU) y guarda una Version nueva. */

@@ -22,6 +22,7 @@ beforeAll(() => {
   fs.writeFileSync(
     path.join(dir, "redes.json"),
     JSON.stringify({ instagram: { appId: "ig-app", appSecret: "ig-secreto-123" }, facebook: { appId: "fb-app", appSecret: "fb-secreto-123" } }),
+    { mode: 0o600 },
   );
   process.env.GEEPER_CONFIG = dir;
   process.env.GEEPER_URL = "http://localhost:3300";

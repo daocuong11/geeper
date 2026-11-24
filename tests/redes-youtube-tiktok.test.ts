@@ -19,6 +19,7 @@ function escribirConfig(publicacionDirecta: boolean) {
       youtube: { clientId: "cliente-yt-falso", clientSecret: "secreto-yt-falso" },
       tiktok: { clientKey: "clave-tt-falsa", clientSecret: "secreto-tt-falso", publicacionDirecta },
     }),
+    { mode: 0o600 },
   );
 }
 

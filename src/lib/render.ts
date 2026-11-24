@@ -8,20 +8,32 @@ import path from "node:path";
 import { sha256Archivo } from "./archivos";
 import { db } from "./db";
 import { compilar, escribirProyectoHf, VERSION_COMPILADOR } from "./compilador";
-import { validarProyecto, type Proyecto } from "./esquema";
+import { conColor, prepararColor } from "./looks";
+import { ampliaciones } from "./nitidez";
+import { resumirConfianza } from "./confianza";
+import { pistasLibres, validarProyecto, type Proyecto } from "./esquema";
 import { metricas } from "./formatos";
 import { tomarGpu } from "./gpu";
-import { aSrt, duracionEscenas, escenasEnLinea } from "./linea";
-import { huellaFfmpeg } from "./media";
+import { aSrt, duracionEscenas, escenasEnLinea, opcionesDe } from "./linea";
+import { huellaFfmpeg, probar } from "./media";
 import { mezclar } from "./mezcla";
 import { paso, type Contexto } from "./pasos";
 import { obtenerPlantilla } from "./plantillas";
-import { correr } from "./proceso";
-import { correrQc, ENTREGA, normalizarAudio, type InformeQc } from "./qc";
+import { cortesDe, medirRitmo, type Ritmo } from "./pulsos";
+import { asegurarPicoReal, correrQc, duplicadosEsperados, ENTREGA, normalizarAudio, TOPES_PICO, type InformeQc } from "./qc";
 import { HYPERFRAMES_VERSION, dirProyecto } from "./rutas";
-import { HF } from "./voz";
+import { correrHf } from "./hyperframes";
+import { SISTEMA } from "./plataforma";
+import { origenClip, reglaClip } from "./clips";
 
 const ENV_HF = { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" };
+
+/** Cortes en pulso según los marcadores de pulso (ya en tiempo de la línea final); null sin pulsos. */
+export function ritmoDe(p: Proyecto): Ritmo | null {
+  const pulsos = p.marcadores.filter((m) => m.tipo === "pulso").map((m) => m.tiempo).sort((a, b) => a - b);
+  if (!pulsos.length) return null;
+  return medirRitmo(cortesDe(p), pulsos, 0);
+}
 
 export interface ResultadoRender {
   renderId: string;
@@ -66,7 +78,7 @@ export async function renderEntregar(
   const dir = dirProyecto(fila.slug);
   const { numero, p } = await versionDeProyecto(proyectoId, numeroVersion);
   const plantilla = await obtenerPlantilla(p.plantilla);
-  const m = metricas(p.formato);
+  const m = metricas(p.formato, opcionesDe(p));
   const huella = `${await huellaFfmpeg()}|hyperframes@${HYPERFRAMES_VERSION}|${VERSION_COMPILADOR}`;
   const total = duracionEscenas(p) + plantilla.datos.tarjetaFinal.duracion;
   const assetsUsados = [...new Set(p.pistas.flatMap((x) => x.clips.map((c) => c.asset)))];
@@ -81,8 +93,15 @@ export async function renderEntregar(
     "audio.mezcla",
     {
       archivos: archivosAssets.filter((a) => /\.(mp3|wav|m4a|ogg|flac)$/i.test(a)),
-      params: { voz: p.pistas.find((x) => x.id === "voz"), musica: musica ?? null, total, ducking: plantilla.datos.musica.ducking },
-      motor: huella,
+      params: {
+        // Lo que suena de cada escena (ya sin los recortes de la edición por texto).
+        voz: escenasEnLinea(p).map((e) => ({ asset: e.voz.asset, tramos: e.tramos.map((t) => [t.inicio, t.fin]) })),
+        efectos: pistasLibres(p).filter((x) => x.tipo === "audio"),
+        musica: musica ?? null,
+        total,
+        ducking: plantilla.datos.musica.ducking,
+      },
+      motor: `${huella}|mezcla-v2`,
     },
     [rutaMezcla],
     async ([tmp]) => {
@@ -93,7 +112,10 @@ export async function renderEntregar(
 
   // 2. Compilar a Hyperframes (siempre: es barato y determinista).
   await ctx.etapa("Compilando a Hyperframes", 0.1);
-  const comp = compilar(p, plantilla.datos, rutaMezcla, dir);
+  // El look de color del canal y la mejora automática se hornean en copias de los clips (src/lib/looks.ts).
+  if (conColor(plantilla.datos.color)) await ctx.etapa("Aplicando el color del canal", 0.12);
+  const sustitutos = await prepararColor(p, dir, plantilla.datos.color, ctx.log);
+  const comp = compilar(p, plantilla.datos, rutaMezcla, dir, sustitutos);
   const dirBuild = path.join(dir, "build", `hf-${p.formato.replace(":", "x")}`);
   await escribirProyectoHf(dirBuild, comp);
   const indexHtml = path.join(dirBuild, "index.html");
@@ -109,7 +131,7 @@ export async function renderEntregar(
     { archivos: [indexHtml, ...Object.values(comp.archivos)], params: { formato: p.formato }, motor: huella },
     [rutaCheck],
     async ([tmp]) => {
-      const r = await correr("npx", [...HF, "check", "--json", "--no-cache", "--no-craft"], {
+      const r = await correrHf(["check", "--json", "--no-cache", "--no-craft"], {
         cwd: dirBuild, env: ENV_HF, permitirFallo: true, signal: ctx.signal, timeout: 15 * 60_000,
       });
       await fs.writeFile(tmp!, r.stdout || "{}");
@@ -135,17 +157,18 @@ export async function renderEntregar(
   const rr = await paso(
     ctx,
     "hyperframes.render",
-    { archivos: [indexHtml, ...Object.values(comp.archivos)], params: { calidad: "delivery", fps: 30 }, motor: huella },
+    { archivos: [indexHtml, ...Object.values(comp.archivos)], params: { calidad: "delivery", fps: p.fps }, motor: huella },
     [crudo],
     async ([tmp]) => {
-      const candado = await tomarGpu(`render ${fila.slug}`, { esperar: false, signal: ctx.signal });
+      // NVENC sólo con NVIDIA: en macOS el render va por CPU (VideoToolbox queda para cuando se pruebe en un Mac).
+      const candado = SISTEMA === "mac" ? null : await tomarGpu(`render ${fila.slug}`, { esperar: false, signal: ctx.signal });
       gpu = candado !== null;
-      ctx.log(gpu ? "GPU libre: render con NVENC (gpu-lock tomado)" : "GPU ocupada: render con CPU (libx264), sin esperar");
+      ctx.log(gpu ? "GPU libre: render con NVENC (gpu-lock tomado)" : SISTEMA === "mac" ? "macOS: render con CPU (libx264)" : "GPU ocupada: render con CPU (libx264), sin esperar");
       try {
-        const args = [...HF, "render", "--output", tmp!, "--quality", "delivery", "--fps", "30", "--quiet"];
+        const args = ["render", "--output", tmp!, "--quality", "delivery", "--fps", String(p.fps), "--quiet"];
         if (gpu) args.push("--gpu");
         else args.push("--no-browser-gpu");
-        await correr("npx", args, { cwd: dirBuild, env: ENV_HF, log: ctx.log, signal: ctx.signal, timeout: 60 * 60_000 });
+        await correrHf(args, { cwd: dirBuild, env: ENV_HF, log: ctx.log, signal: ctx.signal, timeout: 60 * 60_000 });
       } finally {
         candado?.liberar();
       }
@@ -158,10 +181,36 @@ export async function renderEntregar(
   await ctx.etapa("Normalizando sonoridad", 0.8);
   const base = `v${numero}-${m.perfil}`;
   const final = path.join(dir, "renders", `${base}.mp4`);
-  await paso(ctx, "entrega.loudnorm", { archivos: [crudo], params: { lufs: -14, tp: -2, entrega: ENTREGA }, motor: huella }, [final], async ([tmp]) => {
-    const medido = await normalizarAudio(crudo, tmp!, ctx.log);
-    return { antes: medido };
+  await paso(ctx, "entrega.loudnorm", { archivos: [crudo], params: { lufs: -14, tp: -2, entrega: ENTREGA, fps: p.fps, pico: TOPES_PICO }, motor: huella }, [final], async ([tmp]) => {
+    const medido = await normalizarAudio(crudo, tmp!, ctx.log, p.fps);
+    // El AAC sube el pico real: si pasa de −1 dBTP, limitador a 192 kHz y otra vez (hasta 4).
+    const pico = await asegurarPicoReal(tmp!, ctx.log);
+    return { antes: medido, pico };
   });
+
+  // 5 bis. Máster de archivo (si el proyecto lo pide): el mismo proyecto Hyperframes en MOV, calidad alta.
+  let master: string | undefined;
+  if (p.entrega.master) {
+    await ctx.etapa("Máster de archivo", 0.85);
+    master = path.join(dir, "renders", `${base}-master.mov`);
+    await paso(
+      ctx,
+      "hyperframes.master",
+      { archivos: [indexHtml, ...Object.values(comp.archivos)], params: { formato: "mov", calidad: "high", fps: p.fps }, motor: huella },
+      [master],
+      async ([tmp]) => {
+        // Sin GPU: el máster nunca compite con una generación ni la espera.
+        const salida = `${tmp!}.mov`;
+        await correrHf(["render", "--output", salida, "--format", "mov", "--quality", "high", "--fps", String(p.fps), "--quiet", "--no-browser-gpu"], {
+          cwd: dirBuild, env: ENV_HF, log: ctx.log, signal: ctx.signal, timeout: 60 * 60_000,
+        });
+        await fs.rename(salida, tmp!);
+        const info = await probar(tmp!);
+        ctx.log(`máster: ${info.video?.codec_name ?? "?"} ${info.video?.pix_fmt ?? ""}`);
+        return { codec: info.video?.codec_name ?? null };
+      },
+    );
+  }
 
   // 6. QC (mide el archivo entregado).
   await ctx.etapa("Control de calidad", 0.9);
@@ -173,20 +222,35 @@ export async function renderEntregar(
     final,
     {
       formato: p.formato,
+      fps: p.fps,
+      plataformas: p.plataformas,
       total: comp.total,
       inicioTarjeta: comp.inicioTarjeta,
       grupos: comp.grupos,
       cajas: comp.cajas,
       momentos,
       licencias: assetsUsados.map((id) => ({ asset: id, licencia: p.assets[id]!.licencia })),
+      comercial: p.comercial,
+      confianza: resumirConfianza(escenasEnLinea(p).map((e) => ({ id: e.escena.id, palabras: e.escena.palabras }))),
+      ritmo: ritmoDe(p),
+      ampliaciones: ampliaciones(p, m.W, m.H),
       check,
+      extras: [reglaClip(p, comp.inicioTarjeta)].filter((r) => r !== null),
+      ritmoSubtitulosAviso: origenClip(p) !== null,
+      duplicadosEsperados: await repetidosDelMaterial(p, dir),
     },
     path.join(dir, "renders", `${base}-hoja`),
     ctx.log,
   );
   await fs.writeFile(path.join(dir, "renders", `${base}.srt`), aSrt(comp.grupos, comp.inicioTarjeta));
   const rel = (x: string) => path.relative(dir, x);
-  const informeRel = { ...informe, archivo: rel(informe.archivo), hojaContacto: informe.hojaContacto && rel(informe.hojaContacto), fotogramas: informe.fotogramas.map((f) => ({ ...f, ruta: rel(f.ruta) })) };
+  const informeRel = {
+    ...informe,
+    archivo: rel(informe.archivo),
+    hojaContacto: informe.hojaContacto && rel(informe.hojaContacto),
+    fotogramas: informe.fotogramas.map((f) => ({ ...f, ruta: rel(f.ruta) })),
+    master: master && rel(master),
+  };
   await fs.writeFile(path.join(dir, "renders", `${base}.qc.json`), JSON.stringify(informeRel, null, 2));
   for (const r of informe.reglas) ctx.log(`QC ${r.ok ? "✓" : r.aviso ? "!" : "✗"} ${r.nombre}: ${JSON.stringify(r.medido).slice(0, 160)}`);
 
@@ -209,4 +273,26 @@ export async function renderEntregar(
   await db.proyecto.update({ where: { id: proyectoId }, data: { estado: informe.aprobado ? "entregado" : "qc" } });
   ctx.log(`Render ${informe.aprobado ? "APROBADO" : "RECHAZADO por QC"}: ${final} (${segundos.toFixed(1)} s)`);
   return { renderId: render.id, ruta: final, aprobado: informe.aprobado, gpu, segundos };
+}
+
+/** Fotogramas repetidos que ya trae el material (fuentes de pocos fps, imágenes fijas): ver `duplicadosEsperados`. */
+async function repetidosDelMaterial(p: Proyecto, dir: string): Promise<number> {
+  const fpsDe = new Map<string, number | undefined>();
+  const escenas = [];
+  for (const e of escenasEnLinea(p)) {
+    const a = p.assets[e.visual.asset];
+    if (!a) continue;
+    if (a.tipo === "imagen") {
+      escenas.push({ dur: e.duracion, fija: !e.visual.movimiento });
+      continue;
+    }
+    if (!fpsDe.has(a.id)) {
+      const info = await probar(path.join(dir, a.ruta)).catch(() => null);
+      const prom = info?.video?.avg_frame_rate?.split("/").map(Number);
+      const avg = prom && prom[1] ? prom[0]! / prom[1] : undefined;
+      fpsDe.set(a.id, [info?.fps, avg].filter((x): x is number => !!x && Number.isFinite(x)).reduce<number | undefined>((m, x) => (m === undefined ? x : Math.min(m, x)), undefined));
+    }
+    escenas.push({ dur: e.duracion, fpsFuente: fpsDe.get(a.id) });
+  }
+  return duplicadosEsperados(escenas, p.fps);
 }

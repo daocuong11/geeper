@@ -2,6 +2,7 @@
   "name": "geeper",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Estudio de video local de Dimerso: de la idea al video terminado y editable.",
   "packageManager": "pnpm@10.34.7",
   "engines": {
@@ -12,6 +13,9 @@
     "dev": "next dev --port 3300",
     "build": "next build",
     "start": "next start --port 3300",
+    "escritorio:preparar": "tsx scripts/escritorio/empaquetar.ts --sin-instalador",
+    "escritorio:probar": "env -u ELECTRON_RUN_AS_NODE electron escritorio-app",
+    "escritorio:empaquetar": "tsx scripts/escritorio/empaquetar.ts",
     "worker": "tsx worker/index.ts",
     "dev:up": "tsx scripts/dev-up.ts",
     "doctor": "tsx scripts/doctor.ts",
@@ -21,6 +25,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:escritorio": "vitest run tests/escritorio.test.ts tests/plataforma.test.ts tests/gpu.test.ts tests/instalar-craft.test.ts tests/craft-web.test.ts tests/novedades.test.ts tests/estudio.test.ts tests/craft-escritorio.test.ts tests/python-utf8.test.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
@@ -29,18 +34,23 @@
     "@prisma/adapter-better-sqlite3": "^7.10.1",
     "@prisma/client": "^7.10.1",
     "better-sqlite3": "^13.2.0",
+    "fflate": "0.8.2",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.1",
     "@eslint/eslintrc": "^3.3.7",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "electron": "44.10.2",
+    "electron-builder": "26.18.1",
+    "esbuild": "0.28.2",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.4.6",
     "playwright-core": "^1.65.1",
@@ -58,7 +68,8 @@
       "esbuild",
       "sharp",
       "unrs-resolver",
-      "@tailwindcss/oxide"
+      "@tailwindcss/oxide",
+      "electron"
     ]
   }
 }

@@ -3,6 +3,7 @@ import { json, manejar } from "@/lib/http";
 import { configurada, urlCallback } from "@/lib/redes/config";
 import { cuentaPublica } from "@/lib/redes/cuentas";
 import { obtenerRed } from "@/lib/redes/index";
+import { privadosBloquean } from "@/lib/redes/privados";
 import { leerAjustes, verificarSalida } from "@/lib/redes/salida";
 import { REDES_IDS } from "@/lib/redes/tipos";
 
@@ -27,6 +28,7 @@ export async function GET() {
       return { id, nombre: r.nombre, configurada: configurada(id), formatos: r.formatos, privacidades: r.privacidades, programar: r.programar, callback: urlCallback(id) };
     });
     const [ajustes, vpn] = await Promise.all([leerAjustes(), verificarSalida()]);
-    return json({ cuentas, redes, ajustes, vpn });
+    // Con archivos secretos sin proteger, «configurada» da false: la UI explica el motivo real.
+    return json({ cuentas, redes, ajustes, vpn, privadosBloquean: privadosBloquean() });
   });
 }

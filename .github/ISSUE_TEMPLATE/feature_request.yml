@@ -1,0 +1,15 @@
+name: Feature request / Pedir una mejora
+description: Suggest something Geeper should do / Proponer algo que Geeper debería hacer
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do? / ¿Qué intentas hacer?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea / Propuesta
+      description: Must run locally at $0 (no paid APIs). / Tiene que correr en local a US$0 (sin APIs de pago).

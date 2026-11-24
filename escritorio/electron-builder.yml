@@ -1,0 +1,44 @@
+# Instaladores de Geeper (scripts/escritorio/empaquetar.ts lo usa sobre escritorio-app/). Sin firma de
+# pago por ahora (uso interno): Windows avisa «editor desconocido» la primera vez; en macOS va firmado
+# ad hoc y hay que abrirlo con clic derecho → Abrir la primera vez (docs/ESCRITORIO.md).
+appId: com.dimerso.geeper
+productName: Geeper
+copyright: Dimerso
+directories:
+  output: ../dist-escritorio
+  buildResources: ../escritorio/recursos-build
+# Sin asar: el servidor, el worker y Hyperframes leen sus archivos del disco como procesos Node.
+asar: false
+# better-sqlite3 ya viene recompilado para Electron por el empaquetador.
+npmRebuild: false
+files:
+  - "**/*"
+  - "!**/*.map"
+  - "!**/{test,tests,__tests__,docs-src}/**"
+artifactName: "Geeper-${version}-${os}-${arch}.${ext}"
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  # Instalación por usuario (sin permisos de administrador), con acceso directo en el escritorio.
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: Geeper
+  deleteAppDataOnUninstall: false
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+  category: public.app-category.video
+  # Firma ad hoc (gratis): evita el «está dañado» de Gatekeeper; sigue pidiendo clic derecho → Abrir.
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  category: AudioVideo

@@ -22,3 +22,17 @@ body { background: var(--color-fondo); color: #e6e9ef; }
 .campo { width: 100%; background: #0f131a; border: 1px solid var(--color-borde); border-radius: 8px; padding: .5rem .65rem; font-size: .9rem; }
 .campo:focus { outline: 2px solid #0891b2; outline-offset: 0; }
 .etiqueta { font-size: .8rem; color: var(--color-tenue); display: block; margin-bottom: .25rem; }
+
+/* «Rehacer la toma»: vista previa de cada movimiento de cámara sobre la imagen de la escena. */
+@keyframes cam-paneo-der { from { transform: scale(1.3) translateX(8%); } to { transform: scale(1.3) translateX(-8%); } }
+@keyframes cam-paneo-izq { from { transform: scale(1.3) translateX(-8%); } to { transform: scale(1.3) translateX(8%); } }
+@keyframes cam-arriba { from { transform: scale(1.3) translateY(-8%); } to { transform: scale(1.3) translateY(8%); } }
+@keyframes cam-abajo { from { transform: scale(1.3) translateY(8%); } to { transform: scale(1.3) translateY(-8%); } }
+@keyframes cam-acercar { from { transform: scale(1); } to { transform: scale(1.45); } }
+@keyframes cam-alejar { from { transform: scale(1.45); } to { transform: scale(1); } }
+@keyframes cam-subir { from { transform: scale(1.3) translateY(-8%) perspective(400px) rotateX(-6deg); } to { transform: scale(1.3) translateY(8%) perspective(400px) rotateX(6deg); } }
+@keyframes cam-bajar { from { transform: scale(1.3) translateY(8%) perspective(400px) rotateX(6deg); } to { transform: scale(1.3) translateY(-8%) perspective(400px) rotateX(-6deg); } }
+@keyframes cam-arco-izq { from { transform: scale(1.3) translateX(-8%) perspective(400px) rotateY(10deg); } to { transform: scale(1.3) translateX(8%) perspective(400px) rotateY(-10deg); } }
+@keyframes cam-arco-der { from { transform: scale(1.3) translateX(8%) perspective(400px) rotateY(-10deg); } to { transform: scale(1.3) translateX(-8%) perspective(400px) rotateY(10deg); } }
+.vista-camara { animation-duration: 2.6s; animation-timing-function: ease-in-out; animation-iteration-count: infinite; animation-direction: alternate; }
+@media (prefers-reduced-motion: reduce) { .vista-camara { animation: none !important; } }

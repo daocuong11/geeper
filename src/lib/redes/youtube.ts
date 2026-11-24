@@ -26,6 +26,9 @@ const TOKEN = "https://oauth2.googleapis.com/token";
 const REVOKE = "https://oauth2.googleapis.com/revoke";
 const API = "https://www.googleapis.com/youtube/v3";
 const SUBIDA = "https://www.googleapis.com/upload/youtube/v3/videos";
+const MINIATURA = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set";
+/** Límite de YouTube para una miniatura. */
+export const MAX_MINIATURA_BYTES = 2 * 1024 * 1024;
 const SCOPES = ["https://www.googleapis.com/auth/youtube.upload", "https://www.googleapis.com/auth/youtube.readonly"];
 
 /** 8 MiB: múltiplo de 256 KiB, como exige la subida por fragmentos (todos iguales salvo el último). */
@@ -309,6 +312,24 @@ export const youtube: Red = {
     }
     if (r.status === 200 || r.status === 201) return videoTerminado(r, archivo);
     throw await errorDe(r, "YouTube: subir tramo", clasificarYoutube);
+  },
+
+  async miniatura(c, idExterno, jpeg) {
+    if (jpeg.length > MAX_MINIATURA_BYTES) throw new ErrorRed("red", "La portada pesa más de 2 MB, el máximo de YouTube para una miniatura");
+    // thumbnails.set con el permiso youtube.upload (ya pedido al conectar). 50 unidades de cuota.
+    const r = await pedir(`${MINIATURA}?videoId=${encodeURIComponent(idExterno)}&uploadType=media`, {
+      method: "POST",
+      headers: { ...bearer(c), "Content-Type": "image/jpeg", "Content-Length": String(jpeg.length) },
+      body: new Uint8Array(jpeg),
+    });
+    if (r.ok) {
+      await r.body?.cancel();
+      return;
+    }
+    const cuerpo = await r.text().catch(() => "");
+    // Sin verificación por teléfono YouTube no acepta miniaturas propias (403 forbidden).
+    if (r.status === 403) throw new ErrorRed("red", "YouTube no aceptó la miniatura: el canal tiene que estar verificado por teléfono (youtube.com/verify)", undefined, 403);
+    throw await errorDe(new Response(cuerpo, { status: r.status, headers: r.headers }), "YouTube: poner miniatura", clasificarYoutube);
   },
 
   async bytesRecibidos(c, s, archivo) {

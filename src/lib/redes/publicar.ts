@@ -32,6 +32,10 @@ export interface PayloadPublicar extends Payload {
   publicado?: { idExterno: string; url: string | null; borrador: boolean } | null;
   /** Cortes de red seguidos (se espera y se reintenta sin gastar intentos, hasta un tope). */
   cortes?: number;
+  /** Copia congelada de la portada para poner como miniatura (sólo redes con `miniatura`). */
+  miniatura?: string;
+  miniaturaHecha?: boolean;
+  miniaturaError?: string;
 }
 
 export const ESPERA_VPN_MS = 60_000;
@@ -181,11 +185,28 @@ export async function publicarSubir(trabajoId: string, entrada: Payload, ctx: Ct
       await guardar();
     }
 
+    // Miniatura (la portada del video, docs/PHOTOCRAFT.md): si falla, el video ya está publicado y sólo se avisa.
+    if (p.miniatura && !p.miniaturaHecha && red.miniatura) {
+      try {
+        await ctx.etapa(`Poniendo la portada en ${red.nombre}`, 0.97);
+        const jpeg = await fs.readFile(p.miniatura);
+        await usar((cc) => red.miniatura!(cc, p.publicado!.idExterno, jpeg));
+        ctx.log("Portada puesta como miniatura");
+      } catch (e) {
+        // Cuota agotada: el trabajo espera y, al reanudar, sólo reintenta la miniatura (el video ya está en `p.publicado`).
+        if (e instanceof ErrorRed && e.tipo === "cuota") throw e;
+        p.miniaturaError = `Publicado, pero sin la portada: ${tapar(e instanceof Error ? e.message : String(e))}`;
+        ctx.log(`Aviso: ${p.miniaturaError}`);
+      }
+      p.miniaturaHecha = true; // una vez: un reintento no debe repetir la subida del video por esto
+      await guardar();
+    }
+
     // Cerrar.
     const fin = p.publicado!;
     await db.publicacion.update({
       where: { id: pub.id },
-      data: { estado: fin.borrador ? "borrador" : "publicada", idExterno: fin.idExterno, urlExterna: fin.url, error: null },
+      data: { estado: fin.borrador ? "borrador" : "publicada", idExterno: fin.idExterno, urlExterna: fin.url, error: p.miniaturaError ?? null },
     });
     ctx.log(`Listo en ${red.nombre}: ${fin.borrador ? "borrador" : "publicado"} ${fin.url ?? fin.idExterno}`);
     return { publicacionId: pub.id, idExterno: fin.idExterno, url: fin.url, borrador: fin.borrador };

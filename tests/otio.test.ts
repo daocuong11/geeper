@@ -34,8 +34,47 @@ describe("exportar a OpenTimelineIO", () => {
     }
   });
 
+  it("FilmCraft recibe el tamaño, los fps y el volumen de la música", () => {
+    const p = proyectoDePrueba();
+    p.formato = "9:16";
+    const t = aOtio(p, "/d");
+    const ajustes = ((t.metadata as J).filmcraft as J).settings as J;
+    // Los campos obligatorios del deserializador de FilmCraft (si falta uno, abre en 1920×1080).
+    for (const k of ["width", "height", "frame_rate", "par", "sample_rate", "drop_frame", "preset", "audio_master", "preview_codec", "max_bit_depth", "max_render_quality", "working_space"]) {
+      expect(ajustes).toHaveProperty(k);
+    }
+    expect([ajustes.width, ajustes.height]).toEqual([1080, 1920]);
+    expect(ajustes.frame_rate).toEqual({ num: p.fps, den: 1 });
+    p.assets.musica = { ...p.assets.voz!, id: "musica", ruta: "assets/musica.mp3", duracion: 60 };
+    p.pistas.push({ id: "musica", tipo: "audio", clips: [{ id: "m1", asset: "musica", rango: { inicio: 0, duracion: 60 }, volumen: 0.15 }] });
+    const musica = (aOtio(p, "/d").tracks as J).children!.find((x) => x.name === "Música")!;
+    expect(((musica.children![0]!.metadata as J).filmcraft as J).gain_db).toBeCloseTo(-16.48, 2);
+    p.formato = "16:9";
+    expect(((((aOtio(p, "/d").metadata as J).filmcraft as J).settings as J).width)).toBe(1920);
+  });
+
+  it("los fundidos usan el nombre que FilmCraft reconoce", () => {
+    const p = proyectoDePrueba();
+    pista(p, "visual").clips[1]!.transicion = { tipo: "fundido", duracion: 0.4 };
+    const visual = (aOtio(p, "/d").tracks as J).children!.find((x) => x.name === "Visual")!;
+    const tr = visual.children!.find((c) => c.OTIO_SCHEMA === "Transition.1");
+    expect(tr?.name).toBe("Cross Dissolve");
+  });
+
   it("las rutas son absolutas y codificadas como file://", () => {
     const t = JSON.stringify(aOtio(proyectoDePrueba(), "/datos/mi proyecto"));
     expect(t).toContain("file:///datos/mi%20proyecto/");
+  });
+});
+
+describe("SVG en el .otio", () => {
+  it("un sustituto reemplaza la ruta del asset (FilmCraft no lee SVG)", async () => {
+    const { aOtio } = await import("@/lib/otio");
+    const { proyectoDePrueba } = await import("./fixtures");
+    const p = proyectoDePrueba();
+    const id = Object.keys(p.assets).find((k) => p.assets[k]!.tipo !== "audio")!;
+    const texto = JSON.stringify(aOtio(p, "/datos/proyecto", { [id]: "/datos/proyecto/exportes/svg/logo.png" }));
+    expect(texto).toContain("file:///datos/proyecto/exportes/svg/logo.png");
+    expect(texto).not.toContain(`file:///datos/proyecto/${p.assets[id]!.ruta}"`);
   });
 });

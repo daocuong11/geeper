@@ -2,11 +2,12 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { correrHf } from "./hyperframes";
+import { ESCRITORIO, PYTHON_SISTEMA } from "./plataforma";
 import { correr, type Registro } from "./proceso";
-import { HYPERFRAMES_VERSION, PYTHON_VOZ, RAIZ_REPO } from "./rutas";
+import { PYTHON_VOZ, RAIZ_REPO } from "./rutas";
 import type { Palabra } from "./esquema";
 
-export const HF = ["--yes", `hyperframes@${HYPERFRAMES_VERSION}`];
 export const MODELO_WHISPER = "medium";
 
 interface PalabraW {
@@ -21,11 +22,7 @@ export async function transcribir(audio: string, idioma: string, log: Registro):
   try {
     const local = path.join(tmp, "voz" + path.extname(audio));
     await fs.copyFile(audio, local);
-    const r = await correr(
-      "npx",
-      [...HF, "transcribe", local, "--engine", "whisper", "--model", MODELO_WHISPER, "--language", idioma, "--json"],
-      { cwd: tmp, env: { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1" } },
-    );
+    const r = await correrHf(["transcribe", local, "--engine", "whisper", "--model", MODELO_WHISPER, "--language", idioma, "--json"], { cwd: tmp });
     let indicada: string | undefined;
     try {
       const j = JSON.parse(r.stdout.trim().split("\n").pop() ?? "{}") as { transcriptPath?: string; wordCount?: number };
@@ -54,12 +51,15 @@ export async function transcribir(audio: string, idioma: string, log: Registro):
   }
 }
 
+/** La alineación es sólo biblioteca estándar: en la app corre con el Python de la voz (lo crea «Preparar el estudio»). */
+const PYTHON_ALINEAR = ESCRITORIO ? PYTHON_VOZ : PYTHON_SISTEMA;
+
 async function python(accion: string, datos: unknown): Promise<unknown> {
-  const r = await correr("python3", [path.join(RAIZ_REPO, "py", "geeper_py.py"), accion], { entrada: JSON.stringify(datos) });
+  const r = await correr(PYTHON_ALINEAR, [path.join(RAIZ_REPO, "py", "geeper_py.py"), accion], { entrada: JSON.stringify(datos) });
   return JSON.parse(r.stdout);
 }
 
-/** Alinea el texto del guion con los tiempos de whisper (alinear() de mpt_acabado.py). */
+/** Alinea el texto del guion con los tiempos de whisper (alinear() de mpt_acabado.py, copiado en py/alineacion.py). */
 export async function alinear(guion: string, palabrasW: PalabraW[], durVoz: number): Promise<Palabra[]> {
   const filtradas = palabrasW.filter((w) => w.start < durVoz - 0.05);
   const res = (await python("alinear", { guion, palabras: filtradas })) as PalabraW[];
@@ -77,11 +77,7 @@ export async function sintetizar(texto: string, voz: string, velocidad: number, 
     const txt = path.join(tmp, "texto.txt");
     await fs.writeFile(txt, texto);
     const wav = path.join(tmp, "voz.wav");
-    await correr("npx", [...HF, "tts", txt, "--voice", voz, "--speed", String(velocidad), "--output", wav], {
-      cwd: tmp,
-      log,
-      env: { HYPERFRAMES_NO_TELEMETRY: "1", DO_NOT_TRACK: "1", HYPERFRAMES_PYTHON: PYTHON_VOZ },
-    });
+    await correrHf(["tts", txt, "--voice", voz, "--speed", String(velocidad), "--output", wav], { cwd: tmp, log, env: { HYPERFRAMES_PYTHON: PYTHON_VOZ } });
     await fs.copyFile(wav, salida);
   } finally {
     await fs.rm(tmp, { recursive: true, force: true });

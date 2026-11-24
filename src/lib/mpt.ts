@@ -1,5 +1,6 @@
 /** Cliente de la API HTTP de MoneyPrinterTurbo (127.0.0.1:8080). */
 import { correr } from "./proceso";
+import { asegurarMpt, levantarMptCaido } from "./liberar-mpt";
 import { MPT_API, MPT_CONTENEDOR, MPT_TAREAS } from "./rutas";
 import type { DatosPlantilla } from "./plantillas";
 import type { Formato } from "./esquema";
@@ -11,7 +12,14 @@ export interface EstadoMpt {
 }
 
 async function pedir(ruta: string, init?: RequestInit): Promise<{ status: number; json: unknown }> {
-  const r = await fetch(`${MPT_API}/api/v1${ruta}`, { ...init, signal: AbortSignal.timeout(30_000) });
+  let r: Response;
+  try {
+    r = await fetch(`${MPT_API}/api/v1${ruta}`, { ...init, signal: AbortSignal.timeout(30_000) });
+  } catch (e) {
+    // «fetch failed» no le dice nada a nadie: casi siempre es que Docker o MPT están apagados.
+    const tiempo = e instanceof Error && e.name === "TimeoutError";
+    throw new Error(tiempo ? "MPT tardó demasiado en responder: revisa que Docker Desktop esté abierto y MPT funcionando." : "MPT no responde: abre Docker Desktop, espera a que arranque MPT y vuelve a intentar.");
+  }
   let json: unknown = null;
   try {
     json = await r.json();
@@ -21,9 +29,11 @@ async function pedir(ruta: string, init?: RequestInit): Promise<{ status: number
   return { status: r.status, json };
 }
 
-export function cuerpoVideo(tema: string, formato: Formato, mpt: DatosPlantilla["mpt"]) {
+/** `guion`: si viene, MPT lo dice tal cual (video_script) y no escribe uno con su LLM. */
+export function cuerpoVideo(tema: string, formato: Formato, mpt: DatosPlantilla["mpt"], guion?: string) {
   return {
     video_subject: tema,
+    video_script: guion?.trim() ?? "",
     video_language: mpt.video_language,
     voice_name: mpt.voice_name,
     voice_rate: mpt.voice_rate,
@@ -41,6 +51,8 @@ export function cuerpoVideo(tema: string, formato: Formato, mpt: DatosPlantilla[
 }
 
 export async function crearVideo(cuerpo: ReturnType<typeof cuerpoVideo>): Promise<string> {
+  // Ollama y el servidor de imágenes vuelven antes de pedir el video: si Wan los pausó o si quedaron parados.
+  await asegurarMpt(undefined, { todos: true });
   const r = await pedir("/videos", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(cuerpo) });
   const id = (r.json as { data?: { task_id?: string } } | null)?.data?.task_id;
   if (r.status !== 200 || !id) throw new Error(`MPT rechazó el pedido (${r.status}): ${JSON.stringify(r.json).slice(0, 500)}`);
@@ -63,6 +75,22 @@ export async function estadoTarea(taskId: string): Promise<EstadoMpt> {
   if (d.state === 1) return { estado: "completa", progreso: 100 };
   if (d.state === -1) return { estado: "fallida", progreso, detalle: JSON.stringify(d).slice(0, 800) };
   return { estado: "procesando", progreso };
+}
+
+/**
+ * La API viva, o levantada: si no responde y hay contenedores de MPT parados (un reinicio de WSL los tumba),
+ * los levanta y espera hasta `esperaMs` a que contesten. Sólo en la app de escritorio (liberar-mpt.ts).
+ */
+export async function asegurarApi(log?: (l: string) => void, esperaMs = 120_000): Promise<boolean> {
+  if (await apiViva()) return true;
+  const levantados = await levantarMptCaido(log);
+  if (!levantados.length) return false;
+  const hasta = Date.now() + esperaMs;
+  while (Date.now() < hasta) {
+    await new Promise((r) => setTimeout(r, 3000));
+    if (await apiViva()) return true;
+  }
+  return false;
 }
 
 export async function apiViva(): Promise<boolean> {

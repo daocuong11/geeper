@@ -5,6 +5,7 @@
 import { createCipheriv, createDecipheriv, createHmac, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { leerPrivado, noExiste } from "./archivo-privado";
 import { dirConfig } from "./config";
 
 export const rutaClave = () => path.join(dirConfig(), "clave");
@@ -17,15 +18,17 @@ export function obtenerClave(): Buffer {
   if (cache?.ruta === ruta) return cache.clave;
   let clave: Buffer;
   try {
-    clave = fs.readFileSync(ruta);
-  } catch {
+    clave = leerPrivado(ruta);
+  } catch (e) {
+    // Sólo se crea si no existe; una clave con permisos inseguros es un error, no se reemplaza.
+    if (!noExiste(e)) throw e;
     fs.mkdirSync(path.dirname(ruta), { recursive: true, mode: 0o700 });
     clave = randomBytes(32);
     // wx: si otro proceso la creó a la vez, se usa la suya.
     try {
       fs.writeFileSync(ruta, clave, { mode: 0o600, flag: "wx" });
     } catch {
-      clave = fs.readFileSync(ruta);
+      clave = leerPrivado(ruta);
     }
   }
   if (clave.length !== 32) throw new Error(`${ruta} debe tener 32 bytes (tiene ${clave.length})`);

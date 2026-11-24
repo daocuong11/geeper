@@ -68,6 +68,10 @@ Aparte, las consolas piden un **icono** de 1024×1024 px en PNG (el logo de Geep
 
 ### 0.3 VPN (WireGuard, una sola IP fija)
 
+> **Guía completa para que todo el equipo salga por el país elegido** (Windows, navegador, WSL y
+> Geeper, sin fugas de IPv6 ni de DNS, con la ubicación de Windows coherente): [VPN.md](VPN.md).
+> Para verificarlo: `pnpm tsx scripts/verificar-vpn.ts <PAIS>`.
+
 1. Elige un proveedor que entregue archivos de configuración de **WireGuard** con un servidor
    **fijo**, o un VPS propio con WireGuard. Elige un país y no lo cambies.
 2. En **Windows**, instala el cliente oficial desde [wireguard.com/install](https://www.wireguard.com/install/).

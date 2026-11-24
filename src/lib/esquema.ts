@@ -1,20 +1,25 @@
 /**
- * Esquema de geeper.json (schemaVersion 1): la fuente de verdad de cada proyecto.
+ * Esquema de geeper.json (schemaVersion 2): la fuente de verdad de cada proyecto.
  *
  * Toma los conceptos de OpenTimelineIO:
- *  - `pistas` (tracks) con `clips` en orden, cada uno con su `rango` sobre el asset (source_range),
+ *  - `pistas` (tracks) con `clips`, cada uno con su `rango` sobre el asset (source_range),
  *  - `marcadores` (markers) sobre la línea de tiempo.
  * Y agrega lo de Geeper: cada asset lleva su `source` (archivo | mpt | tts | wan), su licencia y lo
- * necesario para regenerarlo; cada escena guarda lo que se oye, los tiempos por palabra y las
- * correcciones de lo que se muestra.
+ * necesario para regenerarlo; cada escena guarda lo que se oye, los tiempos por palabra, las
+ * correcciones de lo que se muestra y los recortes de la edición por texto.
  *
- * Orden de la línea de tiempo: el de los clips de la pista `voz`. La pista `visual` tiene un clip por
- * escena, en el mismo orden (lo comprueba `validarProyecto`). La tarjeta final va después de la última
- * escena y dura lo que diga la plantilla.
+ * Pistas reservadas: `visual` y `voz` (un clip por escena, en el mismo orden: el de la línea de
+ * tiempo) y `musica`. Cualquier otra pista es **libre** (superposiciones de video o efectos de
+ * sonido): sus clips llevan `inicio` en la línea de tiempo final. Los textos superpuestos (títulos,
+ * rótulos) van en `textos`. La tarjeta final va después de la última escena y dura lo que diga la
+ * plantilla.
+ *
+ * v1 → v2 (`migrar`): sólo agrega campos con valor por defecto; un proyecto v1 se lee igual.
  */
 import { z } from "zod";
+import { Curva, Efecto, Fusion, OpcionesMascara, TIPOS_MASCARA } from "./efectos-esquema";
 
-export const SCHEMA_VERSION = 1 as const;
+export const SCHEMA_VERSION = 2 as const;
 
 export const Formato = z.enum(["9:16", "16:9", "1:1"]);
 export type Formato = z.infer<typeof Formato>;
@@ -22,11 +27,34 @@ export type Formato = z.infer<typeof Formato>;
 export const Source = z.enum(["archivo", "mpt", "tts", "wan"]);
 export type Source = z.infer<typeof Source>;
 
+/** Plataformas de destino: cada una tapa zonas distintas del cuadro (formatos.ts). */
+export const Plataforma = z.enum(["youtube", "tiktok", "instagram", "facebook"]);
+export type Plataforma = z.infer<typeof Plataforma>;
+
+export const PISTAS_RESERVADAS = ["visual", "voz", "musica"] as const;
+
 const Segundos = z.number().finite().min(0);
 
 /** Rango sobre el asset (source_range de OTIO), en segundos. */
 export const Rango = z.object({ inicio: Segundos, duracion: z.number().finite().positive() });
 export type Rango = z.infer<typeof Rango>;
+
+/** Dónde está la cara principal de un asset visual (src/lib/caras.ts). Fracciones del cuadro (0..1). */
+export const Foco = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  /** Ancho de la cara en fracción del ancho del cuadro. */
+  ancho: z.number().min(0).max(1),
+  confianza: z.number().min(0).max(1),
+  /** Fracción de las muestras con cara. */
+  cobertura: z.number().min(0).max(1),
+  /** Cuánto se mueve el centro (p90 de |x − mediana|, fracción del ancho). */
+  dispersion: z.number().min(0).max(1),
+  muestras: z.number().int().positive(),
+  /** Detector que lo calculó (p. ej. yunet-2023mar). */
+  modelo: z.string().min(1),
+});
+export type Foco = z.infer<typeof Foco>;
 
 export const Asset = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
@@ -40,10 +68,47 @@ export const Asset = z.object({
   duracion: Segundos.optional(),
   ancho: z.number().int().positive().optional(),
   alto: z.number().int().positive().optional(),
-  /** Lo necesario para regenerarlo: prompt, semilla, modelo, tarea de MPT, voz, texto... */
+  /** Lo necesario para regenerarlo: prompt, semilla, modelo, hash de los pesos, tarea de MPT, voz, texto... */
   regenerar: z.record(z.string(), z.unknown()).default({}),
+  /** Sólo video o imagen: cara principal detectada; sin ancla fijada, el encuadre la sigue. */
+  foco: Foco.optional(),
 });
 export type Asset = z.infer<typeof Asset>;
+
+/** Encuadre de un clip visual: escala 1 = llena el cuadro; x/y desplazan (−1..1 = medio cuadro). */
+export const Encuadre = z.object({
+  escala: z.number().min(0.1).max(4).default(1),
+  x: z.number().min(-1).max(1).default(0),
+  y: z.number().min(-1).max(1).default(0),
+});
+export type Encuadre = z.infer<typeof Encuadre>;
+
+export const Transicion = z.object({
+  /** barrido, radial, iris y persianas revelan el clip con una máscara (efectos.ts). */
+  tipo: z.enum(["corte", "fundido", "deslizar", "zoom", ...TIPOS_MASCARA]),
+  /** Segundos; el fundido se monta sobre el final del clip anterior. */
+  duracion: z.number().min(0.1).max(2).default(0.4),
+  ...OpcionesMascara,
+});
+export type Transicion = z.infer<typeof Transicion>;
+
+export const Color = z.object({
+  brillo: z.number().min(0).max(2).default(1),
+  contraste: z.number().min(0).max(2).default(1),
+  saturacion: z.number().min(0).max(3).default(1),
+});
+export type Color = z.infer<typeof Color>;
+
+/** Pistas libres de video: en un recuadro (la «burbuja» del presentador, marco.ts) en vez de llenar el cuadro. */
+export const Marco = z.object({
+  /** recorte: el avatar sin fondo (video con transparencia), de pie sobre el borde de abajo, como un streamer. */
+  forma: z.enum(["circulo", "redondeado", "recorte"]).default("circulo"),
+  /** «auto»: la esquina que menos tapa las caras de las escenas (marco-auto.ts). */
+  esquina: z.enum(["auto", "abajo-derecha", "abajo-izquierda", "arriba-derecha", "arriba-izquierda"]).default("auto"),
+  /** Ancho del recuadro sobre el ancho de la banda segura (0,15–0,6). */
+  tamano: z.number().min(0.15).max(0.6).default(0.34),
+});
+export type Marco = z.infer<typeof Marco>;
 
 export const Clip = z.object({
   id: z.string().min(1),
@@ -51,24 +116,66 @@ export const Clip = z.object({
   rango: Rango,
   /** Escena a la que pertenece (pistas visual y voz). */
   escena: z.string().optional(),
+  /** Pistas libres: dónde empieza en la línea de tiempo final (s). */
+  inicio: Segundos.optional(),
   /** Sólo video: cómo llena el cuadro si la relación de aspecto no coincide. */
   ajuste: z.enum(["cubrir", "contener"]).optional(),
   /** Sólo video: qué parte se conserva al recortar (object-position). */
   ancla: z.enum(["centro", "arriba", "abajo"]).optional(),
+  /** Sólo video: transición de entrada (en la pista visual, desde la escena anterior). */
+  transicion: Transicion.optional(),
+  /** Sólo video: movimiento de cámara de principio a fin del clip (Ken Burns, zoom). */
+  movimiento: z.object({ desde: Encuadre, hasta: Encuadre, curva: Curva.optional() }).optional(),
+  /** Sólo video: velocidad de reproducción (0,1–10; el audio propio conserva el tono). */
+  velocidad: z.number().min(0.1).max(10).optional(),
+  /** Sólo video: ajuste de color. */
+  color: Color.optional(),
+  /** Sólo video: efectos en orden (tinte, niveles, viñeta, desenfoque, grano), después del color. */
+  efectos: z.array(Efecto).max(8).optional(),
+  /**
+   * Pista visual: «voz» = el video y la voz salen de la misma grabación (un clip de un directo o un
+   * VOD). El video sigue los tramos que suenan de la voz con el mismo desplazamiento sobre el asset:
+   * recortar palabras corta también la imagen y la boca no se desincroniza. Ignora `velocidad`.
+   */
+  sincro: z.literal("voz").optional(),
+  /** Pistas libres de video: opacidad de la superposición. */
+  opacidad: z.number().min(0).max(1).optional(),
+  /** Pistas libres de video: modo de fusión con lo de abajo. */
+  fusion: Fusion.optional(),
+  /** Pistas libres de video: en un recuadro en una esquina (el presentador en burbuja). */
+  marco: Marco.optional(),
   /** Sólo audio: ganancia lineal. */
   volumen: z.number().min(0).max(4).optional(),
 });
 export type Clip = z.infer<typeof Clip>;
 
 export const Pista = z.object({
-  id: z.enum(["visual", "voz", "musica"]),
+  /** visual | voz | musica, o el nombre de una pista libre (p. ej. «broll», «efectos»). */
+  id: z.string().regex(/^[a-z0-9-]+$/),
   tipo: z.enum(["video", "audio"]),
   clips: z.array(Clip),
 });
 export type Pista = z.infer<typeof Pista>;
 
+/** Texto superpuesto (título, rótulo o cita), aparte de los subtítulos. */
+export const Texto = z.object({
+  id: z.string().regex(/^[a-z0-9-]+$/),
+  texto: z.string().min(1).max(160),
+  inicio: Segundos,
+  duracion: z.number().min(0.3).max(60),
+  estilo: z.enum(["titulo", "rotulo", "cita"]).default("rotulo"),
+  posicion: z.enum(["arriba", "centro", "abajo"]).default("arriba"),
+});
+export type Texto = z.infer<typeof Texto>;
+
 /** Tiempo por palabra, en el tiempo del asset de voz de la escena. */
-export const Palabra = z.object({ texto: z.string().min(1), inicio: Segundos, fin: Segundos });
+export const Palabra = z.object({
+  texto: z.string().min(1),
+  inicio: Segundos,
+  fin: Segundos,
+  /** 0..1: qué tan creíble es el tiempo (ver confianza.ts). Ausente = sin medir. */
+  confianza: z.number().min(0).max(1).optional(),
+});
 export type Palabra = z.infer<typeof Palabra>;
 
 /**
@@ -82,12 +189,21 @@ export const Correccion = z.object({
 });
 export type Correccion = z.infer<typeof Correccion>;
 
+/** Tramo que se quita de la voz de la escena (edición por texto), en tiempo del asset de voz. */
+export const Recorte = z.object({
+  inicio: Segundos,
+  fin: Segundos,
+  motivo: z.enum(["palabras", "silencio", "muletilla"]),
+});
+export type Recorte = z.infer<typeof Recorte>;
+
 export const Escena = z.object({
   id: z.string().min(1),
   /** Lo que se oye en esta escena (fragmento del guion). */
   texto: z.string(),
   palabras: z.array(Palabra),
   correcciones: z.array(Correccion).default([]),
+  recortes: z.array(Recorte).default([]),
 });
 export type Escena = z.infer<typeof Escena>;
 
@@ -103,12 +219,28 @@ export const Marcador = z.object({
 });
 
 export const Voz = z.object({
-  motor: z.enum(["kokoro", "mpt"]),
+  /** kokoro: Kokoro local (CPU) · mpt: el Kokoro de MPT · voxcpm: voz diseñada de la biblioteca (voces.ts, GPU). */
+  motor: z.enum(["kokoro", "mpt", "voxcpm"]),
+  /** Con voxcpm, el id de la voz en ~/geeper-data/voces. */
   voz: z.string().min(1),
   velocidad: z.number().min(0.5).max(2).default(1),
   idioma: z.string().default("es"),
 });
 export type Voz = z.infer<typeof Voz>;
+
+/**
+ * Estilo del video: aspecto (efectos), transición entre escenas y ritmo del movimiento de cámara.
+ * Una escena que tiene su propio valor lo usa (excepción); si no, hereda éste. Sin estilo, cada
+ * escena se ve como antes (golpe de zoom de la plantilla, sin efectos, movimiento constante).
+ */
+export const EstiloVideo = z.object({
+  efectos: z.array(Efecto).max(8).optional(),
+  transicion: Transicion.optional(),
+  curva: Curva.optional(),
+});
+export type EstiloVideo = z.infer<typeof EstiloVideo>;
+
+export const Fps = z.union([z.literal(24), z.literal(25), z.literal(30), z.literal(60)]);
 
 export const Proyecto = z
   .object({
@@ -118,14 +250,27 @@ export const Proyecto = z
     tema: z.string(),
     formato: Formato,
     plantilla: z.string().min(1),
-    fps: z.literal(30),
+    fps: Fps.default(30),
     voz: Voz,
     guion: z.object({ texto: z.string() }),
     mostrar: z.array(Mostrar).default([]),
     assets: z.record(z.string(), Asset),
     pistas: z.array(Pista),
+    textos: z.array(Texto).default([]),
     escenas: z.record(z.string(), Escena),
     marcadores: z.array(Marcador).default([]),
+    /** Si el video se va a monetizar o usar con fines comerciales: el QC bloquea licencias dudosas. */
+    comercial: z.boolean().default(false),
+    /** Dónde se va a publicar: ajusta la banda segura a lo que tapa cada interfaz. */
+    plataformas: z.array(Plataforma).default([]),
+    entrega: z.object({ master: z.boolean().default(false) }).default({ master: false }),
+    /** Estilo del video: lo heredan las escenas que no fijan el suyo (ver `aplicarEstilo`). */
+    estilo: EstiloVideo.optional(),
+    /** Botón de la tarjeta final sólo para este video (variantes de anuncios). Sin él, el de la plantilla. */
+    cta: z.string().trim().min(1).max(60).optional(),
+    /** La etiqueta de marca arriba durante el video (la tarjeta final la lleva siempre). En clips react
+     *  tapa la cara del streamer: ahí se oculta. */
+    marca: z.boolean().default(true),
     origen: z.record(z.string(), z.unknown()).default({}),
   })
   .superRefine((p, ctx) => {
@@ -133,13 +278,60 @@ export const Proyecto = z
   });
 export type Proyecto = z.infer<typeof Proyecto>;
 
-export function pista(p: Pick<Proyecto, "pistas">, id: Pista["id"]): Pista {
+/** Convierte un geeper.json de una versión anterior a la actual (sin tocar lo que ya tenía). */
+export function migrar(datos: unknown): unknown {
+  if (!datos || typeof datos !== "object") return datos;
+  const d = datos as Record<string, unknown>;
+  if (d.schemaVersion === 1) return { ...d, schemaVersion: 2 };
+  return d;
+}
+
+export function pista(p: Pick<Proyecto, "pistas">, id: string): Pista {
   const encontrada = p.pistas.find((x) => x.id === id);
   if (!encontrada) throw new Error(`Falta la pista ${id}`);
   return encontrada;
 }
 
-/** Reglas que Zod no expresa por campo: referencias, orden de escenas y rangos. */
+/**
+ * Proyecto con el estilo del video aplicado a los clips visuales que no tienen el suyo: es lo que
+ * compilan Hyperframes y OTIO. Una lista de efectos vacía en la escena es una excepción («sin
+ * efectos»), no una herencia.
+ */
+export function aplicarEstilo(p: Proyecto): Proyecto {
+  const e = p.estilo;
+  if (!e || (!e.efectos?.length && !e.transicion && !e.curva)) return p;
+  const visual = p.pistas.find((x) => x.id === "visual");
+  if (!visual) return p;
+  const clips = visual.clips.map((c, i) => ({
+    ...c,
+    transicion: c.transicion ?? (i > 0 ? e.transicion : undefined),
+    efectos: c.efectos ?? (e.efectos?.length ? e.efectos : undefined),
+    movimiento: c.movimiento && !c.movimiento.curva && e.curva ? { ...c.movimiento, curva: e.curva } : c.movimiento,
+  }));
+  return { ...p, pistas: p.pistas.map((x) => (x === visual ? { ...x, clips } : x)) };
+}
+
+/** Pistas libres (superposiciones y efectos): todo lo que no es visual, voz ni música. */
+export function pistasLibres(p: Pick<Proyecto, "pistas">): Pista[] {
+  return p.pistas.filter((x) => !(PISTAS_RESERVADAS as readonly string[]).includes(x.id));
+}
+
+/** Tramos [inicio, fin) ya recortados y fusionados, dentro de [desde, hasta). */
+export function fusionarRecortes(recortes: { inicio: number; fin: number }[], desde: number, hasta: number): { inicio: number; fin: number }[] {
+  const orden = recortes
+    .map((r) => ({ inicio: Math.max(desde, r.inicio), fin: Math.min(hasta, r.fin) }))
+    .filter((r) => r.fin - r.inicio > 1e-6)
+    .sort((a, b) => a.inicio - b.inicio);
+  const out: { inicio: number; fin: number }[] = [];
+  for (const r of orden) {
+    const u = out[out.length - 1];
+    if (u && r.inicio <= u.fin + 1e-6) u.fin = Math.max(u.fin, r.fin);
+    else out.push({ ...r });
+  }
+  return out;
+}
+
+/** Reglas que Zod no expresa por campo: referencias, orden de escenas, rangos y recortes. */
 export function erroresDeConsistencia(p: Omit<Proyecto, never>): string[] {
   const errores: string[] = [];
   const ids = p.pistas.map((x) => x.id);
@@ -147,13 +339,20 @@ export function erroresDeConsistencia(p: Omit<Proyecto, never>): string[] {
     if (!ids.includes(requerida)) errores.push(`Falta la pista «${requerida}»`);
   }
   if (new Set(ids).size !== ids.length) errores.push("Hay pistas repetidas");
+  const tipos: Record<string, Pista["tipo"]> = { visual: "video", voz: "audio", musica: "audio" };
+  for (const pi of p.pistas) {
+    const esperado = tipos[pi.id];
+    if (esperado && pi.tipo !== esperado) errores.push(`La pista «${pi.id}» debe ser de ${esperado}`);
+  }
   const visual = p.pistas.find((x) => x.id === "visual");
   const voz = p.pistas.find((x) => x.id === "voz");
   const clipIds = new Set<string>();
   for (const pi of p.pistas) {
+    const libre = !(PISTAS_RESERVADAS as readonly string[]).includes(pi.id);
     for (const c of pi.clips) {
       if (clipIds.has(c.id)) errores.push(`Clip repetido: ${c.id}`);
       clipIds.add(c.id);
+      if (libre && c.inicio === undefined) errores.push(`El clip ${c.id} está en la pista libre «${pi.id}» y no dice dónde empieza (inicio)`);
       const a = p.assets[c.asset];
       if (!a) {
         errores.push(`El clip ${c.id} apunta a un asset que no existe: ${c.asset}`);
@@ -161,10 +360,15 @@ export function erroresDeConsistencia(p: Omit<Proyecto, never>): string[] {
       }
       if (pi.tipo === "video" && a.tipo === "audio") errores.push(`El clip ${c.id} es de video pero su asset es audio`);
       if (pi.tipo === "audio" && a.tipo !== "audio") errores.push(`El clip ${c.id} es de audio pero su asset no`);
-      if (pi.id === "voz" && a.duracion !== undefined && c.rango.inicio + c.rango.duracion > a.duracion + 0.05) {
+      if ((pi.id === "voz" || (libre && pi.tipo === "audio")) && a.duracion !== undefined && c.rango.inicio + c.rango.duracion > a.duracion + 0.05) {
         errores.push(`El clip ${c.id} se sale del asset (${(c.rango.inicio + c.rango.duracion).toFixed(2)} s > ${a.duracion.toFixed(2)} s)`);
       }
     }
+  }
+  const textoIds = new Set<string>();
+  for (const t of p.textos) {
+    if (textoIds.has(t.id)) errores.push(`Texto repetido: ${t.id}`);
+    textoIds.add(t.id);
   }
   if (visual && voz) {
     const ev = visual.clips.map((c) => c.escena);
@@ -181,6 +385,17 @@ export function erroresDeConsistencia(p: Omit<Proyecto, never>): string[] {
     for (const id of Object.keys(p.escenas)) {
       if (!vistas.has(id)) errores.push(`La escena ${id} no está en la línea de tiempo`);
     }
+    for (const c of voz.clips) {
+      const e = c.escena ? p.escenas[c.escena] : undefined;
+      if (!e || !e.recortes.length) continue;
+      const desde = c.rango.inicio;
+      const hasta = desde + c.rango.duracion;
+      for (const r of e.recortes) {
+        if (r.fin <= r.inicio) errores.push(`Recorte vacío en ${e.id}: ${r.inicio}–${r.fin}`);
+      }
+      const quitado = fusionarRecortes(e.recortes, desde, hasta).reduce((s, r) => s + (r.fin - r.inicio), 0);
+      if (c.rango.duracion - quitado < 0.1) errores.push(`Los recortes de ${e.id} dejan la escena vacía: quita la escena en vez de recortarla entera`);
+    }
   }
   for (const e of Object.values(p.escenas)) {
     for (const c of e.correcciones) {
@@ -192,6 +407,7 @@ export function erroresDeConsistencia(p: Omit<Proyecto, never>): string[] {
   return errores;
 }
 
+/** Valida un geeper.json (de cualquier versión: las anteriores se migran antes). */
 export function validarProyecto(datos: unknown): Proyecto {
-  return Proyecto.parse(datos);
+  return Proyecto.parse(migrar(datos));
 }

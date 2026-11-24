@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Paleta } from "@/components/paleta";
+import { TrabajosFlotantes } from "@/components/trabajos-flotantes";
 import "./globals.css";
 
 export const metadata: Metadata = { title: "Geeper", description: "Estudio de video local de Dimerso" };
@@ -15,13 +17,20 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </Link>
             <Link href="/" className="text-tenue hover:text-white">Proyectos</Link>
             <Link href="/nuevo" className="text-tenue hover:text-white">Nuevo</Link>
+            <Link href="/clips" className="text-tenue hover:text-white">Clips</Link>
+            <Link href="/avatares" className="text-tenue hover:text-white">Avatares</Link>
+            <Link href="/workflows" className="text-tenue hover:text-white">Workflows</Link>
             <Link href="/trabajos" className="text-tenue hover:text-white">Trabajos</Link>
+            <Link href="/anuncios" className="text-tenue hover:text-white">Anuncios</Link>
             <Link href="/plantillas" className="text-tenue hover:text-white">Plantillas</Link>
+            <Link href="/media" className="text-tenue hover:text-white">Media</Link>
             <Link href="/cuentas" className="text-tenue hover:text-white">Cuentas</Link>
             <Link href="/sistema" className="text-tenue hover:text-white">Sistema</Link>
+            <Paleta />
           </nav>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-6">{children}</main>
+        <TrabajosFlotantes />
       </body>
     </html>
   );

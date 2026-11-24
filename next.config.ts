@@ -9,6 +9,9 @@ const config: NextConfig = {
   // producto hermano lo hace recompilar y recargar la página en bucle.
   turbopack: { root: path.resolve(__dirname) },
   agentRules: false,
+  // App de escritorio (scripts/escritorio/empaquetar.ts): servidor autocontenido para que lo arranque Electron.
+  // Carpeta propia para no pisar el .next del servidor que esté corriendo.
+  ...(process.env.GEEPER_STANDALONE === "1" ? { output: "standalone" as const, distDir: ".next-escritorio" } : {}),
 };
 
 export default config;

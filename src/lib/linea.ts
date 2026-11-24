@@ -1,16 +1,26 @@
 /** Línea de tiempo derivada de geeper.json: la posición de cada escena sale del orden, no se guarda. */
-import { pista, type Clip, type Escena, type Proyecto } from "./esquema";
-import { caracteresPorLinea } from "./formatos";
+import { fusionarRecortes, pista, type Clip, type Escena, type Proyecto } from "./esquema";
+import { caracteresPorLinea, type OpcionesFormato } from "./formatos";
+import { burbujaAbajo } from "./burbuja";
 import { agrupar, aplicarCorrecciones, lineas, reemplazar, type Ficha } from "./subtitulos";
+
+/** Tramo de voz que suena (lo que queda tras los recortes), en tiempo del asset de voz. */
+export interface Tramo {
+  inicio: number;
+  fin: number;
+  /** Dónde empieza dentro de la escena, ya sin los recortes anteriores (s). */
+  enEscena: number;
+}
 
 export interface EscenaEnLinea {
   indice: number;
   escena: Escena;
   voz: Clip;
   visual: Clip;
-  /** Inicio y duración en la línea de tiempo final. */
+  /** Inicio y duración en la línea de tiempo final (la duración ya descuenta los recortes). */
   inicio: number;
   duracion: number;
+  tramos: Tramo[];
 }
 
 export interface Grupo {
@@ -25,6 +35,24 @@ export interface Grupo {
 /** Silencio al inicio (s): la imagen ya se ve y el primer subtítulo tiene de dónde anticiparse. */
 export const ENTRADA = 0.3;
 
+/** Lo que suena del clip de voz de una escena: su rango menos los recortes de la edición por texto. */
+export function tramosDeVoz(escena: Escena, voz: Clip): Tramo[] {
+  const desde = voz.rango.inicio;
+  const hasta = desde + voz.rango.duracion;
+  const quitados = fusionarRecortes(escena.recortes, desde, hasta);
+  const out: Tramo[] = [];
+  let t = desde;
+  let enEscena = 0;
+  for (const r of [...quitados, { inicio: hasta, fin: hasta }]) {
+    if (r.inicio - t > 0.02) {
+      out.push({ inicio: t, fin: r.inicio, enEscena });
+      enEscena += r.inicio - t;
+    }
+    t = Math.max(t, r.fin);
+  }
+  return out;
+}
+
 export function escenasEnLinea(p: Proyecto): EscenaEnLinea[] {
   const voz = pista(p, "voz").clips;
   const visual = pista(p, "visual").clips;
@@ -33,30 +61,56 @@ export function escenasEnLinea(p: Proyecto): EscenaEnLinea[] {
     const escena = p.escenas[c.escena ?? ""];
     const v = visual[i];
     if (!escena || !v) throw new Error(`Escena inconsistente en la posición ${i}`);
-    const r = { indice: i, escena, voz: c, visual: v, inicio: t, duracion: c.rango.duracion };
-    t += c.rango.duracion;
+    const tramos = tramosDeVoz(escena, c);
+    const duracion = tramos.reduce((s, x) => s + (x.fin - x.inicio), 0);
+    const r = { indice: i, escena, voz: c, visual: v, inicio: t, duracion, tramos };
+    t += duracion;
     return r;
   });
 }
 
 export function duracionEscenas(p: Proyecto): number {
-  return ENTRADA + pista(p, "voz").clips.reduce((s, c) => s + c.rango.duracion, 0);
+  return ENTRADA + escenasEnLinea(p).reduce((s, e) => s + e.duracion, 0);
 }
 
-/** Palabras mostradas de una escena, ya en tiempo de la línea final. */
+/**
+ * Tiempo de la línea final para un instante del asset de voz de la escena. Si cae en un recorte, va al
+ * borde del tramo siguiente (o al final del anterior si no hay siguiente).
+ */
+export function aLinea(e: Pick<EscenaEnLinea, "inicio" | "duracion" | "tramos">, t: number): number {
+  for (const x of e.tramos) {
+    if (t < x.inicio) return e.inicio + x.enEscena;
+    if (t <= x.fin) return e.inicio + x.enEscena + (t - x.inicio);
+  }
+  return e.inicio + e.duracion;
+}
+
+/** El tramo que contiene `t` (o -1 si cae en un recorte o fuera del clip). */
+export function tramoDe(tramos: Tramo[], t: number): number {
+  return tramos.findIndex((x) => t >= x.inicio - 1e-6 && t <= x.fin + 1e-6);
+}
+
+/**
+ * Palabras mostradas de una escena, ya en tiempo de la línea final. Una palabra cuyo centro cae en un
+ * recorte no se muestra; las demás se acomodan al tramo que las contiene.
+ */
 function fichasDeEscena(p: Proyecto, e: EscenaEnLinea): (Ficha & { escena: string })[] {
   const desde = e.voz.rango.inicio;
   const hasta = desde + e.voz.rango.duracion;
-  const desplazamiento = e.inicio - desde;
   return reemplazar(aplicarCorrecciones(e.escena.palabras, e.escena.correcciones), p.mostrar)
     // Sólo lo que suena dentro del rango del clip de voz (recortado al borde).
     .filter((f) => f.fin > desde + 0.01 && f.inicio < hasta - 0.01)
-    .map((f) => ({
-      ...f,
-      inicio: Math.max(desde, f.inicio) + desplazamiento,
-      fin: Math.min(hasta, f.fin) + desplazamiento,
-      escena: e.escena.id,
-    }));
+    .flatMap((f) => {
+      const ini = Math.max(desde, f.inicio);
+      const fin = Math.min(hasta, f.fin);
+      const k = tramoDe(e.tramos, (ini + fin) / 2);
+      if (k < 0) return [];
+      const x = e.tramos[k]!;
+      const a = Math.max(x.inicio, ini);
+      const b = Math.min(x.fin, fin);
+      const base = e.inicio + x.enEscena - x.inicio;
+      return [{ ...f, inicio: base + a, fin: base + Math.max(a + 0.02, b), escena: e.escena.id }];
+    });
 }
 
 /**
@@ -64,7 +118,7 @@ function fichasDeEscena(p: Proyecto, e: EscenaEnLinea): (Ficha & { escena: strin
  * suaviza el ritmo en toda la línea, así un grupo puede cruzar un corte si eso lo hace legible.
  */
 export function todosLosGrupos(p: Proyecto): Grupo[] {
-  const cpl = caracteresPorLinea(p.formato);
+  const cpl = caracteresPorLinea(p.formato, opcionesDe(p));
   const escenas = escenasEnLinea(p);
   const porEscena = escenas.flatMap((e) => agrupar(fichasDeEscena(p, e)).flatMap((g) => partirEnDosLineas(g, cpl)));
   const fin = ENTRADA + escenas.reduce((s, e) => s + e.duracion, 0);
@@ -75,6 +129,16 @@ export function todosLosGrupos(p: Proyecto): Grupo[] {
     fin: g[g.length - 1]!.fin,
     escena: g[0]!.escena,
   }));
+}
+
+/**
+ * Opciones de formato que dependen del proyecto: las plataformas de destino estrechan la banda segura, y
+ * con el presentador en una esquina de abajo los subtítulos se corren a su lado (burbuja.ts).
+ */
+export function opcionesDe(p: Pick<Proyecto, "plataformas"> | Proyecto): OpcionesFormato {
+  const o: OpcionesFormato = { plataformas: p.plataformas };
+  const burbuja = "pistas" in p ? burbujaAbajo(p, o) : undefined;
+  return burbuja ? { ...o, burbuja } : o;
 }
 
 /** Grupos que empiezan en una escena (para editarlos en la UI). */

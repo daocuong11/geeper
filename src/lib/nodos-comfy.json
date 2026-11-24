@@ -1,0 +1,582 @@
+{
+  "fijado": "2026-11-21",
+  "paquetes": {
+    "audio-separation-nodes-comfyui": {
+      "nombre": "audio-separation-nodes-comfyui",
+      "version": "2.0.0",
+      "fecha": "2026-04-11",
+      "url": "https://cdn.comfy.org/christian-byrne/audio-separation-nodes-comfyui/2.0.0/node.zip",
+      "sha256": "ae84afa8aa6f593667b8d6fea66639a871df9c165c77c083fe51b43d3e16eec1",
+      "bytes": 1211474,
+      "autor": "christian-byrne",
+      "repo": "https://github.com/christian-byrne/audio-separation-nodes-comfyui",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "librosa>=0.10.2,<1",
+        "numpy",
+        "torchaudio>=2.3.0",
+        "moviepy"
+      ]
+    },
+    "ComfyMath": {
+      "error": "sin versión activa"
+    },
+    "comfyui_controlnet_aux": {
+      "nombre": "comfyui_controlnet_aux",
+      "version": "1.1.5",
+      "fecha": "2026-04-13",
+      "url": "https://cdn.comfy.org/fannovel16/comfyui_controlnet_aux/1.1.5/node.zip",
+      "sha256": "c8b3c719e0dd44aded4c581906a68f0a7b397fc51ad95404a0cdc205ee4f8422",
+      "bytes": 39781252,
+      "autor": "Fannovel16",
+      "repo": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+      "licencia": "",
+      "dependencias": [
+        "torch",
+        "importlib_metadata",
+        "huggingface_hub",
+        "scipy",
+        "opencv-python>=4.7.0.72",
+        "filelock",
+        "numpy",
+        "Pillow",
+        "einops",
+        "torchvision",
+        "pyyaml",
+        "scikit-image",
+        "python-dateutil",
+        "mediapipe",
+        "fvcore",
+        "yapf",
+        "omegaconf",
+        "ftfy",
+        "addict",
+        "yacs",
+        "trimesh[easy]",
+        "albumentations",
+        "scikit-learn",
+        "matplotlib"
+      ]
+    },
+    "comfyui_essentials": {
+      "nombre": "ComfyUI_essentials",
+      "version": "1.1.0",
+      "fecha": "2024-08-07",
+      "url": "https://cdn.comfy.org/matteo/comfyui_essentials/1.1.0/node.tar.gz",
+      "sha256": "ebd99d7463c7be7f13cf8ddd064d6e9bda151199c267b0b9cb27ff634ccb6840",
+      "bytes": 60651,
+      "autor": "Matteo",
+      "repo": "https://github.com/cubiq/ComfyUI_essentials",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "numba",
+        "colour-science",
+        "rembg",
+        "pixeloe"
+      ]
+    },
+    "comfyui_face_parsing": {
+      "nombre": "comfyui_face_parsing",
+      "version": "1.0.5",
+      "fecha": "2025-02-04",
+      "url": "https://cdn.comfy.org/ryuukeisyou/comfyui_face_parsing/1.0.5/node.zip",
+      "sha256": "5b609ecbe0899c5d431570602081af2c3953f1d0f98dcab71860a75a2e7ece11",
+      "bytes": 795912,
+      "autor": "Ryuukeisyou",
+      "repo": "https://github.com/Ryuukeisyou/comfyui_face_parsing",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "opencv-contrib-python",
+        "torchvision",
+        "ultralytics",
+        "matplotlib"
+      ]
+    },
+    "comfyui_fill-chatterbox": {
+      "nombre": "ComfyUI_Fill-ChatterBox",
+      "version": "1.0.4",
+      "fecha": "2026-04-25",
+      "url": "https://cdn.comfy.org/machinedelusions/comfyui_fill-chatterbox/1.0.4/node.zip",
+      "sha256": "aed2cf954a316cfb9c6c231df400fc2f0676f16dd8f265125affaea9aa40c4fe",
+      "bytes": 2579172,
+      "autor": "Machine Delusions",
+      "repo": "https://github.com/filliptm/ComfyUI_Fill-ChatterBox",
+      "licencia": "LICENSE",
+      "dependencias": [
+        "numpy",
+        "resampy",
+        "librosa",
+        "s3tokenizer",
+        "transformers",
+        "diffusers",
+        "resemble-perth",
+        "omegaconf",
+        "conformer"
+      ]
+    },
+    "comfyui_fill-nodes": {
+      "nombre": "ComfyUI_Fill-Nodes",
+      "version": "2.28.6",
+      "fecha": "2026-08-24",
+      "url": "https://cdn.comfy.org/machinedelusions/comfyui_fill-nodes/2.28.6/node.zip",
+      "sha256": "7ba7187ff624634474ee03001b64ae1361759f6729e13a81fbc1631b1f25b572",
+      "bytes": 4950784,
+      "autor": "Machine Delusions",
+      "repo": "https://github.com/filliptm/ComfyUI_Fill-Nodes",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "librosa",
+        "beat-this==1.1.0",
+        "glitch_this",
+        "PyOpenGL",
+        "glfw",
+        "scipy>=1.13.1",
+        "requests",
+        "aiohttp",
+        "imageio[ffmpeg]",
+        "matplotlib",
+        "reportlab",
+        "openai",
+        "PyPDF2",
+        "PyMuPDF",
+        "ollama",
+        "kornia",
+        "opencv-python",
+        "gdown",
+        "open_clip_torch",
+        "google-genai>=2.0.0,<3.0.0",
+        "google-cloud-storage",
+        "fal-client",
+        "runwayml",
+        "httpx",
+        "anthropic>=0.71.0,<1.0",
+        "claude-agent-sdk>=0.2.120,<0.3",
+        "keyring>=25,<26",
+        "openai-codex==0.144.4",
+        "huggingface_hub",
+        "scikit-learn"
+      ]
+    },
+    "comfyui_ipadapter_plus": {
+      "nombre": "ComfyUI_IPAdapter_plus",
+      "version": "2.0.0",
+      "fecha": "2024-06-05",
+      "url": "https://cdn.comfy.org/matteo/comfyui_ipadapter_plus/2.0.0/node.tar.gz",
+      "sha256": "ba5a0bee431175f3389bdc25e28b5e9d4f44811f2f82236e849ec2ef962842a9",
+      "bytes": 283479,
+      "autor": "Matteo",
+      "repo": "https://github.com/cubiq/ComfyUI_IPAdapter_plus",
+      "licencia": "GPL-3.0 license",
+      "dependencias": []
+    },
+    "comfyui_layerstyle": {
+      "nombre": "ComfyUI_LayerStyle",
+      "version": "2.0.40",
+      "fecha": "2026-08-01",
+      "url": "https://cdn.comfy.org/chflame163/comfyui_layerstyle/2.0.40/node.zip",
+      "sha256": "64631d964adba221f50d9febeadc000586ceecb4e3abd6ed6124c63bda4f5a61",
+      "bytes": 47911156,
+      "autor": "chflame163",
+      "repo": "https://github.com/chflame163/ComfyUI_LayerStyle",
+      "licencia": "MIT License",
+      "dependencias": [
+        "numpy",
+        "pillow",
+        "torch",
+        "matplotlib",
+        "Scipy",
+        "scikit_image",
+        "scikit_learn",
+        "opencv-contrib-python",
+        "pymatting",
+        "timm",
+        "colour-science",
+        "transformers",
+        "blend_modes",
+        "huggingface_hub",
+        "loguru"
+      ]
+    },
+    "comfyui_nvidia_rtx_nodes": {
+      "nombre": "ComfyUI Nvidia VFX Nodes",
+      "version": "0.2.1",
+      "fecha": "2026-10-13",
+      "url": "https://cdn.comfy.org/comfyui/comfyui_nvidia_rtx_nodes/0.2.1/node.zip",
+      "sha256": "7bf843330b82086a1a64b01332a51897f0ddf1c14f7a6e4debcd5b6140a4c440",
+      "bytes": 322429,
+      "autor": "Comfy Org Official",
+      "repo": "https://github.com/Comfy-Org/ComfyUI_Nvidia_VFX_Nodes",
+      "licencia": "LICENSE",
+      "dependencias": [
+        "nvidia-vfx"
+      ]
+    },
+    "ComfyUI_Swwan": {
+      "error": "https://api.comfy.org/nodes/ComfyUI_Swwan: 404"
+    },
+    "comfyui_ultimatesdupscale": {
+      "nombre": "ComfyUI_UltimateSDUpscale",
+      "version": "1.7.2",
+      "fecha": "2026-03-28",
+      "url": "https://cdn.comfy.org/ssit/comfyui_ultimatesdupscale/1.7.2/node.zip",
+      "sha256": "da26f141f1c6632176036778a0df81017e6be19525bc3345ab78a700b372192e",
+      "bytes": 265167,
+      "autor": "ssit",
+      "repo": "https://github.com/ssitu/ComfyUI_UltimateSDUpscale",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "comfyui-animatediff-evolved": {
+      "nombre": "ComfyUI-AnimateDiff-Evolved",
+      "version": "1.5.7",
+      "fecha": "2026-03-30",
+      "url": "https://cdn.comfy.org/kosinkadink/comfyui-animatediff-evolved/1.5.7/node.zip",
+      "sha256": "0e2efda42b64c00637f0d7d007feaa05ac00800fe21c9e188ff6ca1dde04104f",
+      "bytes": 186736,
+      "autor": "Kosinkadink",
+      "repo": "https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "ComfyUI-Color-Matcher": {
+      "nombre": "ComfyUI-Color-Matcher",
+      "version": "1.0.0",
+      "fecha": "2026-03-05",
+      "url": "https://cdn.comfy.org/seonghyeon/ComfyUI-Color-Matcher/1.0.0/node.zip",
+      "sha256": "5bfbcc95280fd2d59d7439e58a5c7e2cda8578d425962035ba3a178429d6d9b2",
+      "bytes": 1545451,
+      "autor": "okdalto",
+      "repo": "https://github.com/okdalto/ComfyUI-Color-Matcher",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "numpy",
+        "color-matcher"
+      ]
+    },
+    "comfyui-depthanythingv2": {
+      "nombre": "ComfyUI-DepthAnythingV2",
+      "version": "1.0.2",
+      "fecha": "2026-03-06",
+      "url": "https://cdn.comfy.org/kijai/comfyui-depthanythingv2/1.0.2/node.zip",
+      "sha256": "14d9a9f164633a128f01d25fd2dc0f89943f2806e2a51f38271d444900b5221d",
+      "bytes": 19116,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-DepthAnythingV2",
+      "licencia": "LICENSE",
+      "dependencias": [
+        "huggingface_hub",
+        "accelerate"
+      ]
+    },
+    "comfyui-frame-interpolation": {
+      "nombre": "ComfyUI-Frame-Interpolation",
+      "version": "1.0.11",
+      "fecha": "2026-03-22",
+      "url": "https://cdn.comfy.org/fannovel16/comfyui-frame-interpolation/1.0.11/node.zip",
+      "sha256": "179bb5ec8bc8d435aa4c14465ddd463bd4ff30c84ae286bddcdeead1c31bbe2d",
+      "bytes": 16836693,
+      "autor": "Fannovel16",
+      "repo": "https://github.com/Fannovel16/ComfyUI-Frame-Interpolation",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "comfyui-gimm-vfi": {
+      "error": "sin versión activa"
+    },
+    "comfyui-inpaint-cropandstitch": {
+      "nombre": "ComfyUI-Inpaint-CropAndStitch",
+      "version": "3.0.20",
+      "fecha": "2026-10-21",
+      "url": "https://cdn.comfy.org/lquesada/comfyui-inpaint-cropandstitch/3.0.20/node.zip",
+      "sha256": "1558dd6c6d5ec3e8771edb322f240ff2eab6eed6e930675008a074b2cb331450",
+      "bytes": 12497702,
+      "autor": "Luis Quesada",
+      "repo": "https://github.com/lquesada/ComfyUI-Inpaint-CropAndStitch",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "comfyui-kjnodes": {
+      "nombre": "ComfyUI-KJNodes",
+      "version": "1.5.0",
+      "fecha": "2026-08-07",
+      "url": "https://cdn.comfy.org/kijai/comfyui-kjnodes/1.5.0/node.zip",
+      "sha256": "a7a41da994ecd1fa4327a6a41f0df54c743132d2db21f620890ff6570982a39e",
+      "bytes": 1102873,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-KJNodes",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "pillow>=10.3.0",
+        "color-matcher",
+        "matplotlib"
+      ]
+    },
+    "comfyui-liveportraitkj": {
+      "nombre": "ComfyUI-LivePortraitKJ",
+      "version": "1.1.0",
+      "fecha": "2024-07-27",
+      "url": "https://cdn.comfy.org/kijai/comfyui-liveportraitkj/1.1.0/node.tar.gz",
+      "sha256": "10be3cef89ff09842edc8b81448ba6b1f998524607091eb40b4adceffbe098b3",
+      "bytes": 15629271,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-LivePortraitKJ",
+      "licencia": "MIT License",
+      "dependencias": [
+        "pyyaml",
+        "numpy",
+        "opencv-python",
+        "rich"
+      ]
+    },
+    "ComfyUI-LTXVideo": {
+      "error": "sin versión activa"
+    },
+    "ComfyUI-MelBandRoFormer": {
+      "nombre": "ComfyUI-MelBandRoFormer",
+      "version": "1.0.2",
+      "fecha": "2026-01-30",
+      "url": "https://cdn.comfy.org/kijai/ComfyUI-MelBandRoFormer/1.0.2/node.zip",
+      "sha256": "0d4e74fae1569596976a24df3f637599c780f9547a5344f4978e0b9d90cbf3c7",
+      "bytes": 11108,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-MelBandRoFormer",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "rotary_embedding_torch",
+        "einops"
+      ]
+    },
+    "comfyui-qwenmultiangle": {
+      "nombre": "Qwen Multiangle Camera",
+      "version": "0.7.0",
+      "fecha": "2026-07-06",
+      "url": "https://cdn.comfy.org/jtydhr88/comfyui-qwenmultiangle/0.7.0/node.zip",
+      "sha256": "7699e4cfdbc7045cf4545d9509dac202ff468b03726582510811c80ae910af0f",
+      "bytes": 1385698,
+      "autor": "Terry Jia",
+      "repo": "https://github.com/jtydhr88/ComfyUI-qwenmultiangle",
+      "licencia": "MIT",
+      "dependencias": []
+    },
+    "comfyui-rmbg": {
+      "nombre": "ComfyUI-RMBG",
+      "version": "3.1.0",
+      "fecha": "2026-07-21",
+      "url": "https://cdn.comfy.org/ailab/comfyui-rmbg/3.1.0/node.zip",
+      "sha256": "a456aa435447091cb4abfe22f5cc5d9125a217dc43b828c7e165971dfea2c60f",
+      "bytes": 3362810,
+      "autor": "AILab",
+      "repo": "https://github.com/1038lab/ComfyUI-RMBG",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "huggingface-hub>=0.19.0",
+        "transparent-background>=1.1.2",
+        "segment-anything>=1.0",
+        "groundingdino-py>=0.4.0",
+        "opencv-python>=4.7.0",
+        "onnxruntime>=1.15.0",
+        "onnxruntime-gpu>=1.15.0",
+        "protobuf>=3.20.2,<6.0.0",
+        "hydra-core>=1.3.0",
+        "omegaconf>=2.3.0",
+        "iopath>=0.1.9"
+      ]
+    },
+    "comfyui-sam3": {
+      "nombre": "SAM3",
+      "version": "0.1.21",
+      "fecha": "2026-05-19",
+      "url": "https://cdn.comfy.org/pznodes/comfyui-sam3/0.1.21/node.zip",
+      "sha256": "570c3f31000d958bcf602fbe17487b7f02ef450ca95a918adb5442e927098269",
+      "bytes": 34257322,
+      "autor": "pozzettiandrea",
+      "repo": "https://github.com/PozzettiAndrea/ComfyUI-SAM3",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "comfyui-scail-pose": {
+      "nombre": "ComfyUI-SCAIL-Pose",
+      "version": "1.0.2",
+      "fecha": "2025-12-23",
+      "url": "https://cdn.comfy.org/kijai/ComfyUI-SCAIL-Pose/1.0.2/node.zip",
+      "sha256": "997c5d13f3be1cbc09c15e5950fc3b356075ddab89cbaee99df0a775029e8309",
+      "bytes": 37794,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-SCAIL-Pose",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "taichi >= 1.7.4",
+        "opencv-python",
+        "pillow"
+      ]
+    },
+    "ComfyUI-segment-anything-2": {
+      "nombre": "ComfyUI-segment-anything-2",
+      "version": "1.0.2",
+      "fecha": "2025-10-07",
+      "url": "https://cdn.comfy.org/kijai/comfyui-segment-anything-2/1.0.2/node.zip",
+      "sha256": "8fa3682d47b59194c0b77a1f50b0129af0ffe8e0dd305ba012ce9b98ea20dfb6",
+      "bytes": 155214,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-segment-anything-2",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "comfyui-string-converter": {
+      "error": "sin versión activa"
+    },
+    "comfyui-videohelpersuite": {
+      "nombre": "ComfyUI-VideoHelperSuite",
+      "version": "1.7.9",
+      "fecha": "2025-12-17",
+      "url": "https://cdn.comfy.org/kosinkadink/comfyui-videohelpersuite/1.7.9/node.zip",
+      "sha256": "ac63991d8b237afe5b2cd2b287a14b4a4d40ff203c0f2ee9d5fe61059f57cdf8",
+      "bytes": 106498,
+      "autor": "Kosinkadink",
+      "repo": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "opencv-python",
+        "imageio-ffmpeg"
+      ]
+    },
+    "ComfyUI-WanAnimatePreprocess": {
+      "nombre": "ComfyUI-WanAnimatePreprocess",
+      "version": "1.0.3",
+      "fecha": "2026-05-27",
+      "url": "https://cdn.comfy.org/kijai/ComfyUI-WanAnimatePreprocess/1.0.3/node.zip",
+      "sha256": "b0a7149fd301cc1fe76c14f0447de29cc9a145535e5a4f16eb2d056e525de564",
+      "bytes": 511831,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-WanAnimatePreprocess",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "opencv-python",
+        "onnxruntime-gpu",
+        "onnx"
+      ]
+    },
+    "comfyui-wanvideowrapper": {
+      "nombre": "ComfyUI-WanVideoWrapper",
+      "version": "1.4.7",
+      "fecha": "2026-02-01",
+      "url": "https://cdn.comfy.org/kijai/ComfyUI-WanVideoWrapper/1.4.7/node.zip",
+      "sha256": "50ccbf1d3cc63367c65193603b66b42d8ea74496834a2f9d8fdbbd333ef27fa6",
+      "bytes": 19114232,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-WanVideoWrapper",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "accelerate >= 1.2.1",
+        "diffusers >= 0.33.0",
+        "peft >= 0.17.0",
+        "ftfy",
+        "gguf >= 0.17.1",
+        "pyloudnorm"
+      ]
+    },
+    "ComfyUI-WanVideoWrapper": {
+      "nombre": "ComfyUI-WanVideoWrapper",
+      "version": "1.4.7",
+      "fecha": "2026-02-01",
+      "url": "https://cdn.comfy.org/kijai/ComfyUI-WanVideoWrapper/1.4.7/node.zip",
+      "sha256": "50ccbf1d3cc63367c65193603b66b42d8ea74496834a2f9d8fdbbd333ef27fa6",
+      "bytes": 19114232,
+      "autor": "Kijai",
+      "repo": "https://github.com/kijai/ComfyUI-WanVideoWrapper",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "accelerate >= 1.2.1",
+        "diffusers >= 0.33.0",
+        "peft >= 0.17.0",
+        "ftfy",
+        "gguf >= 0.17.1",
+        "pyloudnorm"
+      ]
+    },
+    "controlaltai-nodes": {
+      "nombre": "ControlAltAI_Nodes",
+      "version": "1.1.4",
+      "fecha": "2025-06-05",
+      "url": "https://cdn.comfy.org/controlaltai/controlaltai-nodes/1.1.4/node.zip",
+      "sha256": "dbb6bb3f21aa4cacd248d3687a17cf62e71044e0a8df8d14eb9d3fd7d6da3c82",
+      "bytes": 43024,
+      "autor": "ControlAltAI",
+      "repo": "https://github.com/gseth/ControlAltAI-Nodes",
+      "licencia": "ver LICENSE",
+      "dependencias": []
+    },
+    "FL_PromptSelectorBasic": {
+      "error": "https://api.comfy.org/nodes/FL_PromptSelectorBasic: 404"
+    },
+    "masquerade-nodes-comfyui": {
+      "error": "sin versión activa"
+    },
+    "QwenVL": {
+      "error": "https://api.comfy.org/nodes/QwenVL: 404"
+    },
+    "RES4LYF": {
+      "error": "sin versión activa"
+    },
+    "seedvr2_videoupscaler": {
+      "nombre": "ComfyUI-SeedVR2_VideoUpscaler",
+      "version": "2.5.24",
+      "fecha": "2025-12-24",
+      "url": "https://cdn.comfy.org/ainvfx/seedvr2_videoupscaler/2.5.24/node.zip",
+      "sha256": "a5d5e93aead0ad901fbbe362078f84910425f81c5ef976b7f5c0c48265a7bb81",
+      "bytes": 4835757,
+      "autor": "AInVFX",
+      "repo": "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "torch",
+        "torchvision",
+        "safetensors",
+        "numpy",
+        "tqdm",
+        "psutil",
+        "einops",
+        "omegaconf>=2.3.0",
+        "diffusers>=0.33.1",
+        "peft>=0.17.0",
+        "rotary_embedding_torch>=0.5.3",
+        "opencv-python",
+        "gguf",
+        "matplotlib"
+      ]
+    },
+    "was-ns": {
+      "nombre": "WAS Node Suite (Revised)",
+      "version": "3.0.1",
+      "fecha": "2025-09-26",
+      "url": "https://cdn.comfy.org/drltdata/was-ns/3.0.1/node.zip",
+      "sha256": "5fea76bd408e649dfc521ffeccd75bd60d82589074dffe0d0fa5b2d0370faf9f",
+      "bytes": 20424731,
+      "autor": "Dr.Lt.Data",
+      "repo": "https://github.com/ltdrdata/was-node-suite-comfyui",
+      "licencia": "ver LICENSE",
+      "dependencias": [
+        "cmake",
+        "fairscale>=0.4.4",
+        "git+https://github.com/ltdrdata/img2texture.git",
+        "git+https://github.com/ltdrdata/cstr",
+        "gitpython",
+        "imageio",
+        "joblib",
+        "matplotlib",
+        "numba>=0.62",
+        "numpy",
+        "opencv-python-headless[ffmpeg]<=4.7.0.72",
+        "pilgram",
+        "git+https://github.com/ltdrdata/ffmpy.git",
+        "rembg",
+        "scikit-image>=0.20.0",
+        "scikit-learn",
+        "scipy",
+        "timm>=0.4.12",
+        "tqdm",
+        "transformers"
+      ]
+    }
+  }
+}

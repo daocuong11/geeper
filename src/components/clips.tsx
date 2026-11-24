@@ -1,0 +1,585 @@
+"use client";
+/**
+ * Asistente de clips para alguien que no sabe nada de video: 1) elige tu video, 2) elige un momento
+ * (con vista previa), 3) ajusta y crea. El paso vive en la URL (?fuente=…&momento=…).
+ */
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { Aviso, Barra, archivo, pedir, postJson, useSondeo } from "./comun";
+import { SugerenciasBusqueda } from "./sugerencias-busqueda";
+
+interface Vista { video: string; poster: string; desde: number; hasta: number }
+interface Candidato { n: number; inicio: number; fin: number; puntaje: number; motivos: string[]; texto?: string; vista?: Vista }
+interface Fuente {
+  id: string;
+  info: { url: string; titulo: string; canal: string | null; plataforma: string | null; duracion: number };
+  candidatos: Candidato[] | null;
+  idioma: string | null;
+}
+interface TrabajoM { id: string; estado: string; etapa: string; progreso: number; error: string | null; payload: { src?: string }; resultado: { fuente?: string } | null }
+interface Datos { fuentes: Fuente[]; trabajos: TrabajoM[]; workerVivo: boolean }
+interface Tendencia { url: string; titulo: string; canal: string; vistas: number; horas: number; vistasPorHora: number; minutos: number; loMasVisto: boolean; fueDirecto: boolean }
+
+const mmss = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+const miles = (n: number) => n.toLocaleString("es");
+
+/** Los motivos del puntaje, dichos como los diría una persona. */
+function motivoSimple(m: string): string {
+  if (m.startsWith("pico de sonoridad")) return "Hay un grito o una reacción fuerte";
+  if (m.startsWith("lo más visto")) return "Es la parte que más vuelve a ver la gente";
+  if (m.startsWith("pico del chat")) return "El chat explotó";
+  if (/palabras de emoción/.test(m)) return "Dicen cosas como «no puede ser»";
+  return "Hay mucha energía";
+}
+
+function estrellas(c: Candidato, todos: Candidato[]): number {
+  const orden = [...todos].sort((a, b) => b.puntaje - a.puntaje);
+  const i = orden.findIndex((x) => x.n === c.n);
+  return i < Math.ceil(orden.length / 3) ? 3 : i < Math.ceil((orden.length * 2) / 3) ? 2 : 1;
+}
+
+export function PaginaClips() {
+  const router = useRouter();
+  const ruta = usePathname();
+  const q = useSearchParams();
+  const fuenteId = q.get("fuente");
+  const momento = q.get("momento") ? Number(q.get("momento")) : null;
+  const { datos, recargar } = useSondeo<Datos>("/api/clips", 3000);
+  const ir = (f: string | null, m: number | null = null) => {
+    const p = new URLSearchParams();
+    if (f) p.set("fuente", f);
+    if (m) p.set("momento", String(m));
+    router.push(p.size ? `${ruta}?${p}` : ruta);
+  };
+  const fuente = datos?.fuentes.find((f) => f.id === fuenteId) ?? null;
+  const cand = fuente?.candidatos?.find((c) => c.n === momento) ?? null;
+  const paso = cand ? 3 : fuente ? 2 : 1;
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold">Hacer clips de un video largo</h1>
+        <p className="text-sm text-tenue">Geeper encuentra los mejores momentos de un video y los convierte en clips verticales listos para redes.</p>
+      </div>
+      <Pasos actual={paso} ir={(n) => (n === 1 ? ir(null) : n === 2 && fuente ? ir(fuente.id) : undefined)} />
+      {datos && !datos.workerVivo && (
+        <Aviso tipo="alerta">
+          <p className="font-medium">El motor de Geeper está apagado, así que nada avanza.</p>
+          <p className="mt-1">Cierra Geeper y ábrelo otra vez con <code>pnpm run dev:up</code> (enciende la web y el motor juntos).</p>
+        </Aviso>
+      )}
+      {!datos && <p className="text-tenue">Cargando…</p>}
+      {datos && paso === 1 && <Paso1 datos={datos} recargar={recargar} elegir={(id) => ir(id)} />}
+      {datos && paso === 2 && fuente && <Paso2 f={fuente} elegir={(n) => ir(fuente.id, n)} volver={() => ir(null)} />}
+      {datos && paso === 3 && fuente && cand && <Paso3 f={fuente} c={cand} volver={() => ir(fuente.id)} />}
+      {datos && fuenteId && !fuente && <Aviso tipo="error">No encuentro ese video. <button className="underline" onClick={() => ir(null)}>Volver al inicio</button></Aviso>}
+    </div>
+  );
+}
+
+function Pasos({ actual, ir }: { actual: number; ir: (n: number) => void }) {
+  const nombres = ["Elige tu video", "Elige un momento", "Ajusta y crea"];
+  return (
+    <ol className="flex flex-wrap gap-2 text-sm" aria-label="Pasos">
+      {nombres.map((n, i) => {
+        const k = i + 1;
+        const hecho = k < actual;
+        return (
+          <li key={n}>
+            <button type="button" disabled={!hecho} onClick={() => ir(k)} aria-current={k === actual ? "step" : undefined}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1 ${k === actual ? "border-cyan-500 bg-cyan-950/50 text-white" : hecho ? "border-borde text-tenue hover:text-white" : "border-borde text-tenue opacity-60"}`}>
+              <span className={`grid h-5 w-5 place-items-center rounded-full text-xs ${k === actual ? "bg-cyan-600" : "bg-[#232a38]"}`}>{hecho ? "✓" : k}</span>{n}
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+// ---- Paso 1 ---------------------------------------------------------------------------------------
+
+function Paso1({ datos, recargar, elegir }: { datos: Datos; recargar: () => Promise<void>; elegir: (id: string) => void }) {
+  const [modo, setModo] = useState<"enlace" | "archivo">("enlace");
+  const [url, setUrl] = useState("");
+  const [idioma, setIdioma] = useState("es");
+  const [min, setMin] = useState(15);
+  const [max, setMax] = useState(40);
+  const [subida, setSubida] = useState<number | null>(null);
+  const [esperando, setEsperando] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [arrastrando, setArrastrando] = useState(false);
+  const entrada = useRef<HTMLInputElement>(null);
+
+  const trabajo = datos.trabajos.find((t) => t.id === esperando);
+  useEffect(() => {
+    // Al pasar al paso 2 este componente se desmonta: basta con navegar.
+    if (trabajo?.estado === "hecho" && trabajo.resultado?.fuente) elegir(trabajo.resultado.fuente);
+  }, [trabajo, elegir]);
+
+  async function buscarEnlace(e?: React.FormEvent, u?: string) {
+    e?.preventDefault();
+    setError(null);
+    try {
+      const r = await postJson<{ trabajo: string }>("/api/clips/momentos", { src: (u ?? url).trim(), idioma, min, max });
+      setEsperando(r.trabajo);
+      void recargar();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  function subir(f: File) {
+    setError(null);
+    setSubida(0);
+    const x = new XMLHttpRequest();
+    x.open("POST", `/api/clips/subir?${new URLSearchParams({ nombre: f.name, idioma, min: String(min), max: String(max) })}`);
+    x.upload.onprogress = (ev) => ev.lengthComputable && setSubida(ev.loaded / ev.total);
+    x.onload = () => {
+      setSubida(null);
+      try {
+        const r = JSON.parse(x.responseText) as { trabajo?: string; error?: string };
+        if (x.status >= 400 || !r.trabajo) setError(r.error ?? `Error ${x.status}`);
+        else {
+          setEsperando(r.trabajo);
+          void recargar();
+        }
+      } catch {
+        setError(`Error ${x.status}`);
+      }
+    };
+    x.onerror = () => {
+      setSubida(null);
+      setError("La subida se cortó. Revisa que Geeper siga abierto y vuelve a intentar.");
+    };
+    x.send(f);
+  }
+
+  const enCurso = datos.trabajos.filter((t) => t.estado === "pendiente" || t.estado === "corriendo");
+  const fallo = datos.trabajos.find((t) => t.id === esperando && t.estado === "fallido");
+  const conMomentos = datos.fuentes.filter((f) => f.candidatos?.length);
+
+  return (
+    <div className="space-y-6">
+      <section className="tarjeta space-y-4 p-5">
+        <div className="flex gap-2" role="tablist">
+          {(["enlace", "archivo"] as const).map((m) => (
+            <button key={m} type="button" role="tab" aria-selected={modo === m} onClick={() => setModo(m)} className={`boton ${modo === m ? "boton-primario" : ""}`}>
+              {m === "enlace" ? "Pegar un enlace" : "Subir un video"}
+            </button>
+          ))}
+        </div>
+        {modo === "enlace" ? (
+          <form onSubmit={buscarEnlace} className="space-y-2">
+            <label className="etiqueta" htmlFor="url">Enlace del video (YouTube, Twitch, Kick…)</label>
+            <input id="url" className="campo" type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" required />
+            <p className="text-xs text-tenue">Tiene que ser un video ya publicado. Si es un directo, espera a que termine y usa la grabación.</p>
+            <button className="boton boton-primario" disabled={!url.trim() || Boolean(esperando)}>Buscar los mejores momentos</button>
+          </form>
+        ) : (
+          <div
+            onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+            onDragLeave={() => setArrastrando(false)}
+            onDrop={(e) => { e.preventDefault(); setArrastrando(false); const f = e.dataTransfer.files[0]; if (f) subir(f); }}
+            className={`grid place-items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center ${arrastrando ? "border-cyan-500 bg-cyan-950/30" : "border-borde"}`}>
+            <p className="text-base">Arrastra tu video aquí</p>
+            <p className="text-sm text-tenue">o</p>
+            <button type="button" className="boton boton-primario" disabled={subida !== null || Boolean(esperando)} onClick={() => entrada.current?.click()}>Elegir un archivo</button>
+            <input ref={entrada} type="file" accept="video/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) subir(f); e.target.value = ""; }} />
+            <p className="text-xs text-tenue">Una grabación tuya, de un directo o de una partida. MP4, MOV, MKV…</p>
+          </div>
+        )}
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <label className="etiqueta" htmlFor="idioma">¿En qué idioma hablan en el video?</label>
+            <select id="idioma" className="campo" value={idioma} onChange={(e) => setIdioma(e.target.value)}>
+              <option value="es">Español</option><option value="en">Inglés</option><option value="pt">Portugués</option>
+            </select>
+          </div>
+          <details className="text-sm">
+            <summary className="cursor-pointer text-tenue">Más opciones</summary>
+            <div className="mt-2 flex gap-3">
+              <div><label className="etiqueta" htmlFor="min">Clip más corto (s)</label><input id="min" type="number" className="campo w-24" value={min} min={3} max={120} onChange={(e) => setMin(Number(e.target.value))} /></div>
+              <div><label className="etiqueta" htmlFor="max">Clip más largo (s)</label><input id="max" type="number" className="campo w-24" value={max} min={3} max={180} onChange={(e) => setMax(Number(e.target.value))} /></div>
+            </div>
+          </details>
+        </div>
+        {subida !== null && (
+          <div className="space-y-1 text-sm"><p>Subiendo el video… {Math.round(subida * 100)} %</p><Barra valor={subida} /></div>
+        )}
+        {error && <Aviso tipo="error">{error}</Aviso>}
+        {fallo && <Aviso tipo="error">No pude analizar ese video: {fallo.error}</Aviso>}
+      </section>
+
+      {enCurso.map((t) => (
+        <section key={t.id} className="tarjeta space-y-2 p-4" aria-live="polite">
+          <p className="font-medium">Analizando el video… {t.id === esperando ? "te llevo a los momentos cuando termine." : ""}</p>
+          <p className="text-sm text-tenue">{etapaSimple(t.etapa, t.estado)}</p>
+          <Barra valor={Math.max(0.03, t.progreso)} />
+          <p className="text-xs text-tenue">Puede tardar unos minutos (bajar el video y escuchar los mejores momentos). Puedes dejar esta página abierta.</p>
+        </section>
+      ))}
+
+      {conMomentos.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="font-medium">Videos que ya analizaste</h2>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {conMomentos.map((f) => {
+              const poster = f.candidatos!.find((c) => c.vista)?.vista?.poster;
+              return (
+                <li key={f.id}>
+                  <button type="button" onClick={() => elegir(f.id)} className="tarjeta flex w-full items-center gap-3 p-3 text-left hover:border-cyan-700">
+                    {poster
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={archivo(poster)} alt="" className="h-16 w-28 shrink-0 rounded object-cover" />
+                      : <span className="grid h-16 w-28 shrink-0 place-items-center rounded bg-[#0f131a] text-2xl" aria-hidden>🎬</span>}
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{f.info.titulo}</span>
+                      <span className="block text-xs text-tenue">{f.info.canal ?? "Video tuyo"} · {f.candidatos!.length} momentos</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <Radar alElegir={(u) => { setModo("enlace"); setUrl(u); void buscarEnlace(undefined, u); }} />
+    </div>
+  );
+}
+
+function etapaSimple(etapa: string, estado: string): string {
+  if (estado === "pendiente") return "En la fila: empieza en cuanto el motor se libere.";
+  if (/Bajando/i.test(etapa)) return "Bajando el video…";
+  if (/transcri/i.test(etapa)) return "Escuchando lo que se dice en los mejores momentos…";
+  if (/sonido|Trayendo/i.test(etapa)) return "Bajando el video y midiendo dónde hay más reacción…";
+  return etapa || "Trabajando…";
+}
+
+function Radar({ alElegir }: { alElegir: (url: string) => void }) {
+  const [q, setQ] = useState("gta 6");
+  const [res, setRes] = useState<Tendencia[] | null>(null);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function buscar(consulta: string) {
+    setCargando(true);
+    setError(null);
+    try {
+      setRes((await pedir<{ videos: Tendencia[] }>(`/api/clips/tendencias?q=${encodeURIComponent(consulta)}&horas=24`)).videos);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCargando(false);
+    }
+  }
+  function medir(e: React.FormEvent) {
+    e.preventDefault();
+    void buscar(q);
+  }
+  function elegirSugerencia(s: string) {
+    setQ(s);
+    if (!cargando) void buscar(s);
+  }
+  return (
+    <details className="tarjeta p-4">
+      <summary className="cursor-pointer font-medium">¿No sabes qué video usar? Mira lo que está de moda hoy</summary>
+      <form onSubmit={medir} className="mt-3 flex flex-wrap items-end gap-3">
+        <div className="grow"><label className="etiqueta" htmlFor="q">Tema</label><input id="q" className="campo" value={q} onChange={(e) => setQ(e.target.value)} /></div>
+        <button className="boton" disabled={cargando || !q.trim()}>{cargando ? "Buscando (cerca de 1 min)…" : "Buscar en YouTube"}</button>
+      </form>
+      {!cargando && <SugerenciasBusqueda consulta={q} alElegir={elegirSugerencia} texto="Toca una para buscar sus videos de moda." />}
+      {error && <div className="mt-3"><Aviso tipo="error">{error}</Aviso></div>}
+      {res && (
+        <div className="mt-3 space-y-2">
+          {res.length === 0 && <p className="text-sm text-tenue">No encontré videos de las últimas 24 horas sobre eso.</p>}
+          <ul className="space-y-2">
+            {res.map((v) => (
+              <li key={v.url} className="flex flex-wrap items-center gap-3 rounded-lg border border-borde p-2 text-sm">
+                <span className="min-w-0 grow">
+                  <a className="hover:underline" href={v.url} target="_blank" rel="noreferrer">{v.titulo}</a>
+                  <span className="block text-xs text-tenue">{v.canal} · {miles(v.vistasPorHora)} vistas por hora · hace {v.horas} h · {v.minutos} min</span>
+                </span>
+                <button type="button" className="boton" onClick={() => alElegir(v.url)}>Usar este video</button>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-tenue">Que un video esté de moda no da permiso para usarlo: hace falta que el creador tenga una campaña de clips o te autorice.</p>
+        </div>
+      )}
+    </details>
+  );
+}
+
+// ---- Paso 2 ---------------------------------------------------------------------------------------
+
+function Paso2({ f, elegir, volver }: { f: Fuente; elegir: (n: number) => void; volver: () => void }) {
+  const cands = f.candidatos ?? [];
+  const orden = [...cands].sort((a, b) => b.puntaje - a.puntaje);
+  const sinVista = cands.some((c) => !c.vista);
+  const [reanalizando, setReanalizando] = useState(false);
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h2 className="text-lg font-medium">{f.info.titulo}</h2>
+        <span className="text-sm text-tenue">{f.info.canal ?? "Video tuyo"} · {mmss(f.info.duracion)}</span>
+        <button type="button" className="boton ml-auto" onClick={volver}>← Elegir otro video</button>
+      </div>
+      {cands.length === 0 ? (
+        <Aviso tipo="alerta">No encontré momentos en este video. Suele pasar si es más corto que un clip o si casi no tiene sonido.</Aviso>
+      ) : (
+        <p className="text-sm text-tenue">{cands.length === 1 ? "Encontré 1 momento. Dale play para verlo." : `Encontré ${cands.length} momentos, del mejor al menos bueno. Dale play para verlos y elige uno.`}</p>
+      )}
+      {sinVista && (
+        <Aviso tipo="info">
+          Este video se analizó antes de las vistas previas.{" "}
+          <button type="button" className="underline" disabled={reanalizando} onClick={() => { setReanalizando(true); void postJson("/api/clips/momentos", { src: f.info.url, idioma: f.idioma ?? "es" }); }}>
+            {reanalizando ? "Analizando otra vez… (vuelve al paso 1 para ver el avance)" : "Analizarlo otra vez"}
+          </button>
+        </Aviso>
+      )}
+      <ul className="grid gap-4 sm:grid-cols-2">
+        {orden.map((c) => (
+          <li key={c.n} className="tarjeta overflow-hidden">
+            <VistaMomento c={c} />
+            <div className="space-y-2 p-3">
+              <div className="flex items-center gap-2">
+                <span aria-label={`${estrellas(c, cands)} de 3 estrellas`} className="text-amber-300">{"★".repeat(estrellas(c, cands))}<span className="text-[#3a4255]">{"★".repeat(3 - estrellas(c, cands))}</span></span>
+                <span className="text-xs text-tenue">en el minuto {mmss(c.inicio)} · dura {Math.round(c.fin - c.inicio)} s</span>
+              </div>
+              <ul className="text-sm">{[...new Set(c.motivos.map(motivoSimple))].map((m) => <li key={m}>• {m}</li>)}</ul>
+              {c.texto && <p className="line-clamp-3 text-sm text-tenue">«{c.texto}»</p>}
+              <button type="button" className="boton boton-primario w-full justify-center" onClick={() => elegir(c.n)}>Usar este momento</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Miniatura que, al darle play, reproduce sólo el momento (dentro de la vista previa con aire). */
+function VistaMomento({ c }: { c: Candidato }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  if (!c.vista) return <div className="grid aspect-video place-items-center bg-[#0f131a] text-sm text-tenue">Sin vista previa</div>;
+  const v = c.vista;
+  return (
+    <video ref={ref} src={archivo(v.video)} poster={archivo(v.poster)} controls preload="none" className="aspect-video w-full bg-black"
+      onPlay={(e) => { const t = e.currentTarget; if (t.currentTime < c.inicio - v.desde - 0.5 || t.currentTime >= c.fin - v.desde) t.currentTime = c.inicio - v.desde; }}
+      onTimeUpdate={(e) => { const t = e.currentTarget; if (t.currentTime >= c.fin - v.desde) t.pause(); }} />
+  );
+}
+
+// ---- Paso 3 ---------------------------------------------------------------------------------------
+
+const ESTILOS = [
+  { id: "react", nombre: "Cara arriba, juego abajo", para: "Streamer con su cámara sobre el juego" },
+  { id: "cara", nombre: "Sigue a la persona", para: "Alguien hablando o caminando (IRL)" },
+  { id: "contener", nombre: "Video completo", para: "Se ve todo, con fondo desenfocado" },
+] as const;
+
+function Dibujo({ id }: { id: string }) {
+  const caja = "mx-auto grid h-24 w-14 overflow-hidden rounded border border-borde bg-[#0f131a]";
+  if (id === "react") return <span className={`${caja} grid-rows-[38%_62%]`} aria-hidden><span className="grid place-items-center bg-[#334155] text-lg">🙂</span><span className="bg-gradient-to-br from-emerald-700 to-cyan-800" /></span>;
+  if (id === "cara") return <span className={`${caja} place-items-center bg-[#334155] text-2xl`} aria-hidden>🙂</span>;
+  if (id === "contener") return <span className={`${caja} place-items-center bg-gradient-to-b from-[#1e293b] to-[#0f172a]`} aria-hidden><span className="h-7 w-full bg-gradient-to-br from-emerald-700 to-cyan-800" /></span>;
+  return <span className={`${caja} place-items-center bg-gradient-to-br from-emerald-700 to-cyan-800`} aria-hidden />;
+}
+
+const PERMISOS = [
+  { id: "campania", texto: "Es de una campaña de clips del creador" },
+  { id: "escrito", texto: "El creador me autorizó por escrito" },
+  { id: "propio", texto: "Es mi propio video" },
+] as const;
+
+function Paso3({ f, c, volver }: { f: Fuente; c: Candidato; volver: () => void }) {
+  const router = useRouter();
+  const ref = useRef<HTMLVideoElement>(null);
+  const v = c.vista;
+  const desde = v?.desde ?? c.inicio;
+  const hasta = v?.hasta ?? c.fin;
+  const [inicio, setInicio] = useState(c.inicio);
+  const [fin, setFin] = useState(c.fin);
+  const [estilo, setEstilo] = useState<string>("react");
+  const [formato, setFormato] = useState("9:16");
+  const [gancho, setGancho] = useState("");
+  const [titulo, setTitulo] = useState("");
+  const [ideas, setIdeas] = useState<{ ganchos: string[]; titulo: string | null } | null>(null);
+  const [pensando, setPensando] = useState(false);
+  const [errorIdeas, setErrorIdeas] = useState<string | null>(null);
+  const [tienePermiso, setTienePermiso] = useState(f.info.plataforma === "archivo");
+  const [tipoPermiso, setTipoPermiso] = useState<string>(f.info.plataforma === "archivo" ? "propio" : "campania");
+  const [detallePermiso, setDetallePermiso] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const dur = fin - inicio;
+  const ahora = () => (ref.current ? desde + ref.current.currentTime : inicio);
+
+  function verRecorte() {
+    const el = ref.current;
+    if (!el) return;
+    el.currentTime = inicio - desde;
+    void el.play();
+  }
+
+  async function sugerir() {
+    setPensando(true);
+    setErrorIdeas(null);
+    try {
+      const r = await postJson<{ ganchos: string[]; titulo: string | null }>("/api/clips/ganchos", { fuenteId: f.id, momento: c.n, react: estilo === "react" });
+      setIdeas(r);
+      if (!gancho && r.ganchos[0]) setGancho(r.ganchos[0]);
+    } catch (err) {
+      setErrorIdeas(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPensando(false);
+    }
+  }
+
+  async function crear(e: React.FormEvent) {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+    const tp = PERMISOS.find((p) => p.id === tipoPermiso)!;
+    const permiso = tienePermiso ? `${tp.texto.toLowerCase()}${detallePermiso.trim() ? ` (${detallePermiso.trim()})` : ""}` : undefined;
+    try {
+      const r = await postJson<{ proyecto: { id: string } }>("/api/clips", {
+        fuenteId: f.id, inicio: Math.round(inicio * 10) / 10, fin: Math.round(fin * 10) / 10, encuadre: estilo, formato,
+        idioma: f.idioma ?? "es", plantilla: "gta-vi-shorts", gancho, titulo: estilo === "react" ? titulo : "", permiso,
+      });
+      router.push(`/proyectos/${r.proyecto.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <form onSubmit={crear} className="space-y-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-lg font-medium">Ajusta tu clip</h2>
+        <button type="button" className="boton ml-auto" onClick={volver}>← Elegir otro momento</button>
+      </div>
+
+      <section className="tarjeta space-y-3 p-4">
+        <h3 className="font-medium">1. ¿Dónde empieza y dónde termina?</h3>
+        {v ? (
+          <video ref={ref} src={archivo(v.video)} poster={archivo(v.poster)} controls className="w-full rounded bg-black"
+            onLoadedMetadata={(e) => { e.currentTarget.currentTime = inicio - desde; }}
+            onTimeUpdate={(e) => { if (desde + e.currentTarget.currentTime >= fin) e.currentTarget.pause(); }} />
+        ) : <Aviso tipo="info">Este momento no tiene vista previa: ajusta con los números.</Aviso>}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="etiqueta" htmlFor="ini">Empieza en {mmss(inicio)}</label>
+            <input id="ini" type="range" className="w-full accent-cyan-500" min={desde} max={hasta} step={0.1} value={inicio}
+              onChange={(e) => { const x = Math.min(Number(e.target.value), fin - 3); setInicio(x); if (ref.current) ref.current.currentTime = x - desde; }} />
+            {v && <button type="button" className="boton mt-1" onClick={() => setInicio(Math.min(ahora(), fin - 3))}>Empezar donde está el video</button>}
+          </div>
+          <div>
+            <label className="etiqueta" htmlFor="fin">Termina en {mmss(fin)}</label>
+            <input id="fin" type="range" className="w-full accent-cyan-500" min={desde} max={hasta} step={0.1} value={fin}
+              onChange={(e) => { const x = Math.max(Number(e.target.value), inicio + 3); setFin(x); if (ref.current) ref.current.currentTime = Math.max(0, x - desde - 2); }} />
+            {v && <button type="button" className="boton mt-1" onClick={() => setFin(Math.max(ahora(), inicio + 3))}>Terminar donde está el video</button>}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {v && <button type="button" className="boton" onClick={verRecorte}>▶ Ver mi recorte</button>}
+          <span className={`text-sm ${dur < 7 || dur > 60 ? "text-amber-300" : "text-tenue"}`}>
+            Dura {Math.round(dur)} s{dur < 7 ? " · muy corto: la gente no alcanza a entenderlo" : dur > 60 ? " · largo: los clips de 15 a 40 s funcionan mejor" : " · buena duración"}
+          </span>
+        </div>
+      </section>
+
+      <section className="tarjeta space-y-3 p-4">
+        <h3 className="font-medium">2. ¿Cómo se ve en el teléfono?</h3>
+        <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Estilo">
+          {ESTILOS.map((s) => (
+            <label key={s.id} className={`cursor-pointer rounded-xl border p-3 text-center ${estilo === s.id ? "border-cyan-500 bg-cyan-950/40" : "border-borde hover:border-cyan-800"}`}>
+              <input type="radio" name="estilo" value={s.id} checked={estilo === s.id} onChange={() => setEstilo(s.id)} className="sr-only" />
+              <Dibujo id={s.id} />
+              <span className="mt-2 block font-medium">{s.nombre}</span>
+              <span className="block text-xs text-tenue">{s.para}</span>
+            </label>
+          ))}
+        </div>
+        <p className="text-xs text-tenue">Si Geeper no encuentra una cara clara, usa «Video completo» y te lo dice. Lo puedes cambiar después.</p>
+      </section>
+
+      <section className="tarjeta space-y-3 p-4">
+        <h3 className="font-medium">3. La frase del principio</h3>
+        <p className="text-sm text-tenue">Una frase corta que sale en los primeros 2 segundos para que la gente no pase de largo.</p>
+        <div className="flex flex-wrap gap-2">
+          <input aria-label="Gancho" className="campo grow" value={gancho} maxLength={160} onChange={(e) => setGancho(e.target.value)} placeholder="Ej.: Nadie vio venir lo que pasó aquí" />
+          <button type="button" className="boton" disabled={pensando || !c.texto} onClick={() => void sugerir()} title={!c.texto ? "Este momento no tiene palabras" : undefined}>
+            {pensando ? "Pensando (hasta 1 min)…" : "✨ Sugerirme ideas"}
+          </button>
+        </div>
+        {errorIdeas && <Aviso tipo="alerta">{errorIdeas}</Aviso>}
+        {ideas && ideas.ganchos.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {ideas.ganchos.map((g) => (
+              <button key={g} type="button" onClick={() => setGancho(g)} className={`rounded-full border px-3 py-1 text-sm ${gancho === g ? "border-cyan-500 bg-cyan-950/50" : "border-borde hover:border-cyan-700"}`}>{g}</button>
+            ))}
+          </div>
+        )}
+        {estilo === "react" && (
+          <div>
+            <label className="etiqueta" htmlFor="titulo">Título fijo en la mitad (opcional)</label>
+            <div className="flex flex-wrap gap-2">
+              <input id="titulo" className="campo grow" value={titulo} maxLength={160} onChange={(e) => setTitulo(e.target.value)} placeholder="Ej.: Kai PIERDE LA CABEZA cuando llega la policía" />
+              {ideas?.titulo && <button type="button" className="boton" onClick={() => setTitulo(ideas.titulo!)}>Usar: {ideas.titulo}</button>}
+            </div>
+          </div>
+        )}
+        <p className="text-xs text-tenue">Describe lo que pasa. Nunca pongas frases que la persona no dijo, ni «oficial», ni promesas que el clip no cumple.</p>
+      </section>
+
+      <section className="tarjeta space-y-3 p-4">
+        <h3 className="font-medium">4. ¿Tienes permiso para usar este video?</h3>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={tienePermiso} onChange={(e) => setTienePermiso(e.target.checked)} />
+          Sí, tengo permiso
+        </label>
+        {tienePermiso ? (
+          <div className="space-y-2 pl-6">
+            {PERMISOS.map((p) => (
+              <label key={p.id} className="flex items-center gap-2 text-sm">
+                <input type="radio" name="permiso" checked={tipoPermiso === p.id} onChange={() => setTipoPermiso(p.id)} /> {p.texto}
+              </label>
+            ))}
+            {tipoPermiso !== "propio" && (
+              <input aria-label="Dónde está el permiso" className="campo" value={detallePermiso} maxLength={200} onChange={(e) => setDetallePermiso(e.target.value)}
+                placeholder={tipoPermiso === "campania" ? "Nombre o enlace de la campaña" : "Dónde te autorizó (mensaje, correo…)"} />
+            )}
+          </div>
+        ) : (
+          <Aviso tipo="alerta">
+            Puedes crear el clip para practicar, pero no lo publiques sin permiso: las redes lo pueden bajar y te pueden quitar la cuenta. Muchos creadores tienen campañas que pagan por clips.
+          </Aviso>
+        )}
+      </section>
+
+      <details className="text-sm">
+        <summary className="cursor-pointer text-tenue">Más opciones</summary>
+        <div className="mt-2 flex flex-wrap gap-4">
+          <div>
+            <label className="etiqueta" htmlFor="formato">Forma del video</label>
+            <select id="formato" className="campo" value={formato} onChange={(e) => setFormato(e.target.value)}>
+              <option value="9:16">Vertical (TikTok, Reels, Shorts)</option><option value="1:1">Cuadrado</option><option value="16:9">Horizontal (YouTube)</option>
+            </select>
+          </div>
+          <label className="flex items-center gap-2 self-end">
+            <input type="radio" name="estilo" checked={estilo === "cubrir"} onChange={() => setEstilo("cubrir")} /> Recortar al centro (sin seguir caras)
+          </label>
+        </div>
+      </details>
+
+      {error && <Aviso tipo="error">{error}</Aviso>}
+      <div className="flex flex-wrap items-center gap-3">
+        <button className="boton boton-primario px-5 py-2 text-base" disabled={enviando || dur < 3}>{enviando ? "Creando…" : "Crear mi clip"}</button>
+        <span className="text-xs text-tenue">Tarda 1 o 2 minutos. Después lo puedes corregir: subtítulos, cortar palabras, quitar partes.</span>
+      </div>
+    </form>
+  );
+}

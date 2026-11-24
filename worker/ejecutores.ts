@@ -1,17 +1,32 @@
 /** Ejecutores por tipo de trabajo. Cada uno devuelve su resultado y, si toca, el siguiente de la cadena. */
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { crearCarpetas } from "@/lib/almacen";
+import { generarPropuesta, retocarAvatar } from "@/lib/avatares";
 import { guardarPayload, type Payload, type TipoTrabajo } from "@/lib/cola";
 import { db } from "@/lib/db";
 import { Formato } from "@/lib/esquema";
 import { tomarGpu } from "@/lib/gpu";
 import { importarMpt } from "@/lib/importador";
-import { apiViva, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/lib/mpt";
+import { buscarMomentos } from "@/lib/buscar-momentos";
+import { Campania } from "@/lib/clips";
+import { ENCUADRES, importarClip, type EncuadreClip } from "@/lib/importador-clip";
+import { asegurarApi, crearVideo, cuerpoVideo, estadoTarea, modeloImagen } from "@/lib/mpt";
 import type { Contexto } from "@/lib/pasos";
 import { obtenerPlantilla } from "@/lib/plantillas";
 import { correr } from "@/lib/proceso";
+import { generarPlanoEscena, type OpcionesPlano } from "@/lib/plano";
+import { generarPresentador, type OpcionesPresentador } from "@/lib/presentador";
+import { PedidoRehacer, rehacerEscena } from "@/lib/rehacer";
+import { animarEscenasDelVideo } from "@/lib/animar-escenas";
+import { actuarEscena, leerAvatarDelVideo, PedidoActuar, PedidoStreamer, streamerAvatar } from "@/lib/actuar";
+import { protagonizarVideo } from "@/lib/protagonista";
+import { correrWorkflow, PedidoWorkflow } from "@/lib/workflows";
+import { disenarVoz } from "@/lib/voces";
 import { regenerarVoz } from "@/lib/regenerar";
+import type { Avance } from "@/lib/wan2gp";
+import { reencuadrarEscena } from "@/lib/reencuadre";
 import { renderEntregar, versionDeProyecto } from "@/lib/render";
 import { publicarSubir } from "@/lib/redes/publicar";
 import { dirProyecto } from "@/lib/rutas";
@@ -55,7 +70,7 @@ function telemetria(ruta: string): () => void {
     if (!activo) return;
     try {
       const r = await correr("nvidia-smi", ["--query-gpu=temperature.gpu,power.draw,memory.used,utilization.gpu", "--format=csv,noheader,nounits"], { permitirFallo: true });
-      const carga = (await fs.readFile("/proc/loadavg", "utf8")).split(" ")[0];
+      const carga = os.loadavg()[0]!.toFixed(2); // 0 en Windows
       const fh = await fs.open(ruta, "a");
       await fh.write(`${new Date().toISOString()},${r.stdout.trim().replace(/\s/g, "")},${carga}\n`);
       await fh.sync();
@@ -75,7 +90,9 @@ async function mptGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const proyecto = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
   const dir = await crearCarpetas(proyecto.slug);
   const plantilla = await obtenerPlantilla(proyecto.plantilla);
-  if (!(await apiViva())) throw new Error("La API de MPT (127.0.0.1:8080) no responde. Corre `pnpm run doctor` para ver qué falta.");
+  if (!(await asegurarApi(h.log))) {
+    throw new Error("MoneyPrinterTurbo no responde: abre Docker Desktop, espera a que diga que está corriendo y relanza este trabajo (en Sistema ves qué falta).");
+  }
   await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "generando" } });
 
   let taskId = typeof t.payload.mptTaskId === "string" ? t.payload.mptTaskId : undefined;
@@ -103,7 +120,8 @@ async function mptGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const pararTelemetria = telemetria(path.join(dir, "logs", `${t.id}-telemetria.csv`));
   try {
     if (!taskId) {
-      const cuerpo = cuerpoVideo(proyecto.tema, Formato.parse(proyecto.formato), plantilla.datos.mpt);
+      const guion = typeof t.payload.guion === "string" ? t.payload.guion : undefined;
+      const cuerpo = cuerpoVideo(proyecto.tema, Formato.parse(proyecto.formato), plantilla.datos.mpt, guion);
       taskId = await crearVideo(cuerpo);
       // Se guarda ANTES de esperar: si el worker muere, al relanzar se retoma esta misma tarea.
       await guardarPayload(t.id, { ...t.payload, mptTaskId: taskId });
@@ -144,12 +162,200 @@ async function proyectoImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
 }
 
+async function clipMomentos(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const pl = t.payload;
+  const n = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : undefined);
+  await h.etapa("Trayendo la fuente y midiendo el sonido", 0.1);
+  const r = await buscarMomentos(
+    {
+      src: String(pl.src ?? ""),
+      top: n(pl.top), min: n(pl.min), max: n(pl.max), maxMinutos: n(pl.maxMinutos),
+      idioma: typeof pl.idioma === "string" ? pl.idioma : undefined,
+    },
+    h.log,
+    h.signal,
+  );
+  return { resultado: { fuente: r.fuente, candidatos: r.candidatos.length } };
+}
+
+async function clipImportar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const proyecto = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
+  const pl = t.payload;
+  const encuadre = String(pl.encuadre ?? "cubrir");
+  if (!(ENCUADRES as readonly string[]).includes(encuadre)) throw new Error(`Encuadre desconocido: ${encuadre}`);
+  const texto = (x: unknown) => (typeof x === "string" && x.trim() ? x.trim() : undefined);
+  await h.etapa("Cortando el tramo, reencuadrando y transcribiendo (CPU)", 0.1);
+  const r = await importarClip(h, {
+    proyectoId: proyecto.id,
+    slug: proyecto.slug,
+    nombre: proyecto.nombre,
+    tema: proyecto.tema,
+    formato: Formato.parse(proyecto.formato),
+    plantilla: await obtenerPlantilla(proyecto.plantilla),
+    fuenteId: String(pl.fuenteId ?? ""),
+    inicio: Number(pl.inicio),
+    fin: Number(pl.fin),
+    encuadre: encuadre as EncuadreClip,
+    idioma: texto(pl.idioma) ?? "es",
+    titulo: texto(pl.titulo),
+    gancho: texto(pl.gancho),
+    permiso: texto(pl.permiso),
+    campania: pl.campania ? Campania.parse(pl.campania) : undefined,
+  });
+  await db.proyecto.update({ where: { id: proyecto.id }, data: { estado: "ensamblado" } });
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function visualReencuadrar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const escena = String(t.payload.escena ?? "");
+  const layout = t.payload.layout === "cara" ? "cara" : "react";
+  await h.etapa(`Buscando la cara (${layout}, CPU)`, 0.1);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await reencuadrarEscena(h, t.proyectoId!, p, escena, layout);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
 async function vozRegenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
   const escena = typeof t.payload.escena === "string" ? t.payload.escena : null;
   await h.etapa(escena ? `Voz nueva para ${escena} (Kokoro + whisper, CPU)` : "Voz nueva del guion completo (Kokoro + whisper, CPU)", 0.1);
   const { p } = await versionDeProyecto(t.proyectoId!);
   const r = await regenerarVoz(h, t.proyectoId!, p, escena);
   return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function vozDisenar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Creando 3 voces que cumplan la descripción (VoxCPM2, tarjeta gráfica)", 0.1);
+  const r = await disenarVoz(h, String(t.payload.propuesta ?? ""), String(t.payload.descripcion ?? ""));
+  return { resultado: r };
+}
+
+/** Lo que ve la persona en Trabajos mientras se anima una escena. */
+export function etapaDePlano(a: Avance): string {
+  switch (a.fase) {
+    case "descargando":
+      return `Bajando el modelo (sólo la primera vez): ${(a.bytes! / 1024 ** 3).toFixed(1)} GB`;
+    case "cargando":
+      return "Cargando el modelo en la GPU";
+    case "codificando":
+      return "Preparando la imagen";
+    case "generando":
+      if (a.ventanas && a.ventanas > 1) return `Generando: parte ${a.ventana} de ${a.ventanas}${a.pasos ? `, paso ${a.paso} de ${a.pasos}` : ""}`;
+      return a.pasos ? `Animando: paso ${a.paso} de ${a.pasos}` : "Animando";
+    case "decodificando":
+      return "Armando el video";
+    default:
+      return "Guardando el plano";
+  }
+}
+
+async function planoGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const escena = String(t.payload.escena ?? "");
+  const opciones = (t.payload.opciones ?? {}) as OpcionesPlano;
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras anima)", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  let ultima = "";
+  const r = await generarPlanoEscena(
+    { ...h, alAvanzar: (a) => {
+      const e = etapaDePlano(a);
+      if (e !== ultima) void h.etapa((ultima = e), a.avance);
+    } },
+    t.proyectoId!, p, escena, opciones,
+  );
+  h.log(`Escena animada en ${r.segundos} s → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+/** El avance de Wan2GP en palabras, para los trabajos de avatar. */
+function conAvance(h: Herramientas, verbo: string) {
+  let ultima = "";
+  return {
+    ...h,
+    alAvanzar: (a: Avance) => {
+      const e = a.fase === "generando"
+        ? a.ventanas && a.ventanas > 1 ? `${verbo}: parte ${a.ventana} de ${a.ventanas}` : a.pasos ? `${verbo}: paso ${a.paso} de ${a.pasos}` : verbo
+        : etapaDePlano(a).replace("Guardando el plano", "Guardando");
+      if (e !== ultima) void h.etapa((ultima = e), a.avance);
+    },
+  };
+}
+
+async function avatarProponer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras dibuja)", 0.01);
+  return { resultado: await generarPropuesta(conAvance(h, "Dibujando"), String(t.payload.propuesta ?? "")) };
+}
+
+async function avatarRetocar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras retoca)", 0.01);
+  const semilla = typeof t.payload.semilla === "number" ? t.payload.semilla : undefined;
+  const a = await retocarAvatar(conAvance(h, "Retocando"), String(t.payload.avatar ?? ""), String(t.payload.instruccion ?? ""), semilla);
+  return { resultado: { avatar: a.id, versiones: a.versiones.length } };
+}
+
+async function presentadorGenerar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU (pausa la IA de MPT mientras el avatar habla)", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await generarPresentador(conAvance(h, "Haciendo hablar al avatar"), t.proyectoId!, p, t.payload.opciones as OpcionesPresentador);
+  h.log(`Presentador listo en ${r.segundos} s → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function avatarActuar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const pedido = PedidoActuar.parse(t.payload.pedido);
+  await h.etapa("Poniendo a tu avatar en la escena", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await actuarEscena(conAvance(h, pedido.tipo === "habla" ? "Haciendo hablar al avatar" : "Animando al avatar"), t.proyectoId!, p, String(t.payload.escena ?? ""), pedido);
+  h.log(`Avatar en la escena → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function avatarStreamer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const pedido = PedidoStreamer.parse(t.payload.pedido);
+  await h.etapa("Preparando a tu avatar sobre fondo verde", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await streamerAvatar(conAvance(h, "Haciendo hablar al avatar"), t.proyectoId!, p, pedido);
+  h.log(`Avatar streamer → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+/** «Tu avatar en el video»: protagoniza todo el video en un solo set, de corrido (protagonista.ts). */
+async function avatarEscenas(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const fila = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
+  const elegido = await leerAvatarDelVideo(fila.slug);
+  if (!elegido) return { resultado: { escenas: [] }, siguiente: siguienteDe(t.payload) };
+  const r = await protagonizarVideo(conAvance(h, "Tu avatar"), t.proyectoId!, elegido, (a) => h.etapa(a.etapa, a.avance));
+  h.log(r.escenas.length ? `Tu avatar protagoniza las escenas ${r.escenas.join(", ")} (${r.tomas === 1 ? "una toma" : `${r.tomas} tomas`})` : "Tu avatar no pudo entrar en el video: queda con las imágenes");
+  return { resultado: r, siguiente: siguienteDe(t.payload) };
+}
+
+/** Video nuevo «Equilibrado» o «Lo más real posible»: cada escena de MPT pasa a video (animar-escenas.ts). */
+async function escenasAnimar(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const fila = await db.proyecto.findUniqueOrThrow({ where: { id: t.proyectoId! } });
+  const r = await animarEscenasDelVideo(conAvance(h, "Animando"), t.proyectoId!, fila.slug, async (a) => {
+    await h.etapa(`Animando la escena ${a.numero} (${a.indice + 1} de ${a.total})`, a.indice / Math.max(1, a.total));
+  });
+  h.log(r.hechas.length ? `Escenas animadas: ${r.hechas.join(", ")}` : "No había escenas para animar");
+  return { resultado: r, siguiente: siguienteDe(t.payload) };
+}
+
+async function escenaRehacer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  const pedido = PedidoRehacer.parse(t.payload.pedido);
+  await h.etapa(pedido.tipo === "persona" ? "Buscando a la persona en cada cuadro" : "Preparando la toma", 0.01);
+  const { p } = await versionDeProyecto(t.proyectoId!);
+  const r = await rehacerEscena(conAvance(h, pedido.tipo === "persona" ? "Cambiando la persona" : "Moviendo la cámara"), t.proyectoId!, p, String(t.payload.escena ?? ""), pedido);
+  h.log(`Toma rehecha en ${r.segundos} s → versión ${r.version}`);
+  return { resultado: r, siguiente: siguienteDe(t.payload, { version: r.version }) };
+}
+
+async function workflowCorrer(t: Trabajo, h: Herramientas): Promise<Salida> {
+  await h.etapa("Esperando la GPU", 0.01);
+  let ultima = "";
+  const c = await correrWorkflow(
+    { ...h, avanzar: (a) => { if (a.etapa !== ultima) void h.etapa((ultima = a.etapa), a.avance); } },
+    String(t.payload.corrida ?? ""),
+    PedidoWorkflow.parse(t.payload.pedido),
+  );
+  h.log(`Workflow listo en ${c.segundos} s: ${c.salidas.map((s) => s.archivo).join(", ")}`);
+  return { resultado: { corrida: c.id, salidas: c.salidas.length } };
 }
 
 async function renderEntregarEj(t: Trabajo, h: Herramientas): Promise<Salida> {
@@ -175,7 +381,21 @@ async function publicarSubirEj(t: Trabajo, h: Herramientas): Promise<Salida> {
 export const EJECUTORES: Record<TipoTrabajo, (t: Trabajo, h: Herramientas) => Promise<Salida>> = {
   "mpt.generar": mptGenerar,
   "proyecto.importar": proyectoImportar,
+  "clip.momentos": clipMomentos,
+  "clip.importar": clipImportar,
+  "visual.reencuadrar": visualReencuadrar,
+  "plano.generar": planoGenerar,
+  "avatar.proponer": avatarProponer,
+  "avatar.retocar": avatarRetocar,
+  "presentador.generar": presentadorGenerar,
+  "avatar.actuar": avatarActuar,
+  "avatar.streamer": avatarStreamer,
+  "avatar.escenas": avatarEscenas,
+  "escenas.animar": escenasAnimar,
+  "escena.rehacer": escenaRehacer,
+  "workflow.correr": workflowCorrer,
   "voz.regenerar": vozRegenerar,
+  "voz.disenar": vozDisenar,
   "render.entregar": renderEntregarEj,
   "publicar.subir": publicarSubirEj,
 };
