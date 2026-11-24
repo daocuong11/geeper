@@ -5,7 +5,7 @@ const config = [
   ...next,
   ...nextTs,
   {
-    ignores: [".next/**", ".next-escritorio/**", "escritorio-app/**", "dist-escritorio/**", "node_modules/**", "src/generated/**", "next-env.d.ts", "py/**", ".claude/**"],
+    ignores: [".next/**", ".next-escritorio/**", "escritorio-app/**", "dist-escritorio/**", "node_modules/**", "src/generated/**", "next-env.d.ts", "py/**", ".claude/**", "packages/*/dist/**"],
   },
   {
     rules: {

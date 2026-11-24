@@ -1,7 +1,9 @@
 # Geeper
 
+[English](README.en.md) · Licencia: [Apache-2.0](LICENSE) · El QC como paquete: [`shortform-qc`](packages/shortform-qc)
+
 El estudio de video local de Dimerso: de un tema a un short terminado, **editable** y con control de
-calidad. Uso interno, en esta PC, US$0 al mes. Ver `docs/PRODUCTO.md` (qué es y hacia dónde va),
+calidad. Corre en una sola PC con GPU, US$0 al mes, sin nube. Ver `docs/PRODUCTO.md` (qué es y hacia dónde va),
 `docs/DECISIONES.md` (lo que cambió y por qué) y `MODELOS.md` (licencias).
 
 ## Qué hace

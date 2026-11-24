@@ -2,6 +2,7 @@
   "name": "geeper",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "description": "Estudio de video local de Dimerso: de la idea al video terminado y editable.",
   "packageManager": "pnpm@10.34.7",
   "engines": {

@@ -21,3 +21,10 @@ escritorio-app/
 dist-escritorio/
 escritorio/dist/
 .next-escritorio/
+
+# Python
+__pycache__/
+*.pyc
+
+# Paquetes: salida de compilación
+packages/*/dist/

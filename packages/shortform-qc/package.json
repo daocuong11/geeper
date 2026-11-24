@@ -1,0 +1,58 @@
+{
+  "name": "shortform-qc",
+  "version": "0.1.0",
+  "description": "Pre-publish quality checks for short-form video: loudness (-14 LUFS / -1 dBTP), Rec.709, frame integrity, subtitle readability, platform safe zones and asset licenses.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "shortform-qc": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --root .",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "video",
+    "qc",
+    "quality-control",
+    "ffmpeg",
+    "loudness",
+    "lufs",
+    "ebu-r128",
+    "subtitles",
+    "srt",
+    "safe-zone",
+    "shorts",
+    "tiktok",
+    "reels"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/saihdez/geeper.git",
+    "directory": "packages/shortform-qc"
+  },
+  "bugs": "https://github.com/saihdez/geeper/issues",
+  "homepage": "https://github.com/saihdez/geeper/tree/main/packages/shortform-qc#readme",
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}
