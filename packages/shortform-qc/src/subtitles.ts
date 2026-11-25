@@ -30,11 +30,15 @@ export function charCount(s: string): number {
 
 /**
  * Strips WebVTT/SRT formatting tags (`<i>`, `<font ...>`, `<c.class>`,
- * `{\\an8}` ...) so they don't count as characters. Only the counting
- * ignores the tags; the cue text itself is unchanged.
+ * `{\\an8}` ...) so they don't count as characters. Only tag-like
+ * sequences and `{\...}` override blocks are stripped, so plain text
+ * like `3 < 5` or `{name}` still counts. Only the counting ignores the
+ * tags; the cue text itself is unchanged.
  */
 export function stripFormatting(s: string): string {
-  return s.replace(/<[^>]*>/g, "").replace(/\{[^}]*\}/g, "");
+  return s
+    .replace(/<\/?(?:[a-z][\w.-]*(?:\s[^<>]*)?|\d{1,2}:\d{2}(?::\d{2})?\.\d{3})>/gi, "")
+    .replace(/\{\\[^}]*\}/g, "");
 }
 
 export interface CueProblem {
