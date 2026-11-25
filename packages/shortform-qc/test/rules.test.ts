@@ -133,10 +133,19 @@ three
     expect(r.problems).toEqual([]);
   });
 
+  it("keeps plain text with <, > and braces when counting characters", () => {
+    // `3 < 5` is not a tag and `{name}` is not an ASS override block.
+    const cues = [{ start: 0, end: 2, text: "3 < 5 and {name} said hi" }];
+    const r = reviewCues(cues, DEFAULT_TARGETS);
+    expect(r.worstLine).toBe(24);
+    expect(r.problems).toEqual([]);
+  });
+
   it("does not flag a cue that only exceeds the limits because of its tags", () => {
     // 40 visible characters plus `<i></i>`: 47 raw characters would exceed
     // the 42 chars/line limit, but the tags are not visible text.
-    const cues = [{ start: 0, end: 1, text: "<i>" + "x".repeat(40) + "</i>" }];
+    // 3 s keeps it under the 17 chars/s reading-speed limit (40 / 3 ≈ 13.3).
+    const cues = [{ start: 0, end: 3, text: "<i>" + "x".repeat(40) + "</i>" }];
     expect(reviewCues(cues, DEFAULT_TARGETS).problems).toEqual([]);
   });
 });
