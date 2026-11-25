@@ -1,6 +1,6 @@
 {
   "name": "shortform-qc",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Pre-publish quality checks for short-form video: loudness (-14 LUFS / -1 dBTP), Rec.709, frame integrity, subtitle readability, platform safe zones and asset licenses.",
   "license": "Apache-2.0",
   "type": "module",
@@ -16,9 +16,10 @@
     "shortform-qc": "dist/cli.js"
   },
   "files": [
-    "dist",
+    "CHANGELOG.md",
+    "LICENSE",
     "README.md",
-    "LICENSE"
+    "dist"
   ],
   "engines": {
     "node": ">=20"
