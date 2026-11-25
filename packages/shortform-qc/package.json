@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "shortform-qc": "./dist/cli.js"
+    "shortform-qc": "dist/cli.js"
   },
   "files": [
     "dist",
