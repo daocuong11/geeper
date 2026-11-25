@@ -1,5 +1,7 @@
 # shortform-qc
 
+[![npm](https://img.shields.io/npm/v/shortform-qc)](https://www.npmjs.com/package/shortform-qc) [![CI](https://github.com/saihdez/geeper/actions/workflows/shortform-qc.yml/badge.svg)](https://github.com/saihdez/geeper/actions/workflows/shortform-qc.yml) [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 Pre-publish quality checks for short-form video (Shorts, Reels, TikTok). Point it at a rendered file
 and it tells you, rule by rule, whether it's ready to publish and what to fix if it isn't.
 

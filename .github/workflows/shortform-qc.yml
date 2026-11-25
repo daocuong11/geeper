@@ -1,0 +1,31 @@
+name: shortform-qc
+
+on:
+  push:
+    branches: [main]
+    paths: ["packages/shortform-qc/**", ".github/workflows/shortform-qc.yml"]
+  pull_request:
+    paths: ["packages/shortform-qc/**", ".github/workflows/shortform-qc.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    defaults:
+      run:
+        working-directory: packages/shortform-qc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: npm install --no-package-lock --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
