@@ -1,5 +1,7 @@
 # Geeper
 
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE) [![shortform-qc on npm](https://img.shields.io/npm/v/shortform-qc?label=shortform-qc)](https://www.npmjs.com/package/shortform-qc) [![shortform-qc CI](https://github.com/saihdez/geeper/actions/workflows/shortform-qc.yml/badge.svg)](https://github.com/saihdez/geeper/actions/workflows/shortform-qc.yml)
+
 **A local video studio: from a topic or a long recording to a finished, editable short video with
 automated quality control. Runs on one consumer GPU, $0 a month, no cloud.**
 
