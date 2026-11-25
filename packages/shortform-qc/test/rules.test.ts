@@ -120,6 +120,25 @@ three
     const cues = [{ start: 0, end: 1, text: "é".repeat(42) }];
     expect(reviewCues(cues, DEFAULT_TARGETS).worstLine).toBe(42);
   });
+
+  it("ignores WebVTT/SRT formatting tags when counting characters", () => {
+    const cues = [
+      { start: 0, end: 2, text: "<i>Hello</i>" },
+      { start: 0, end: 2, text: "{\\an8}Hello" },
+      { start: 0, end: 2, text: "<font color=\"#fff\">Hello</font> <c.red>world</c>" },
+    ];
+    const r = reviewCues(cues, DEFAULT_TARGETS);
+    expect(r.worstLine).toBe(11); // "Hello world" — the tags add no characters
+    expect(r.worstCps).toBeCloseTo(5.5, 2); // 11 chars over 2 s
+    expect(r.problems).toEqual([]);
+  });
+
+  it("does not flag a cue that only exceeds the limits because of its tags", () => {
+    // 40 visible characters plus `<i></i>`: 47 raw characters would exceed
+    // the 42 chars/line limit, but the tags are not visible text.
+    const cues = [{ start: 0, end: 1, text: "<i>" + "x".repeat(40) + "</i>" }];
+    expect(reviewCues(cues, DEFAULT_TARGETS).problems).toEqual([]);
+  });
 });
 
 describe("safe zones", () => {
