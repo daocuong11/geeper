@@ -1,5 +1,7 @@
 # Publica shortform-qc en npm al subir una etiqueta shortform-qc-vX.Y.Z (no v*: esa arma el instalador).
 # Usa trusted publishing (OIDC): sin tokens guardados, y npm agrega la procedencia (provenance).
+# La versión queda en espera (staged): no sale al público hasta que el dueño la aprueba con su llave
+# en npmjs.com → Staged Packages, o con `npm stage approve <id>`.
 name: publish shortform-qc
 
 on:
@@ -29,4 +31,4 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       - run: npm install -g npm@latest
       - run: npm ci --no-audit --no-fund
-      - run: npm publish --access public
+      - run: npm stage publish . --access public
