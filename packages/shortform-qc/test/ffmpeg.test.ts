@@ -27,6 +27,9 @@ describe.skipIf(!hasFfmpeg)("checkVideo with real ffmpeg (CPU only)", () => {
       "-v", "error", "-y",
       "-f", "lavfi", "-i", "testsrc2=size=360x640:rate=30:duration=2",
       "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=2",
+      // ffmpeg 7.1+ takes color tags from the frames: set them in the filter graph as well as on the
+      // encoder so the clip is tagged the same on every version.
+      "-vf", "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=range=tv:color_primaries=bt709:color_trc=bt709:colorspace=bt709",
       "-c:v", "libx264", "-pix_fmt", "yuv420p",
       "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", "-color_range", "tv",
       "-c:a", "aac", "-shortest", clip,
@@ -38,7 +41,8 @@ describe.skipIf(!hasFfmpeg)("checkVideo with real ffmpeg (CPU only)", () => {
   it("measures the file and reports every rule", async () => {
     const r = await checkVideo(clip, { width: 360, height: 640, duration: 2 });
     const ok = Object.fromEntries(r.rules.map((x) => [x.id, x.ok]));
-    expect(ok).toMatchObject({ color: true, resolution: true, fps: true, duration: true, frames: true, duplicates: true });
+    const measured = JSON.stringify(r.rules.filter((x) => !x.ok).map((x) => [x.id, x.measured]));
+    expect(ok, measured).toMatchObject({ color: true, resolution: true, fps: true, duration: true, frames: true, duplicates: true });
     // A raw sine is nowhere near -14 LUFS: the loudness rule must notice.
     expect(r.rules.find((x) => x.id === "loudness")).toBeDefined();
   });
