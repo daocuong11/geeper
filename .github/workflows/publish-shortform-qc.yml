@@ -1,0 +1,32 @@
+# Publica shortform-qc en npm al subir una etiqueta shortform-qc-vX.Y.Z (no v*: esa arma el instalador).
+# Usa trusted publishing (OIDC): sin tokens guardados, y npm agrega la procedencia (provenance).
+name: publish shortform-qc
+
+on:
+  push:
+    tags: ["shortform-qc-v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    defaults:
+      run:
+        working-directory: packages/shortform-qc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Tag must match package.json version
+        run: test "shortform-qc-v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: npm install -g npm@latest
+      - run: npm ci --no-audit --no-fund
+      - run: npm publish --access public
