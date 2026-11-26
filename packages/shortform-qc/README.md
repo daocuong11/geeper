@@ -82,7 +82,8 @@ Helpers: `safeZone(format, platforms)`, `platformZone()`, `parseSrt()`, `reviewC
 ## Credits
 
 Platform UI margins for 9:16 adapted from [vincentsch/explainroo](https://github.com/vincentsch/explainroo)
-(MIT).
+(MIT); Snapchat Spotlight and Pinterest margins come from the platforms' published specs and
+template measurements (sources in `src/safe-zones.ts`).
 
 ## License
 

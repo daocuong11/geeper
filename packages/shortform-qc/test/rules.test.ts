@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commercialUse, evaluate, parseFreezes, parseRate, parseSrt, reviewCues, safeZone, DEFAULT_TARGETS, type Measurements } from "../src/index.js";
+import { commercialUse, evaluate, parseFreezes, parseRate, parseSrt, platformZone, reviewCues, safeZone, DEFAULT_TARGETS, type Measurements } from "../src/index.js";
 
 const good: Measurements = {
   loudness: { integrated: -14.2, truePeak: -1.4, lra: 6 },
@@ -157,6 +157,27 @@ describe("safe zones", () => {
     expect(z.x).toBe(119); // TikTok's left 11 %
     expect(z.y).toBe(288); // YouTube's top 15 %
     expect(z.x + z.w).toBeLessThanOrEqual(1080 * 0.8);
+  });
+
+  it("adds Snapchat Spotlight and Pinterest zones", () => {
+    // Snapchat: 150px top / 360px bottom, 65px left / 162px right on 1080x1920.
+    const snap = platformZone("snapchat");
+    expect(snap.x).toBeCloseTo(64.8, 2);
+    expect(snap.y).toBeCloseTo(149.76, 2);
+    expect(snap.w).toBeCloseTo(853.2, 2);
+    expect(snap.h).toBeCloseTo(1409.28, 2);
+    // Pinterest (organic video Pins): 270px top / 790px bottom, 65px left / 195px right.
+    const pin = platformZone("pinterest");
+    expect(pin.x).toBeCloseTo(64.8, 2);
+    expect(pin.y).toBeCloseTo(270.72, 2);
+    expect(pin.w).toBeCloseTo(819.72, 2);
+    expect(pin.h).toBeCloseTo(860.16, 2);
+  });
+
+  it("narrows 9:16 for Snapchat and Pinterest", () => {
+    expect(safeZone("9:16", ["snapchat"])).toEqual({ x: 65, y: 168, w: 853, h: 1162 });
+    expect(safeZone("9:16", ["pinterest"])).toEqual({ x: 65, y: 271, w: 819, h: 860 });
+    expect(safeZone("9:16", ["snapchat", "pinterest"])).toEqual({ x: 65, y: 271, w: 819, h: 860 });
   });
 
   it("ignores platforms outside 9:16", () => {
