@@ -51,7 +51,7 @@ npm install shortform-qc     # library
 npx shortform-qc --help      # CLI
 ```
 
-Exit codes: `0` ready (warnings allowed), `1` a rule failed, `2` usage error. Use `--json` in CI.
+Exit codes: `0` ready (warnings allowed), `1` a rule failed, `2` usage error. Use `--json` in CI, `--junit report.xml` for a JUnit report (one test case per rule), or `--markdown` for a summary to post as a PR comment or to `$GITHUB_STEP_SUMMARY`.
 
 ## Library
 
