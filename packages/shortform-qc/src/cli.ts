@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { parseArgs } from "node:util";
 import { checkVideo } from "./index.js";
 import { parseSrt } from "./subtitles.js";
+import { toJUnit, toMarkdown } from "./reporters.js";
 import type { Expectations, Format, Platform, Report } from "./types.js";
 
 const HELP = `Usage: shortform-qc <video> [options]
@@ -20,6 +21,8 @@ Options:
   --outro-start <seconds>     stop freeze/duplicate checks here (static end card)
   --no-rec709                 skip the color check
   --json                      print the full report as JSON
+  --junit <file>              write the report as JUnit XML (one test case per rule)
+  --markdown                  print the report as Markdown (for PR comments / $GITHUB_STEP_SUMMARY)
   -h, --help                  show this help
 
 Exit code: 0 when every rule passes (warnings allowed), 1 when one fails, 2 on usage errors.
@@ -62,6 +65,8 @@ async function main() {
       "outro-start": { type: "string" },
       "no-rec709": { type: "boolean" },
       json: { type: "boolean" },
+      junit: { type: "string" },
+      markdown: { type: "boolean" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -85,7 +90,9 @@ async function main() {
     subtitles: values.srt ? parseSrt(await readFile(values.srt, "utf8")) : undefined,
   };
   const report = await checkVideo(file, exp);
+  if (values.junit) await writeFile(values.junit, toJUnit(report), "utf8");
   if (values.json) process.stdout.write(JSON.stringify(report, null, 2) + "\n");
+  else if (values.markdown) process.stdout.write(toMarkdown(report));
   else print(report);
   process.exitCode = report.passed ? 0 : 1;
 }
